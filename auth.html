@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Authentication - Document Request Tracker</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-logo">
+                <i class="fas fa-file-alt"></i>
+                <span>DocTracker</span>
+            </div>
+            <div class="nav-menu">
+                <a href="index.html" class="nav-link">Home</a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="auth-container">
+        <div class="auth-wrapper">
+            <!-- Login Form -->
+            <div id="loginForm" class="auth-form">
+                <div class="auth-header">
+                    <h1><i class="fas fa-sign-in-alt"></i> Student Login</h1>
+                    <p>Access your document request portal</p>
+                </div>
+                
+                <form id="loginFormElement">
+                    <div class="form-group">
+                        <label for="loginEmail">Email Address *</label>
+                        <input type="email" id="loginEmail" name="loginEmail" class="form-control" required placeholder="your.email@student.edu">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="loginPassword">Password *</label>
+                        <input type="password" id="loginPassword" name="loginPassword" class="form-control" required placeholder="Enter your password">
+                    </div>
+                    
+                    <div class="form-group">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="rememberMe">
+                                <span class="checkmark"></span>
+                                Remember me
+                            </label>
+                            <a href="#" class="forgot-password">Forgot Password?</a>
+                        </div>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary btn-full">
+                        <i class="fas fa-sign-in-alt"></i> Login
+                    </button>
+                    
+                    <div class="auth-divider">
+                        <span>Don't have an account?</span>
+                    </div>
+                    
+                    <button type="button" class="btn btn-outline btn-full" onclick="showSignupForm()">
+                        <i class="fas fa-user-plus"></i> Create Account
+                    </button>
+                </form>
+            </div>
+
+            <!-- Signup Form -->
+            <div id="signupForm" class="auth-form d-none">
+                <div class="auth-header">
+                    <h1><i class="fas fa-user-plus"></i> Student Registration</h1>
+                    <p>Create your account to submit document requests online</p>
+                </div>
+                
+                <form id="signupFormElement">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="firstName">First Name *</label>
+                                <input type="text" id="firstName" name="firstName" class="form-control" required placeholder="Enter your first name">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="lastName">Last Name *</label>
+                                <input type="text" id="lastName" name="lastName" class="form-control" required placeholder="Enter your last name">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="studentId">Student ID *</label>
+                        <input type="text" id="studentId" name="studentId" class="form-control" required placeholder="Enter your student ID">
+                        <small class="form-text text-muted">Your official student identification number</small>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="email">Email Address *</label>
+                        <input type="email" id="email" name="email" class="form-control" required placeholder="your.email@student.edu">
+                        <small class="form-text text-muted">Use your school email if available</small>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="phone">Phone Number *</label>
+                        <input type="tel" id="phone" name="phone" class="form-control" required placeholder="+63 912 345 6789">
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="course">Course/Program *</label>
+                                <select id="course" name="course" class="form-control" required>
+                                    <option value="">Select Course/Program</option>
+                                    <option value="Computer Science">Computer Science</option>
+                                    <option value="Information Technology">Information Technology</option>
+                                    <option value="Computer Engineering">Computer Engineering</option>
+                                    <option value="Civil Engineering">Civil Engineering</option>
+                                    <option value="Mechanical Engineering">Mechanical Engineering</option>
+                                    <option value="Electrical Engineering">Electrical Engineering</option>
+                                    <option value="Business Administration">Business Administration</option>
+                                    <option value="Accountancy">Accountancy</option>
+                                    <option value="Marketing">Marketing</option>
+                                    <option value="Education">Education</option>
+                                    <option value="Psychology">Psychology</option>
+                                    <option value="Nursing">Nursing</option>
+                                    <option value="Medicine">Medicine</option>
+                                    <option value="Other">Other</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="yearLevel">Year Level *</label>
+                                <select id="yearLevel" name="yearLevel" class="form-control" required>
+                                    <option value="">Select Year Level</option>
+                                    <option value="1st Year">1st Year</option>
+                                    <option value="2nd Year">2nd Year</option>
+                                    <option value="3rd Year">3rd Year</option>
+                                    <option value="4th Year">4th Year</option>
+                                    <option value="5th Year">5th Year</option>
+                                    <option value="Graduate Student">Graduate Student</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="password">Password *</label>
+                        <input type="password" id="password" name="password" class="form-control" required placeholder="Create a strong password">
+                        <small class="form-text text-muted">Password must be at least 8 characters long</small>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="confirmPassword">Confirm Password *</label>
+                        <input type="password" id="confirmPassword" name="confirmPassword" class="form-control" required placeholder="Confirm your password">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="agreeTerms" name="agreeTerms" required>
+                            <span class="checkmark"></span>
+                            I agree to the <a href="#" class="terms-link">Terms and Conditions</a> and <a href="#" class="terms-link">Privacy Policy</a>
+                        </label>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary btn-full">
+                        <i class="fas fa-user-plus"></i> Create Account
+                    </button>
+                    
+                    <div class="auth-divider">
+                        <span>Already have an account?</span>
+                    </div>
+                    
+                    <button type="button" class="btn btn-outline btn-full" onclick="showLoginForm()">
+                        <i class="fas fa-sign-in-alt"></i> Login
+                    </button>
+                </form>
+            </div>
+        </div>
+    </main>
+
+    <!-- Success Modal -->
+    <div id="successModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-check-circle text-success"></i> Registration Successful!</h3>
+            </div>
+            <div class="modal-body">
+                <p>Your account has been created successfully. You can now access the student portal to submit document requests.</p>
+                <div class="d-flex gap-2 mt-3">
+                    <button class="btn btn-primary" onclick="redirectToStudentPortal()">
+                        <i class="fas fa-user-graduate"></i> Go to Student Portal
+                    </button>
+                    <button class="btn btn-outline" onclick="closeModal()">
+                        Close
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="auth-script.js"></script>
+</body>
+</html>
