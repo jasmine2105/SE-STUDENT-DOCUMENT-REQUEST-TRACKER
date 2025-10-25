@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Authentication</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-section { margin: 20px 0; padding: 20px; border: 1px solid #ccc; }
+        button { padding: 10px 20px; margin: 10px; background: #007bff; color: white; border: none; cursor: pointer; }
+        .success { color: green; }
+        .error { color: red; }
+    </style>
+</head>
+<body>
+    <h1>Authentication Test Page</h1>
+    
+    <div class="test-section">
+        <h2>Test Form Switching</h2>
+        <button onclick="testShowSignupForm()">Test Show Signup Form</button>
+        <button onclick="testShowLoginForm()">Test Show Login Form</button>
+        <div id="formTestResult"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>Test Form Data Collection</h2>
+        <form id="testForm">
+            <input type="text" name="firstName" placeholder="First Name" value="John"><br><br>
+            <input type="text" name="lastName" placeholder="Last Name" value="Doe"><br><br>
+            <input type="text" name="studentId" placeholder="Student ID" value="2024-001"><br><br>
+            <input type="email" name="email" placeholder="Email" value="john.doe@test.com"><br><br>
+            <input type="password" name="password" placeholder="Password" value="password123"><br><br>
+            <input type="password" name="confirmPassword" placeholder="Confirm Password" value="password123"><br><br>
+            <input type="checkbox" id="agreeTerms" name="agreeTerms" checked> I agree to terms<br><br>
+            <button type="button" onclick="testFormData()">Test Form Data Collection</button>
+        </form>
+        <div id="formDataResult"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>Test Notifications</h2>
+        <button onclick="testNotification('success', 'Success message')">Test Success Notification</button>
+        <button onclick="testNotification('error', 'Error message')">Test Error Notification</button>
+        <button onclick="testNotification('info', 'Info message')">Test Info Notification</button>
+    </div>
+
+    <script src="auth-script.js"></script>
+    <script>
+        function testShowSignupForm() {
+            const result = document.getElementById('formTestResult');
+            try {
+                showSignupForm();
+                result.innerHTML = '<div class="success">✓ showSignupForm() function works!</div>';
+            } catch (error) {
+                result.innerHTML = '<div class="error">✗ Error: ' + error.message + '</div>';
+            }
+        }
+        
+        function testShowLoginForm() {
+            const result = document.getElementById('formTestResult');
+            try {
+                showLoginForm();
+                result.innerHTML = '<div class="success">✓ showLoginForm() function works!</div>';
+            } catch (error) {
+                result.innerHTML = '<div class="error">✗ Error: ' + error.message + '</div>';
+            }
+        }
+        
+        function testFormData() {
+            const form = document.getElementById('testForm');
+            const formData = new FormData(form);
+            const userData = Object.fromEntries(formData.entries());
+            
+            // Handle checkbox separately
+            userData.agreeTerms = document.getElementById('agreeTerms').checked;
+            
+            const result = document.getElementById('formDataResult');
+            result.innerHTML = '<div class="success">✓ Form data collected: ' + JSON.stringify(userData, null, 2) + '</div>';
+        }
+        
+        function testNotification(type, message) {
+            showNotification(type, message);
+        }
+        
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('Test page loaded');
+            console.log('showSignupForm function available:', typeof showSignupForm);
+            console.log('showLoginForm function available:', typeof showLoginForm);
+            console.log('showNotification function available:', typeof showNotification);
+        });
+    </script>
+</body>
+</html>
