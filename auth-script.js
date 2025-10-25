@@ -95,6 +95,7 @@ function checkAuthState() {
     const currentUserData = localStorage.getItem('currentUser');
     if (currentUserData) {
         currentUser = JSON.parse(currentUserData);
+<<<<<<< HEAD
         // Redirect to student portal if already logged in (use absolute path to avoid nested folders)
         try {
             const origin = window.location.origin || '';
@@ -106,6 +107,10 @@ function checkAuthState() {
         } catch (e) {
             window.location.href = '/STUDENT/student-portal.html';
         }
+=======
+        // Redirect to student portal if already logged in
+        window.location.href = 'student-portal.html';
+>>>>>>> dc13fc5fc4ecf84e06785bcbfffec341c6494c8e
     }
 }
 
@@ -133,6 +138,7 @@ function handleLogin(e) {
         showNotification('success', 'Login successful! Redirecting...');
         
         setTimeout(() => {
+<<<<<<< HEAD
             try {
                 const origin = window.location.origin || '';
                 if (origin && origin.startsWith('http')) {
@@ -143,6 +149,9 @@ function handleLogin(e) {
             } catch (e) {
                 window.location.href = '/STUDENT/student-portal.html';
             }
+=======
+            window.location.href = 'student-portal.html';
+>>>>>>> dc13fc5fc4ecf84e06785bcbfffec341c6494c8e
         }, 1500);
     } else {
         showNotification('error', 'Invalid email or password. Please try again.');
@@ -206,6 +215,7 @@ function handleSignup(e) {
     
     setTimeout(() => {
         console.log('Redirecting now...');
+<<<<<<< HEAD
         try {
             const origin = window.location.origin || '';
             if (origin && origin.startsWith('http')) {
@@ -216,6 +226,9 @@ function handleSignup(e) {
         } catch (e) {
             window.location.href = '/STUDENT/student-portal.html';
         }
+=======
+        window.location.href = 'student-portal.html';
+>>>>>>> dc13fc5fc4ecf84e06785bcbfffec341c6494c8e
     }, 2000);
 }
 
@@ -310,7 +323,11 @@ function showLoginForm() {
 
 // Redirect to student portal
 function redirectToStudentPortal() {
+<<<<<<< HEAD
     window.location.href = 'STUDENT/student-portal.html';
+=======
+    window.location.href = 'student-portal.html';
+>>>>>>> dc13fc5fc4ecf84e06785bcbfffec341c6494c8e
 }
 
 // Logout function
@@ -318,6 +335,7 @@ function logout() {
     currentUser = null;
     localStorage.removeItem('currentUser');
     sessionStorage.removeItem('currentUser');
+<<<<<<< HEAD
     // Use absolute path to ensure redirect works from any subfolder (STUDENT/, FACULTY/, etc.)
     try {
         const target = window.location.origin + '/index.html';
@@ -326,6 +344,9 @@ function logout() {
         // Fallback: relative path
         window.location.href = '/index.html';
     }
+=======
+    window.location.href = 'auth.html';
+>>>>>>> dc13fc5fc4ecf84e06785bcbfffec341c6494c8e
 }
 
 // Get current user

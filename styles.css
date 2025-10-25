@@ -260,7 +260,11 @@ body {
 
 .stat h3 {
     font-size: 2.5rem;
+<<<<<<< HEAD
     color: #89e46d;
+=======
+    color: #667eea;
+>>>>>>> dc13fc5fc4ecf84e06785bcbfffec341c6494c8e
     margin-bottom: 0.5rem;
 }
 
