@@ -4,8 +4,20 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Faculty Portal - Document Request Tracker</title>
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="../styles.css">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        /* Match student portal white card look for consistent layout */
+        .portal-container {
+            background: rgba(255,255,255,0.96);
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.06);
+            padding: 30px;
+            max-width: 1100px;
+            margin: 120px auto 40px; /* keep below fixed navbar */
+        }
+        .portal-header { margin-bottom: 1.25rem; }
+    </style>
 </head>
 <body>
     <nav class="navbar">
@@ -15,11 +27,11 @@
                 <span>DocTracker</span>
             </div>
             <div class="nav-menu">
-                <a href="index.html" class="nav-link">Home</a>
-                <a href="admin-portal.html" class="nav-link">Admin Portal</a>
+                <a href="../index.html" class="nav-link">Home</a>
+                <a href="../admin-portal.html" class="nav-link">Admin Portal</a>
                 <div class="nav-buttons">
                     <span class="nav-link">Welcome, Dr. Faculty</span>
-                    <a href="#" class="btn btn-outline" onclick="logout()">Logout</a>
+                    <button class="btn btn-outline" onclick="logout()">Logout</button>
                 </div>
             </div>
         </div>
@@ -27,12 +39,17 @@
 
     <main class="portal-container">
         <div class="portal-header">
-            <h1><i class="fas fa-user-check"></i> Faculty Portal</h1>
-            <p>Approve academic clearance requests</p>
+            <div class="portal-icon"><i class="fas fa-user-check"></i></div>
+            <div>
+                <h1>Faculty Portal</h1>
+                <p>Approve academic clearance requests</p>
+            </div>
         </div>
 
-        <!-- Dashboard Stats -->
-        <div class="dashboard-grid">
+        <div class="portal-grid">
+            <div>
+                <!-- Dashboard Stats -->
+                <div class="dashboard-grid">
             <div class="stat-card">
                 <h3 id="pendingClearances">0</h3>
                 <p>Pending Clearances</p>
@@ -49,6 +66,20 @@
                 <h3 id="totalProcessed">0</h3>
                 <p>Total Processed</p>
             </div>
+            <aside>
+                <div class="card">
+                    <div class="card-header">
+                        <h3><i class="fas fa-chalkboard-teacher"></i> Faculty Menu</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-flex flex-column">
+                            <a href="faculty-portal.html" class="btn btn-outline" style="margin-bottom:8px; text-align:left;">Clearances</a>
+                            <a href="../admin-portal.html" class="btn btn-outline" style="margin-bottom:8px; text-align:left;">Admin Portal</a>
+                            <button class="btn btn-outline" style="text-align:left;" onclick="logout()">Logout</button>
+                        </div>
+                    </div>
+                </div>
+            </aside>
         </div>
 
         <!-- Quick Actions -->
@@ -150,6 +181,9 @@
         </div>
     </div>
 
+    <script src="../utils.js"></script>
+    <script src="../ui.js"></script>
+    <script src="../auth-script.js"></script>
     <script src="faculty-script.js"></script>
 </body>
 </html>

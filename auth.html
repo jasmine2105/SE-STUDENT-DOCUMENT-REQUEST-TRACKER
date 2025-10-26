@@ -22,14 +22,46 @@
 
     <main class="auth-container">
         <div class="auth-wrapper">
-            <!-- Login Form -->
-            <div id="loginForm" class="auth-form">
+            <!-- Role Selection -->
+            <div id="roleSelection" class="auth-form" style="display: block;">
                 <div class="auth-header">
-                    <h1><i class="fas fa-sign-in-alt"></i> Student Login</h1>
+                    <h1><i class="fas fa-users"></i> Select Your Role</h1>
+                    <p>Choose how you want to access the system</p>
+                </div>
+                
+                <div class="role-grid">
+                    <div class="role-card" onclick="selectRole('student')">
+                        <div class="role-icon">
+                            <i class="fas fa-user-graduate"></i>
+                        </div>
+                        <h3>Student</h3>
+                        <p>Submit and track document requests</p>
+                    </div>
+                    <div class="role-card" onclick="selectRole('faculty')">
+                        <div class="role-icon">
+                            <i class="fas fa-chalkboard-teacher"></i>
+                        </div>
+                        <h3>Faculty</h3>
+                        <p>Review and approve academic requests</p>
+                    </div>
+                    <div class="role-card" onclick="selectRole('admin')">
+                        <div class="role-icon">
+                            <i class="fas fa-user-shield"></i>
+                        </div>
+                        <h3>Administrator</h3>
+                        <p>Manage and process all requests</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Login Form -->
+            <div id="loginForm" class="auth-form d-none" style="display: none;">
+                <div class="auth-header">
+                    <h1><i class="fas fa-sign-in-alt"></i> <span id="loginRoleTitle">Login</span></h1>
                     <p>Access your document request portal</p>
                 </div>
                 
-                <form id="loginFormElement">
+                <form id="loginFormElement" onsubmit="handleLogin(event)">
                     <div class="form-group">
                         <label for="loginEmail">Email Address *</label>
                         <input type="email" id="loginEmail" name="loginEmail" class="form-control" required placeholder="your.email@student.edu">
@@ -41,12 +73,12 @@
                     </div>
                     
                     <div class="form-group">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <label class="checkbox-label">
-                                <input type="checkbox" id="rememberMe">
-                                <span class="checkmark"></span>
-                                Remember me
-                            </label>
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="rememberMe">
+                            <span class="checkmark"></span>
+                            Remember me
+                        </label>
+                        <div style="margin-top:8px;">
                             <a href="#" class="forgot-password">Forgot Password?</a>
                         </div>
                     </div>
@@ -59,20 +91,28 @@
                         <span>Don't have an account?</span>
                     </div>
                     
-                    <button type="button" class="btn btn-outline btn-full" onclick="showSignupForm()">
+                    <button type="button" class="btn btn-outline btn-full" id="showSignupBtn" onclick="showSignupForm()">
                         <i class="fas fa-user-plus"></i> Create Account
+                    </button>
+                    
+                    <div class="auth-divider">
+                        <span>OR</span>
+                    </div>
+                    
+                    <button type="button" class="btn btn-outline btn-full" onclick="goBackToRoleSelection()">
+                        <i class="fas fa-arrow-left"></i> Back to Role Selection
                     </button>
                 </form>
             </div>
 
             <!-- Signup Form -->
-            <div id="signupForm" class="auth-form d-none">
+            <div id="signupForm" class="auth-form d-none" style="display: none;">
                 <div class="auth-header">
-                    <h1><i class="fas fa-user-plus"></i> Student Registration</h1>
-                    <p>Create your account to submit document requests online</p>
+                    <h1><i class="fas fa-user-plus"></i> <span id="signupRoleTitle">Registration</span></h1>
+                    <p>Create your account to access the system</p>
                 </div>
                 
-                <form id="signupFormElement">
+                <form id="signupFormElement" onsubmit="handleSignup(event)">
                     <div class="row">
                         <div class="col-md-6">
                             <div class="form-group">
@@ -159,7 +199,7 @@
                         <label class="checkbox-label">
                             <input type="checkbox" id="agreeTerms" name="agreeTerms" required>
                             <span class="checkmark"></span>
-                            I agree to the <a href="#" class="terms-link">Terms and Conditions</a> and <a href="#" class="terms-link">Privacy Policy</a>
+                            I agree to the <a href="#" class="terms-link" onclick="openTermsModal(); return false;">Terms and Conditions</a> and <a href="#" class="terms-link" onclick="openTermsModal(); return false;">Privacy Policy</a>
                         </label>
                     </div>
                     
@@ -174,10 +214,62 @@
                     <button type="button" class="btn btn-outline btn-full" onclick="showLoginForm()">
                         <i class="fas fa-sign-in-alt"></i> Login
                     </button>
+                    
+                    <div class="auth-divider">
+                        <span>OR</span>
+                    </div>
+                    
+                    <button type="button" class="btn btn-outline btn-full" onclick="goBackToRoleSelection()">
+                        <i class="fas fa-arrow-left"></i> Back to Role Selection
+                    </button>
                 </form>
             </div>
         </div>
     </main>
+
+    <!-- Terms and Policy Modal -->
+    <div id="termsModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-file-contract"></i> Terms and Conditions & Privacy Policy</h3>
+                <span class="close" onclick="closeTermsModal()">&times;</span>
+            </div>
+            <div class="modal-body" style="max-height: 500px; overflow-y: auto;">
+                <h4>Student Document Request Tracker - USJR</h4>
+                <p><strong>Last Updated:</strong> September 2024</p>
+                
+                <h5>1. User Responsibilities</h5>
+                <p>Users are responsible for maintaining the confidentiality of their account credentials and for all activities that occur under their account.</p>
+                
+                <h5>2. Data Privacy</h5>
+                <p>All personal information collected through this system is used solely for processing document requests and is handled in accordance with the Data Privacy Act of 2012 (Republic Act No. 10173).</p>
+                
+                <h5>3. Request Processing</h5>
+                <p>Document requests are processed within 3-5 business days. Rush processing may be available for an additional fee.</p>
+                
+                <h5>4. Prohibited Activities</h5>
+                <p>Users are prohibited from submitting false information, impersonating others, or using the system for any fraudulent purposes.</p>
+                
+                <h5>5. Email Notifications</h5>
+                <p>Users will receive email notifications regarding their request status updates to the email address provided during registration.</p>
+                
+                <h5>6. System Availability</h5>
+                <p>We strive to maintain 24/7 system availability but cannot guarantee uninterrupted access. Scheduled maintenance will be announced in advance.</p>
+                
+                <h5>7. Contact Information</h5>
+                <p>For support or inquiries, please contact the Registrar's Office or visit <a href="mailto:registrar@usjr.edu.ph">registrar@usjr.edu.ph</a></p>
+                
+                <div class="d-flex gap-2 mt-3">
+                    <button class="btn btn-primary" onclick="acceptTerms()">
+                        <i class="fas fa-check"></i> I Accept
+                    </button>
+                    <button class="btn btn-outline" onclick="closeTermsModal()">
+                        <i class="fas fa-times"></i> Decline
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <!-- Success Modal -->
     <div id="successModal" class="modal">
@@ -198,6 +290,27 @@
             </div>
         </div>
     </div>
+    
+        <!-- Admin / Faculty Password Modal -->
+        <div id="rolePassModal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3><i class="fas fa-lock"></i> Enter Role Password</h3>
+                    <span class="close" onclick="closeModal()">&times;</span>
+                </div>
+                <div class="modal-body">
+                    <p id="rolePassPrompt">This role requires a password. Please enter it to continue.</p>
+                    <div class="form-group">
+                        <input type="password" id="rolePasswordInput" class="form-control" placeholder="Enter role password">
+                    </div>
+                    <div class="d-flex gap-2 mt-3">
+                        <button class="btn btn-primary" id="rolePassSubmit">Submit</button>
+                        <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
 
     <script src="auth-script.js"></script>
 </body>

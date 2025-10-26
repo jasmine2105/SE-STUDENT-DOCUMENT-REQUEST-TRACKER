@@ -7,7 +7,7 @@ let currentStudent = null;
 document.addEventListener('DOMContentLoaded', function() {
     // Check authentication first
     if (!Auth.isAuthenticated()) {
-        window.location.href = 'auth.html';
+        window.location.href = '../auth.html';
         return;
     }
     
@@ -60,6 +60,32 @@ function setupEventListeners() {
         });
     }
 
+    // Document type change - show/hide extra fields
+    const documentType = document.getElementById('documentType');
+    if (documentType) {
+        documentType.addEventListener('change', function() {
+            const otherField = document.getElementById('otherDocumentType');
+            const termField = document.getElementById('termCoverage');
+            const selected = this.value;
+            // Show 'other' input when Other selected
+            if (selected === 'Other') {
+                otherField.classList.remove('d-none');
+                otherField.required = true;
+            } else {
+                otherField.classList.add('d-none');
+                otherField.required = false;
+            }
+
+            // For TOR and COE, show termCoverage input
+            if (selected === 'TOR' || selected === 'COE') {
+                termField.parentElement.classList.remove('d-none');
+            } else {
+                // Keep term coverage visible but optional for others
+                termField.parentElement.classList.remove('d-none');
+            }
+        });
+    }
+
     // Filter changes
     const statusFilter = document.getElementById('statusFilter');
     const typeFilter = document.getElementById('typeFilter');
@@ -69,6 +95,12 @@ function setupEventListeners() {
     }
     if (typeFilter) {
         typeFilter.addEventListener('change', filterRequests);
+    }
+    
+    // Request form submission
+    const requestForm = document.getElementById('requestForm');
+    if (requestForm) {
+        requestForm.addEventListener('submit', handleRequestSubmission);
     }
 }
 
@@ -251,8 +283,8 @@ function viewRequestDetails(requestId) {
                 <p><strong>Purpose:</strong> ${request.purpose}</p>
                 <p><strong>Copies:</strong> ${request.copies}</p>
                 <p><strong>Delivery Method:</strong> ${request.deliveryMethod}</p>
-                ${request.deliveryAddress ? `<p><strong>Delivery Address:</strong> ${request.deliveryAddress}</p>` : ''}
-                ${request.notes ? `<p><strong>Notes:</strong> ${request.notes}</p>` : ''}
+                        ${request.deliveryAddress ? `<p><strong>Delivery Address:</strong> ${request.deliveryAddress}</p>` : ''}
+                        ${request.notes ? `<p><strong>Notes:</strong> ${request.notes}</p>` : ''}
             </div>
             <div class="col-md-6">
                 <h5>Status Information</h5>
@@ -314,10 +346,10 @@ function refreshRequests() {
 }
 
 // Handle form submission
-document.getElementById('requestForm').addEventListener('submit', function(e) {
+function handleRequestSubmission(e) {
     e.preventDefault();
 
-    const formElement = this;
+    const formElement = e.target;
     const formData = new FormData(formElement);
 
     // Build local request object for UI
@@ -396,7 +428,7 @@ document.getElementById('requestForm').addEventListener('submit', function(e) {
           console.error('Error sending to server:', err);
           DocTracker.showNotification('warning', 'Could not reach server. Your request is saved locally and will not trigger email until server is running.');
       });
-});
+};
 
 // Add timeline styles
 const timelineStyles = `
@@ -450,29 +482,111 @@ document.head.insertAdjacentHTML('beforeend', timelineStyles);
 
 // Student-specific logout to ensure logout works from the student portal folder.
 function studentLogout() {
+    console.log('[studentLogout] Logging out...');
+    
+    // Clear all user data
     try {
         currentStudent = null;
         localStorage.removeItem('currentUser');
         sessionStorage.removeItem('currentUser');
+        console.log('[studentLogout] Cleared user data');
     } catch (e) {
-        console.warn('Error clearing user data during logout', e);
+        console.error('Error clearing user data:', e);
     }
 
-    // Redirect to index page. Use origin when available.
+    // Redirect to auth page
     try {
-        const origin = window.location.origin || '';
-        if (origin && origin.startsWith('http')) {
-            window.location.href = origin + '/index.html';
-        } else {
-            window.location.href = '../index.html';
-        }
+        window.location.href = '../index.html';
     } catch (e) {
-        window.location.href = 'index.html';
+        console.error('[studentLogout] Redirect error:', e);
+        window.location.href = '../index.html';
     }
 }
 
-// Expose and override Auth.logout if present so existing onclicks (Auth.logout()) work
+// Helper functions
+function formatDate(dateString) {
+    if (!dateString) return 'N/A';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', { 
+        year: 'numeric', 
+        month: 'short', 
+        day: 'numeric' 
+    });
+}
+
+function formatDateTime(dateString) {
+    if (!dateString) return 'N/A';
+    const date = new Date(dateString);
+    return date.toLocaleString('en-US', { 
+        year: 'numeric', 
+        month: 'short', 
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+}
+
+function getStatusBadgeClass(status) {
+    const statusClasses = {
+        'Submitted': 'status-submitted',
+        'Processing': 'status-processing',
+        'Ready for Release': 'status-ready',
+        'Completed': 'status-completed',
+        'Declined': 'status-declined'
+    };
+    return statusClasses[status] || 'status-submitted';
+}
+
+function openModal(modalId) {
+    const modal = document.getElementById(modalId);
+    if (modal) {
+        modal.style.display = 'block';
+        document.body.style.overflow = 'hidden';
+    }
+}
+
+function closeModal() {
+    const modals = document.querySelectorAll('.modal');
+    modals.forEach(modal => {
+        modal.style.display = 'none';
+    });
+    document.body.style.overflow = 'auto';
+}
+
+function showNotification(type, message) {
+    // Simple notification - just use alert for now
+    alert(message);
+}
+
+function generateRequestId() {
+    const timestamp = Date.now().toString().slice(-6);
+    const random = Math.random().toString(36).substr(2, 3).toUpperCase();
+    return `REQ${timestamp}${random}`;
+}
+
+// Expose closeModal globally
+window.closeModal = closeModal;
+
+// Expose all functions globally for onclick handlers
 window.studentLogout = studentLogout;
+window.showSubmitForm = showSubmitForm;
+window.hideSubmitForm = hideSubmitForm;
+window.refreshRequests = refreshRequests;
+window.viewRequestDetails = viewRequestDetails;
+window.confirmPickup = confirmPickup;
+
+// Override Auth.logout if present
 if (window.Auth && typeof window.Auth === 'object') {
     window.Auth.logout = studentLogout;
 }
+
+// Add DocTracker helper object
+window.DocTracker = {
+    formatDate: formatDate,
+    formatDateTime: formatDateTime,
+    getStatusBadgeClass: getStatusBadgeClass,
+    openModal: openModal,
+    closeModal: closeModal,
+    showNotification: showNotification,
+    generateRequestId: generateRequestId
+};

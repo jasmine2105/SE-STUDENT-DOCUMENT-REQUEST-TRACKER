@@ -2,6 +2,13 @@
 
 let users = [];
 let currentUser = null;
+let selectedRole = null; // Store the selected role (student, faculty, admin)
+let pendingRole = null; // Role awaiting password verification
+
+// NOTE: These are placeholder passwords for demo purposes.
+// Change them to secure values or implement server-side role auth for production.
+const ADMIN_PASSWORD = 'admin123';
+const FACULTY_PASSWORD = 'faculty123';
 
 // Simple notification function for auth page
 function showNotification(type, message, duration = 3000) {
@@ -55,8 +62,233 @@ function closeModal() {
 document.addEventListener('DOMContentLoaded', function() {
     loadUsers();
     setupEventListeners();
-    checkAuthState();
+    
+    // If someone opens the auth page and they already have a session
+    // show a small prompt instead of auto-redirecting. This lets the
+    // user explicitly choose to continue to the portal, switch account,
+    // or log out. If no session exists, show role selection.
+    const currentUserData = localStorage.getItem('currentUser') || sessionStorage.getItem('currentUser');
+    if (currentUserData) {
+        showLoggedInPrompt();
+    } else {
+        // Show role selection if not logged in
+        showRoleSelection();
+    }
 });
+
+// When a user with an active session visits the auth page, show a small
+// banner with options to continue to their portal, switch accounts, or log out.
+function showLoggedInPrompt() {
+    const saved = localStorage.getItem('currentUser') || sessionStorage.getItem('currentUser');
+    let user = null;
+    try {
+        user = saved ? JSON.parse(saved) : null;
+    } catch (e) {
+        user = null;
+    }
+
+    // If parsing failed or no user, fall back to role selection
+    if (!user) {
+        showRoleSelection();
+        return;
+    }
+
+    const wrapper = document.querySelector('.auth-wrapper');
+    if (!wrapper) return showRoleSelection();
+
+    // Remove any existing banner
+    const existing = document.getElementById('loggedInBanner');
+    if (existing) existing.remove();
+
+    const banner = document.createElement('div');
+    banner.id = 'loggedInBanner';
+    banner.className = 'auth-notification auth-notification-info';
+    banner.style.marginBottom = '1rem';
+    banner.innerHTML = `
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <strong>Signed in as ${user.firstName || ''} ${user.lastName || ''} (${user.email || ''})</strong>
+                <div style="margin-top:6px">
+                    <button class="btn btn-primary" id="continuePortalBtn">Continue to Portal</button>
+                    <button class="btn btn-outline" id="switchAccountBtn">Switch Account</button>
+                    <button class="btn btn-outline" id="logoutBtn">Logout</button>
+                </div>
+            </div>
+        </div>
+    `;
+
+    wrapper.insertBefore(banner, wrapper.firstChild);
+
+    // Show role selection underneath so users can still choose to register/login
+    showRoleSelection();
+
+    // Hook up buttons
+    const continueBtn = document.getElementById('continuePortalBtn');
+    const switchBtn = document.getElementById('switchAccountBtn');
+    const logoutBtn = document.getElementById('logoutBtn');
+
+    if (continueBtn) continueBtn.addEventListener('click', redirectToStudentPortal);
+    if (switchBtn) switchBtn.addEventListener('click', function() {
+        localStorage.removeItem('currentUser');
+        sessionStorage.removeItem('currentUser');
+        const b = document.getElementById('loggedInBanner');
+        if (b) b.remove();
+        showRoleSelection();
+    });
+    if (logoutBtn) logoutBtn.addEventListener('click', function() {
+        logout();
+    });
+}
+
+// Open the shared role password modal and wire submit behavior
+function openRolePasswordModal(role) {
+    const modal = document.getElementById('rolePassModal');
+    const prompt = document.getElementById('rolePassPrompt');
+    const passwordInput = document.getElementById('rolePasswordInput');
+    const submitBtn = document.getElementById('rolePassSubmit');
+
+    if (!modal || !passwordInput || !submitBtn) return;
+
+    prompt.textContent = `The ${role} role requires a password. Please enter it to continue.`;
+    passwordInput.value = '';
+    modal.style.display = 'block';
+    document.body.style.overflow = 'hidden';
+
+    const cleanup = () => {
+        modal.style.display = 'none';
+        document.body.style.overflow = 'auto';
+        submitBtn.onclick = null;
+    };
+
+    submitBtn.onclick = function() {
+        const val = passwordInput.value || '';
+        if (role === 'admin' && val === ADMIN_PASSWORD) {
+            selectedRole = 'admin';
+            pendingRole = null;
+            // Mark this browser session as having verified the admin role password
+            try { sessionStorage.setItem('roleVerified', 'admin'); } catch (e) { /* ignore */ }
+            cleanup();
+            // Directly navigate to admin portal (no signup/login required after password)
+            try {
+                const origin = window.location.origin || '';
+                const portalPath = '/admin-portal.html';
+                if (origin && origin.startsWith('http')) {
+                    window.location.href = origin + portalPath;
+                } else {
+                    window.location.href = portalPath;
+                }
+            } catch (e) {
+                window.location.href = '/admin-portal.html';
+            }
+        } else if (role === 'faculty' && val === FACULTY_PASSWORD) {
+            selectedRole = 'faculty';
+            pendingRole = null;
+            // Mark this browser session as having verified the faculty role password
+            try { sessionStorage.setItem('roleVerified', 'faculty'); } catch (e) { /* ignore */ }
+            cleanup();
+            // Directly navigate to faculty portal
+            try {
+                const origin = window.location.origin || '';
+                const portalPath = '/FACULTY/faculty-portal.html';
+                if (origin && origin.startsWith('http')) {
+                    window.location.href = origin + portalPath;
+                } else {
+                    window.location.href = portalPath;
+                }
+            } catch (e) {
+                window.location.href = '/FACULTY/faculty-portal.html';
+            }
+        } else {
+            showNotification('error', 'Incorrect role password. Please try again.');
+        }
+    };
+}
+
+// Check if user is coming back to auth page to select role
+function checkForRoleSelection() {
+    const currentUserData = localStorage.getItem('currentUser');
+    if (!currentUserData) {
+        // User is not logged in, show role selection
+        showRoleSelection();
+    }
+}
+
+// Show role selection screen
+function showRoleSelection() {
+    const roleSelection = document.getElementById('roleSelection');
+    const loginForm = document.getElementById('loginForm');
+    const signupForm = document.getElementById('signupForm');
+    
+    if (roleSelection) {
+        roleSelection.classList.remove('d-none');
+        roleSelection.style.display = 'block';
+    }
+    if (loginForm) {
+        loginForm.classList.add('d-none');
+        loginForm.style.display = 'none';
+    }
+    if (signupForm) {
+        signupForm.classList.add('d-none');
+        signupForm.style.display = 'none';
+    }
+}
+
+// Select role and show appropriate form
+function selectRole(role) {
+    console.log('Selected role:', role);
+    const roleSelection = document.getElementById('roleSelection');
+    const loginForm = document.getElementById('loginForm');
+    const loginRoleTitle = document.getElementById('loginRoleTitle');
+    const signupRoleTitle = document.getElementById('signupRoleTitle');
+    const showSignupBtn = document.getElementById('showSignupBtn');
+
+    // If admin or faculty, require password first
+    if (role === 'admin' || role === 'faculty') {
+        pendingRole = role;
+        openRolePasswordModal(role);
+        return;
+    }
+
+    // Student role: proceed to login form
+    selectedRole = role;
+    // Hide role selection and show login form
+    if (roleSelection) {
+        roleSelection.classList.add('d-none');
+        roleSelection.style.display = 'none';
+    }
+    if (loginForm) {
+        loginForm.classList.remove('d-none');
+        loginForm.style.display = 'block';
+    }
+
+    // Update titles based on role
+    const roleTitles = {
+        'student': 'Student Login',
+        'faculty': 'Faculty Login',
+        'admin': 'Administrator Login'
+    };
+    if (loginRoleTitle) loginRoleTitle.textContent = roleTitles[role] || 'Login';
+    if (signupRoleTitle) signupRoleTitle.textContent = roleTitles[role]?.replace('Login', 'Registration') || 'Registration';
+
+    // Hide signup button for admin and faculty (they need admin approval)
+    if (showSignupBtn) {
+        if (role === 'admin' || role === 'faculty') {
+            showSignupBtn.style.display = 'none';
+        } else {
+            showSignupBtn.style.display = 'block';
+        }
+    }
+}
+
+// Go back to role selection
+function goBackToRoleSelection() {
+    selectedRole = null;
+    showRoleSelection();
+}
+
+// Make function globally available
+window.selectRole = selectRole;
+window.goBackToRoleSelection = goBackToRoleSelection;
 
 // Load existing users from localStorage
 function loadUsers() {
@@ -95,22 +327,26 @@ function checkAuthState() {
     const currentUserData = localStorage.getItem('currentUser');
     if (currentUserData) {
         currentUser = JSON.parse(currentUserData);
-<<<<<<< HEAD
-        // Redirect to student portal if already logged in (use absolute path to avoid nested folders)
+        // Redirect to appropriate portal based on role
+        const role = currentUser.role || 'student';
+        let portalPath = '/STUDENT/student-portal.html';
+        
+        if (role === 'faculty') {
+            portalPath = '/FACULTY/faculty-portal.html';
+        } else if (role === 'admin') {
+            portalPath = '/admin-portal.html';
+        }
+        
         try {
             const origin = window.location.origin || '';
             if (origin && origin.startsWith('http')) {
-                window.location.href = origin + '/STUDENT/student-portal.html';
+                window.location.href = origin + portalPath;
             } else {
-                window.location.href = '/STUDENT/student-portal.html';
+                window.location.href = portalPath;
             }
         } catch (e) {
-            window.location.href = '/STUDENT/student-portal.html';
+            window.location.href = portalPath;
         }
-=======
-        // Redirect to student portal if already logged in
-        window.location.href = 'student-portal.html';
->>>>>>> dc13fc5fc4ecf84e06785bcbfffec341c6494c8e
     }
 }
 
@@ -118,14 +354,48 @@ function checkAuthState() {
 function handleLogin(e) {
     e.preventDefault();
     
+    // Validate that a role has been selected
+    if (!selectedRole) {
+        showNotification('error', 'Please select a role first.');
+        goBackToRoleSelection();
+        return;
+    }
+    
     const email = document.getElementById('loginEmail').value;
     const password = document.getElementById('loginPassword').value;
     const rememberMe = document.getElementById('rememberMe').checked;
     
-    // Find user
-    const user = users.find(u => u.email === email && u.password === password && u.isActive);
+    // Validate email and password are filled
+    if (!email || !password) {
+        showNotification('error', 'Please enter both email and password.');
+        return;
+    }
+    
+    // Debug: Log available users and search criteria
+    console.log('Attempting login for role:', selectedRole);
+    console.log('Total users:', users.length);
+    console.log('Available users:', users.map(u => ({ email: u.email, role: u.role || 'no role' })));
+    
+    // Find user with matching credentials and role
+    // For backward compatibility: if user has no role, assume 'student'
+    const user = users.find(u => {
+        if (u.email === email && u.password === password && u.isActive) {
+            // If user has no role set, default to 'student'
+            const userRole = u.role || 'student';
+            console.log(`User ${u.email} has role: ${userRole}, searching for: ${selectedRole}`);
+            return userRole === selectedRole;
+        }
+        return false;
+    });
+    
+    console.log('Found user:', user ? user.email : 'none');
     
     if (user) {
+        // Ensure user has a role for future logins
+        if (!user.role) {
+            user.role = 'student';
+            saveUsers();
+        }
         currentUser = user;
         
         // Save to localStorage
@@ -138,29 +408,42 @@ function handleLogin(e) {
         showNotification('success', 'Login successful! Redirecting...');
         
         setTimeout(() => {
-<<<<<<< HEAD
+            // Route based on role
+            let portalPath = '';
+            if (selectedRole === 'student') {
+                portalPath = '/STUDENT/student-portal.html';
+            } else if (selectedRole === 'faculty') {
+                portalPath = '/FACULTY/faculty-portal.html';
+            } else if (selectedRole === 'admin') {
+                portalPath = '/admin-portal.html';
+            }
+            
             try {
                 const origin = window.location.origin || '';
                 if (origin && origin.startsWith('http')) {
-                    window.location.href = origin + '/STUDENT/student-portal.html';
+                    window.location.href = origin + portalPath;
                 } else {
-                    window.location.href = '/STUDENT/student-portal.html';
+                    window.location.href = portalPath;
                 }
             } catch (e) {
-                window.location.href = '/STUDENT/student-portal.html';
+                window.location.href = portalPath;
             }
-=======
-            window.location.href = 'student-portal.html';
->>>>>>> dc13fc5fc4ecf84e06785bcbfffec341c6494c8e
         }, 1500);
     } else {
-        showNotification('error', 'Invalid email or password. Please try again.');
+        showNotification('error', 'Invalid email or password for this role. Please try again.');
     }
 }
 
 // Handle signup
 function handleSignup(e) {
     e.preventDefault();
+    
+    // Validate that a role has been selected
+    if (!selectedRole) {
+        showNotification('error', 'Please select a role first.');
+        goBackToRoleSelection();
+        return;
+    }
     
     const formData = new FormData(e.target);
     const userData = Object.fromEntries(formData.entries());
@@ -183,7 +466,7 @@ function handleSignup(e) {
         return;
     }
     
-    // Create new user
+    // Create new user with role
     const newUser = {
         id: generateUserId(),
         firstName: userData.firstName,
@@ -194,6 +477,7 @@ function handleSignup(e) {
         course: userData.course,
         yearLevel: userData.yearLevel,
         password: userData.password,
+        role: selectedRole || 'student', // Add role
         dateCreated: new Date().toISOString(),
         isActive: true
     };
@@ -202,33 +486,18 @@ function handleSignup(e) {
     users.push(newUser);
     saveUsers();
     
-    // Set as current user
-    currentUser = newUser;
-    localStorage.setItem('currentUser', JSON.stringify(currentUser));
-    
     // Debug: Log successful creation
     console.log('User created successfully:', newUser);
-    console.log('Redirecting to student portal...');
     
-    // Show success notification and redirect
-    showNotification('success', 'Account created successfully! Redirecting to student portal...');
+    // Show success notification
+    showNotification('success', 'Account created successfully! You can now log in.');
     
+    // Clear the form
+    document.getElementById('signupFormElement').reset();
+    
+    // Switch back to login form
     setTimeout(() => {
-        console.log('Redirecting now...');
-<<<<<<< HEAD
-        try {
-            const origin = window.location.origin || '';
-            if (origin && origin.startsWith('http')) {
-                window.location.href = origin + '/STUDENT/student-portal.html';
-            } else {
-                window.location.href = '/STUDENT/student-portal.html';
-            }
-        } catch (e) {
-            window.location.href = '/STUDENT/student-portal.html';
-        }
-=======
-        window.location.href = 'student-portal.html';
->>>>>>> dc13fc5fc4ecf84e06785bcbfffec341c6494c8e
+        showLoginForm();
     }, 2000);
 }
 
@@ -299,7 +568,9 @@ function showSignupForm() {
     
     if (loginForm && signupForm) {
         loginForm.classList.add('d-none');
+        loginForm.style.display = 'none';
         signupForm.classList.remove('d-none');
+        signupForm.style.display = 'block';
         console.log('Successfully switched to signup form');
     } else {
         console.error('Could not find login or signup form elements');
@@ -314,39 +585,84 @@ function showLoginForm() {
     
     if (loginForm && signupForm) {
         signupForm.classList.add('d-none');
+        signupForm.style.display = 'none';
         loginForm.classList.remove('d-none');
+        loginForm.style.display = 'block';
         console.log('Successfully switched to login form');
     } else {
         console.error('Could not find login or signup form elements');
     }
 }
 
-// Redirect to student portal
+// Redirect to appropriate portal based on role
 function redirectToStudentPortal() {
-<<<<<<< HEAD
-    window.location.href = 'STUDENT/student-portal.html';
-=======
-    window.location.href = 'student-portal.html';
->>>>>>> dc13fc5fc4ecf84e06785bcbfffec341c6494c8e
+    const user = getCurrentUser();
+    let portalPath = '/STUDENT/student-portal.html';
+    
+    if (user && user.role === 'faculty') {
+        portalPath = '/FACULTY/faculty-portal.html';
+    } else if (user && user.role === 'admin') {
+        portalPath = '/admin-portal.html';
+    }
+    
+    try {
+        const origin = window.location.origin || '';
+        if (origin && origin.startsWith('http')) {
+            window.location.href = origin + portalPath;
+        } else {
+            window.location.href = portalPath;
+        }
+    } catch (e) {
+        window.location.href = portalPath;
+    }
 }
+
+// Terms modal functions
+function openTermsModal() {
+    const modal = document.getElementById('termsModal');
+    if (modal) {
+        modal.style.display = 'block';
+        document.body.style.overflow = 'hidden';
+    }
+}
+
+function closeTermsModal() {
+    const modal = document.getElementById('termsModal');
+    if (modal) {
+        modal.style.display = 'none';
+        document.body.style.overflow = 'auto';
+    }
+}
+
+function acceptTerms() {
+    const checkbox = document.getElementById('agreeTerms');
+    if (checkbox) {
+        checkbox.checked = true;
+    }
+    closeTermsModal();
+}
+
+// Make functions globally available
+window.openTermsModal = openTermsModal;
+window.closeTermsModal = closeTermsModal;
+window.acceptTerms = acceptTerms;
 
 // Logout function
 function logout() {
     currentUser = null;
     localStorage.removeItem('currentUser');
     sessionStorage.removeItem('currentUser');
-<<<<<<< HEAD
-    // Use absolute path to ensure redirect works from any subfolder (STUDENT/, FACULTY/, etc.)
+    // After logout, go back to the main dashboard (index)
     try {
-        const target = window.location.origin + '/index.html';
-        window.location.href = target;
+        const origin = window.location.origin || '';
+        if (origin && origin.startsWith('http')) {
+            window.location.href = origin + '/index.html';
+        } else {
+            window.location.href = '/index.html';
+        }
     } catch (e) {
-        // Fallback: relative path
         window.location.href = '/index.html';
     }
-=======
-    window.location.href = 'auth.html';
->>>>>>> dc13fc5fc4ecf84e06785bcbfffec341c6494c8e
 }
 
 // Get current user

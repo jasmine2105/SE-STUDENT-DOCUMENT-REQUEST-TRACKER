@@ -147,6 +147,59 @@ app.get('/api/requests/:id', async (req, res) => {
   res.json({ success: true, request });
 });
 
+// API: update a request (status, notes, clearance, timeline entries)
+app.put('/api/requests/:id', async (req, res) => {
+  try {
+    const id = req.params.id;
+    const payload = req.body || {};
+    await db.read();
+    const idx = db.data.requests.findIndex(r => r.id === id);
+    if (idx === -1) return res.status(404).json({ success: false, error: 'Not found' });
+
+    const request = db.data.requests[idx];
+
+    // Merge updatable fields
+    if (payload.status) request.status = payload.status;
+    if (typeof payload.requiresClearance !== 'undefined') request.requiresClearance = !!payload.requiresClearance;
+    if (payload.adminNotes) request.adminNotes = payload.adminNotes;
+    if (payload.facultyNotes) request.facultyNotes = payload.facultyNotes;
+
+    // Add timeline entry if provided
+    if (payload.timelineEntry) {
+      request.timeline = request.timeline || [];
+      request.timeline.push(payload.timelineEntry);
+    }
+
+    // Save changes
+    db.data.requests[idx] = request;
+    await db.write();
+
+    // Optionally notify student by email about status change
+    try {
+      if (process.env.EMAIL_USER && process.env.EMAIL_PASS && request.studentEmail) {
+        const transporter = createTransporter();
+        const mailOptions = {
+          from: process.env.EMAIL_USER,
+          to: request.studentEmail,
+          subject: `Request Update: ${request.id} — ${request.status}`,
+          text: `Hello ${request.studentName || ''},\n\nYour request ${request.id} status has been updated to ${request.status}.\n\nRegards,\nDocTracker`,
+          html: `<p>Hello ${request.studentName || ''},</p><p>Your request <strong>${request.id}</strong> status has been updated to <strong>${request.status}</strong>.</p><p>Regards,<br/>DocTracker</p>`
+        };
+        transporter.sendMail(mailOptions, (err, info) => {
+          if (err) console.error('Error sending status update email:', err);
+        });
+      }
+    } catch (e) {
+      console.warn('Email status update skipped or failed:', e.message);
+    }
+
+    return res.json({ success: true, request });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // Start server and handle common errors (EADDRINUSE)
 const server = app.listen(PORT, () => {
   console.log(`Server running on http://localhost:${PORT}`);

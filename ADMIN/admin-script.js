@@ -5,6 +5,25 @@ let adminNotifications = [];
 
 // Initialize admin portal
 document.addEventListener('DOMContentLoaded', function() {
+    // Ensure only admin can view this page
+    if (window.Auth && window.Auth.isAuthenticated) {
+        const user = window.Auth.getCurrentUser();
+        const roleVerified = sessionStorage.getItem('roleVerified');
+        // Allow access if either the logged-in user is an admin OR the role password was
+        // verified in this session. This lets admins skip signup/login after entering the password.
+        if (!((user && user.role === 'admin') || roleVerified === 'admin')) {
+            window.location.href = '../auth.html';
+            return;
+        }
+    } else {
+        // No persistent login; allow access only if role password was verified in this session
+        const roleVerified = sessionStorage.getItem('roleVerified');
+        if (roleVerified !== 'admin') {
+            window.location.href = '../auth.html';
+            return;
+        }
+    }
+
     loadAdminData();
     updateDashboard();
     loadRequests();
@@ -12,6 +31,11 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Set up event listeners
     setupEventListeners();
+    
+    // Try to sync with backend if available
+    fetchAdminRequests();
+    // Poll the server periodically for new requests (every 10s)
+    setInterval(fetchAdminRequests, 10000);
 });
 
 // Load admin-specific data
@@ -134,6 +158,51 @@ function loadAdminData() {
     ];
 }
 
+// Try to fetch requests from backend API (if server running) and replace adminRequests
+async function fetchAdminRequests() {
+    try {
+        const res = await fetch('/api/requests');
+        if (res.ok) {
+            const body = await res.json();
+            // server returns { success: true, requests: [...] }
+            const data = Array.isArray(body) ? body : (body.requests || []);
+            // Map any missing fields to adminRequests format
+            adminRequests = data.map(r => Object.assign({
+                adminNotes: r.adminNotes || '',
+                attachments: r.attachments || [],
+                requiresClearance: !!r.requiresClearance,
+                timeline: r.timeline || [{ status: r.status, date: r.dateSubmitted, note: 'Submitted', user: 'Student' }]
+            }, r));
+            updateDashboard();
+            loadRequests();
+        }
+    } catch (e) {
+        console.warn('Could not fetch admin requests from server:', e.message);
+    }
+}
+
+// Helper to persist request updates to server
+async function persistRequestUpdate(requestId, payload) {
+    try {
+        const res = await fetch(`/api/requests/${requestId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        if (res.ok) {
+            const body = await res.json();
+            if (body && body.success && body.request) {
+                // Refresh local adminRequests from server
+                await fetchAdminRequests();
+                return true;
+            }
+        }
+    } catch (err) {
+        console.error('Failed to persist request update:', err);
+    }
+    return false;
+}
+
 // Setup event listeners
 function setupEventListeners() {
     // Filter changes
@@ -215,7 +284,7 @@ function applyFilters() {
     const statusFilter = document.getElementById('statusFilter').value;
     const typeFilter = document.getElementById('typeFilter').value;
     const dateFilter = document.getElementById('dateFilter').value;
-    const searchFilter = document.getElementById('searchFilter').value.toLowerCase();
+    const searchFilter = (document.getElementById('searchFilter').value || '').toLowerCase();
     
     let filteredRequests = adminRequests;
     
@@ -254,8 +323,8 @@ function applyFilters() {
     
     if (searchFilter) {
         filteredRequests = filteredRequests.filter(r => 
-            r.studentName.toLowerCase().includes(searchFilter) ||
-            r.studentId.toLowerCase().includes(searchFilter)
+            ((r.studentName || '').toLowerCase().includes(searchFilter)) ||
+            ((r.studentId || '').toLowerCase().includes(searchFilter))
         );
     }
     
@@ -320,6 +389,7 @@ function showPendingRequests() {
 
 // View request details
 function viewRequestDetails(requestId) {
+    console.log('[admin] viewRequestDetails', requestId);
     const request = adminRequests.find(r => r.id === requestId);
     if (!request) return;
 
@@ -369,6 +439,11 @@ function viewRequestDetails(requestId) {
         <div class="mt-3">
             <h5>Actions</h5>
             <div class="d-flex gap-2">
+                ${!request.requiresClearance ? `
+                    <button class="btn btn-outline" onclick="sendForFacultyClearance('${request.id}')">
+                        <i class="fas fa-university"></i> FOR FACULTY VALIDATION
+                    </button>
+                ` : ''}
                 ${request.status === 'Submitted' ? `
                     <button class="btn btn-success" onclick="updateRequestStatus('${request.id}', 'Processing')">
                         <i class="fas fa-play"></i> Start Processing
@@ -401,11 +476,13 @@ function viewRequestDetails(requestId) {
 
 // Process request
 function processRequest(requestId) {
+    console.log('[admin] processRequest', requestId);
     viewRequestDetails(requestId);
 }
 
 // Add notes
 function addNotes(requestId) {
+    console.log('[admin] addNotes', requestId);
     const request = adminRequests.find(r => r.id === requestId);
     if (!request) return;
 
@@ -414,78 +491,125 @@ function addNotes(requestId) {
     document.getElementById('notesForm').onsubmit = function(e) {
         e.preventDefault();
         const noteText = document.getElementById('noteText').value;
-        if (noteText.trim()) {
-            request.adminNotes = noteText;
-            request.timeline.push({
-                status: request.status,
-                date: new Date().toISOString(),
-                note: `Admin note: ${noteText}`,
-                user: 'Admin'
-            });
-            
-            DocTracker.showNotification('success', 'Note added successfully!');
-            DocTracker.closeModal();
-            document.getElementById('noteText').value = '';
-            loadRequests();
-        }
+            if (noteText.trim()) {
+                request.adminNotes = noteText;
+                request.timeline.push({
+                    status: request.status,
+                    date: new Date().toISOString(),
+                    note: `Admin note: ${noteText}`,
+                    user: 'Admin'
+                });
+                
+                // Persist to server
+                persistRequestUpdate(requestId, { adminNotes: noteText, timelineEntry: { status: request.status, date: new Date().toISOString(), note: `Admin note: ${noteText}`, user: 'Admin' } })
+                    .then(success => {
+                        if (success) {
+                            DocTracker.showNotification('success', 'Note added successfully!');
+                        } else {
+                            DocTracker.showNotification('warning', 'Note saved locally but failed to sync with server.');
+                        }
+                        DocTracker.closeModal();
+                        document.getElementById('noteText').value = '';
+                        loadRequests();
+                    });
+            }
     };
 }
 
 // Update request status
 function updateRequestStatus(requestId, newStatus) {
+    console.log('[admin] updateRequestStatus', requestId, newStatus);
     const request = adminRequests.find(r => r.id === requestId);
     if (!request) return;
 
     const oldStatus = request.status;
-    request.status = newStatus;
-    
-    request.timeline.push({
+    const timelineEntry = {
         status: newStatus,
         date: new Date().toISOString(),
         note: `Status changed from ${oldStatus} to ${newStatus}`,
         user: 'Admin'
-    });
-    
-    // Add notification
-    adminNotifications.unshift({
-        id: adminNotifications.length + 1,
-        type: 'info',
-        title: 'Request Status Updated',
-        message: `${request.studentName}'s ${request.documentType} request status changed to ${newStatus}`,
-        timestamp: new Date().toISOString(),
-        read: false,
-        requestId: requestId
-    });
-    
-    DocTracker.showNotification('success', `Request status updated to ${newStatus}!`);
-    updateDashboard();
-    loadRequests();
-    loadNotifications();
-    DocTracker.closeModal();
+    };
+
+    // Optimistically update locally
+    request.status = newStatus;
+    request.timeline.push(timelineEntry);
+
+    // Persist update to server
+    persistRequestUpdate(requestId, { status: newStatus, timelineEntry })
+        .then(success => {
+            if (success) {
+                DocTracker.showNotification('success', `Request status updated to ${newStatus}!`);
+            } else {
+                DocTracker.showNotification('warning', `Status updated locally to ${newStatus} (server sync failed).`);
+            }
+            updateDashboard();
+            loadRequests();
+            loadNotifications();
+            DocTracker.closeModal();
+        });
 }
 
 // Decline request
 function declineRequest(requestId) {
+    console.log('[admin] declineRequest', requestId);
     const reason = prompt('Please provide a reason for declining this request:');
     if (reason && reason.trim()) {
         const request = adminRequests.find(r => r.id === requestId);
         if (request) {
+            const timelineEntry = { status: 'Declined', date: new Date().toISOString(), note: `Request declined: ${reason}`, user: 'Admin' };
+            // Optimistic update
             request.status = 'Declined';
             request.adminNotes = `Request declined: ${reason}`;
-            
-            request.timeline.push({
-                status: 'Declined',
-                date: new Date().toISOString(),
-                note: `Request declined: ${reason}`,
-                user: 'Admin'
-            });
-            
-            DocTracker.showNotification('success', 'Request has been declined!');
-            updateDashboard();
-            loadRequests();
-            DocTracker.closeModal();
+            request.timeline.push(timelineEntry);
+            // Persist
+            persistRequestUpdate(requestId, { status: 'Declined', adminNotes: `Request declined: ${reason}`, timelineEntry })
+                .then(success => {
+                    if (success) {
+                        DocTracker.showNotification('success', 'Request has been declined!');
+                    } else {
+                        DocTracker.showNotification('warning', 'Request declined locally (server sync failed).');
+                    }
+                    updateDashboard();
+                    loadRequests();
+                    DocTracker.closeModal();
+                });
         }
     }
+}
+
+// Send request to faculty for clearance
+function sendForFacultyClearance(requestId) {
+    console.log('[admin] sendForFacultyClearance', requestId);
+    const request = adminRequests.find(r => r.id === requestId);
+    if (!request) return;
+
+    const timelineEntry = { status: 'Action Required', date: new Date().toISOString(), note: 'Sent to faculty for clearance', user: 'Admin' };
+    // Optimistic update
+    request.status = 'Action Required';
+    request.requiresClearance = true;
+    request.timeline.push(timelineEntry);
+
+    persistRequestUpdate(requestId, { status: 'Action Required', requiresClearance: true, timelineEntry })
+        .then(success => {
+            if (success) {
+                adminNotifications.unshift({
+                    id: adminNotifications.length + 1,
+                    type: 'warning',
+                    title: 'Faculty Clearance Requested',
+                    message: `${request.studentName}'s ${request.documentType} needs faculty clearance`,
+                    timestamp: new Date().toISOString(),
+                    read: false,
+                    requestId: requestId
+                });
+                DocTracker.showNotification('success', 'Request sent to faculty for clearance');
+            } else {
+                DocTracker.showNotification('warning', 'Request marked for faculty clearance locally (server sync failed).');
+            }
+            updateDashboard();
+            loadRequests();
+            loadNotifications();
+            DocTracker.closeModal();
+        });
 }
 
 // Load notifications
@@ -578,3 +702,20 @@ const timelineStyles = `
 
 // Add timeline styles to head
 document.head.insertAdjacentHTML('beforeend', timelineStyles);
+
+// Expose admin functions globally (in case inline onclicks need them)
+window.viewRequestDetails = viewRequestDetails;
+window.processRequest = processRequest;
+window.addNotes = addNotes;
+window.updateRequestStatus = updateRequestStatus;
+window.declineRequest = declineRequest;
+window.sendForFacultyClearance = sendForFacultyClearance;
+window.markNotificationRead = markNotificationRead;
+window.refreshData = refreshData;
+window.showAllRequests = showAllRequests;
+window.showPendingRequests = showPendingRequests;
+window.applyFilters = applyFilters;
+window.loadRequests = loadRequests;
+window.loadNotifications = loadNotifications;
+window.fetchAdminRequests = fetchAdminRequests;
+window.persistRequestUpdate = persistRequestUpdate;
