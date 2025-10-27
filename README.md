@@ -203,7 +203,8 @@ This project is created for educational and demonstration purposes. Feel free to
 - Make the App user-friendly
 
 # Patrick Duron
--
+- Modified the structuring for better convience and easier debugging experience
+- structured the roles like ADMIN to have their own auth, scripts, styles and views
 
 ---
 
