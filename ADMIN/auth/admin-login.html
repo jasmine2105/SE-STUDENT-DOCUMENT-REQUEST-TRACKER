@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin/Faculty Login - DocTracker</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <link rel="stylesheet" href="styles.css">
-    <link rel="stylesheet" href="auth-styles.css">
+    <link rel="stylesheet" href="../../shared/styles-home.css">
+    <link rel="stylesheet" href="../styles/admin-portal.css">
 </head>
 <body>
     <div class="auth-container">
@@ -15,7 +15,7 @@
             <form id="adminLoginForm">
                 <div class="form-group">
                     <select class="form-control" id="userType" required>
-                        <option value="">Select use</option>
+                        <option value="">Select user</option>
                         <option value="admin">Admin</option>
                         <option value="faculty">Faculty</option>
                     </select>
@@ -50,7 +50,7 @@
             <div id="adminAuthError" class="auth-error" aria-live="polite" style="display:none; margin-top:0.75rem; color:#b71c1c; background: #ffebee; padding:0.5rem; border-radius:4px;"></div>
 
             <div class="back-link">
-                <a href="index.html">
+                <a href="../../index.html">
                     <i class="fas fa-arrow-left"></i>
                     Back to Home
                 </a>
@@ -58,15 +58,7 @@
         </div>
     </div>
 
-    <script src="admin-script.js"></script>
-            <div style="text-align: center; margin-top: 1rem;">
-                <a href="index.html" class="btn btn-outline">
-                    <i class="fas fa-arrow-left"></i>
-                    Back to Home
-                </a>
-            </div>
-        </div>
-    </div>
+    <script src="../scripts/admin-portal.js"></script>
     <script src="admin-auth.js"></script>
 </body>
 </html>
