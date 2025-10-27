@@ -154,7 +154,7 @@
       "deliveryAddress": "",
       "recipientName": "mon cal",
       "notes": "",
-      "status": "Ready for Release",
+      "status": "Completed",
       "dateSubmitted": "2025-10-27T07:24:27.202Z",
       "attachments": [],
       "timeline": [
@@ -173,6 +173,12 @@
           "status": "Ready for Release",
           "date": "2025-10-27T09:07:24.527Z",
           "note": "Status changed from Processing to Ready for Release",
+          "user": "Admin"
+        },
+        {
+          "status": "Completed",
+          "date": "2025-10-27T10:11:50.439Z",
+          "note": "Status changed from Ready for Release to Completed",
           "user": "Admin"
         }
       ]

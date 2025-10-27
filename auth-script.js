@@ -95,17 +95,45 @@ document.addEventListener('DOMContentLoaded', function() {
     loadUsers();
     setupEventListeners();
     
-    // If someone opens the auth page and they already have a session
-    // show a small prompt instead of auto-redirecting. This lets the
-    // user explicitly choose to continue to the portal, switch account,
-    // or log out. If no session exists, show role selection.
+    // If a role or portal parameter is supplied in the URL (e.g. auth.html?role=student
+    // or auth.html?portal=admin) auto-select behavior. If the user already has an
+    // active session we keep the existing behavior (show logged-in prompt).
+    const params = new URLSearchParams(window.location.search);
+    const roleParam = params.get('role') || (window.location.hash ? window.location.hash.replace('#', '') : null);
+    const portalParam = params.get('portal');
+
     const currentUserData = localStorage.getItem('currentUser') || sessionStorage.getItem('currentUser');
     if (currentUserData) {
+        // User already signed-in: show the prompt (they can still switch account)
         showLoggedInPrompt();
-    } else {
-        // Show role selection if not logged in
-        showRoleSelection();
+        return;
     }
+
+    // If portal=admin is present, we want to show only faculty/admin options
+    // on the role selection screen (hide student choice).
+    if (portalParam && portalParam.toLowerCase() === 'admin') {
+        showRoleSelection();
+        // Hide student role card so only faculty/admin are visible
+        try {
+            const studentCard = document.querySelector('.role-card[data-role="student"]');
+            if (studentCard) studentCard.style.display = 'none';
+        } catch (e) {
+            console.warn('Failed to hide student card for admin portal', e);
+        }
+        return;
+    }
+
+    // If role param provided, auto-select that role (student/faculty/admin)
+    if (roleParam) {
+        const r = roleParam.toLowerCase();
+        if (['student', 'faculty', 'admin'].includes(r)) {
+            try { selectRole(r); } catch (e) { console.warn('Could not auto-select role from URL', e); showRoleSelection(); }
+            return;
+        }
+    }
+
+    // Default behavior: show role selection
+    showRoleSelection();
 });
 
 // When a user with an active session visits the auth page, show a small
@@ -183,13 +211,23 @@ function openRolePasswordModal(role) {
 
     prompt.textContent = `The ${role} role requires a password. Please enter it to continue.`;
     passwordInput.value = '';
+    passwordInput.focus();
     modal.style.display = 'block';
     document.body.style.overflow = 'hidden';
+
+    // Key handler to allow Enter to submit
+    const onKeyDown = (e) => {
+        if (e.key === 'Enter' || e.keyCode === 13) {
+            e.preventDefault();
+            submitBtn.click();
+        }
+    };
 
     const cleanup = () => {
         modal.style.display = 'none';
         document.body.style.overflow = 'auto';
         submitBtn.onclick = null;
+        passwordInput.removeEventListener('keydown', onKeyDown);
         // hide any previous role password errors
         const err = document.getElementById('rolePassError');
         if (err) { err.style.display = 'none'; clearTimeout(err._hideTimeout); }
@@ -240,6 +278,8 @@ function openRolePasswordModal(role) {
             passwordInput.focus();
         }
     };
+    // Attach Enter key handler
+    passwordInput.addEventListener('keydown', onKeyDown);
 }
 
 // Check if user is coming back to auth page to select role
