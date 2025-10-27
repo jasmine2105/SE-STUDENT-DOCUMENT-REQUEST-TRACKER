@@ -28,7 +28,7 @@
             </div>
             <div class="nav-menu">
                 <a href="index.html" class="nav-link">Home</a>
-                <a href="FACULTY/faculty-portal.html" class="nav-link">Faculty Portal</a>
+                <a href="auth.html" class="nav-link">Portal</a>
                 <div class="nav-buttons">
                     <span class="nav-link">Welcome, Admin User</span>
                     <a href="#" class="btn btn-outline" onclick="logout()">Logout</a>
@@ -74,7 +74,7 @@
                     <div class="card-body">
                         <div class="d-flex flex-column">
                             <a href="admin-portal.html" class="btn btn-outline" style="margin-bottom:8px; text-align:left;">Dashboard</a>
-                            <a href="FACULTY/faculty-portal.html" class="btn btn-outline" style="margin-bottom:8px; text-align:left;">Faculty Portal</a>
+                            <a href="auth.html" class="btn btn-outline" style="margin-bottom:8px; text-align:left;">Portal</a>
                             <button class="btn btn-outline" style="text-align:left;" onclick="logout()">Logout</button>
                         </div>
                     </div>
@@ -221,6 +221,88 @@
     <script src="utils.js"></script>
     <script src="ui.js"></script>
     <script src="auth-script.js"></script>
+    <!-- Admin entry modal: require role password when opening admin portal -->
+    <div id="adminEntryModal" class="modal" style="display:none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-lock"></i> Admin Access Required</h3>
+            </div>
+            <div class="modal-body">
+                <p>Please enter the admin role password to access this portal.</p>
+                <div class="form-group">
+                    <input type="password" id="adminEntryPassword" class="form-control" placeholder="Enter admin password">
+                </div>
+                <div id="adminEntryError" aria-live="polite" style="display:none; margin-top:0.5rem; color:#b71c1c; background:#ffebee; padding:0.5rem; border-radius:4px;"></div>
+                <div class="d-flex gap-2 mt-3">
+                    <button class="btn btn-primary" id="adminEntrySubmit">Submit</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Require admin password when loading this page if not already verified in this session
+        (function() {
+            function openAdminEntry() {
+                const modal = document.getElementById('adminEntryModal');
+                if (!modal) return;
+                modal.style.display = 'block';
+                document.body.style.overflow = 'hidden';
+                const pwd = document.getElementById('adminEntryPassword');
+                if (pwd) pwd.focus();
+            }
+
+            function closeAdminEntry() {
+                const modal = document.getElementById('adminEntryModal');
+                if (!modal) return;
+                modal.style.display = 'none';
+                document.body.style.overflow = 'auto';
+            }
+
+            // Wait until auth-script defines ADMIN_PASSWORD (auth-script.js is included above)
+            document.addEventListener('DOMContentLoaded', function() {
+                try {
+                    const verified = sessionStorage.getItem('roleVerified');
+                    if (verified === 'admin') return; // already verified this session
+
+                    // show modal and require password
+                    openAdminEntry();
+
+                    const submitBtn = document.getElementById('adminEntrySubmit');
+                    const pwdInput = document.getElementById('adminEntryPassword');
+                    const errEl = document.getElementById('adminEntryError');
+
+                    submitBtn.addEventListener('click', function() {
+                        const val = pwdInput.value || '';
+                        // ADMIN_PASSWORD comes from auth-script.js; fallback to 'admin123' if not defined
+                        const adminPwd = (typeof ADMIN_PASSWORD !== 'undefined') ? ADMIN_PASSWORD : 'admin123';
+                        if (val === adminPwd) {
+                            try { sessionStorage.setItem('roleVerified', 'admin'); } catch (e) {}
+                            closeAdminEntry();
+                        } else {
+                            if (errEl) {
+                                errEl.textContent = 'Incorrect role password. Only authorized personnel may access this area.';
+                                errEl.style.display = 'block';
+                                clearTimeout(errEl._hideTimeout);
+                                errEl._hideTimeout = setTimeout(() => { errEl.style.display = 'none'; }, 5000);
+                            } else {
+                                alert('Incorrect password');
+                            }
+                            pwdInput.value = '';
+                            pwdInput.focus();
+                        }
+                    });
+
+                    // also submit on Enter
+                    pwdInput.addEventListener('keydown', function(e) {
+                        if (e.key === 'Enter') { e.preventDefault(); submitBtn.click(); }
+                    });
+                } catch (e) {
+                    console.error('Admin entry check failed', e);
+                }
+            });
+        })();
+    </script>
     <script src="ADMIN/admin-script.js"></script>
 </body>
 </html>

@@ -41,6 +41,38 @@ function showNotification(type, message, duration = 3000) {
     }, duration);
 }
 
+// Show inline error inside the role password modal
+function showRolePassError(message, timeout = 5000) {
+    const el = document.getElementById('rolePassError');
+    if (!el) {
+        // fallback to notification
+        showNotification('error', message, timeout);
+        return;
+    }
+    el.textContent = message;
+    el.style.display = 'block';
+    // Auto-hide
+    clearTimeout(el._hideTimeout);
+    el._hideTimeout = setTimeout(() => {
+        el.style.display = 'none';
+    }, timeout);
+}
+
+// Show inline error at the top of the login form
+function showLoginFormError(message, timeout = 4000) {
+    const el = document.getElementById('loginFormError');
+    if (!el) {
+        showNotification('error', message, timeout);
+        return;
+    }
+    el.textContent = message;
+    el.style.display = 'block';
+    clearTimeout(el._hideTimeout);
+    el._hideTimeout = setTimeout(() => {
+        el.style.display = 'none';
+    }, timeout);
+}
+
 // Simple modal function for auth page
 function openModal(modalId) {
     const modal = document.getElementById(modalId);
@@ -158,6 +190,9 @@ function openRolePasswordModal(role) {
         modal.style.display = 'none';
         document.body.style.overflow = 'auto';
         submitBtn.onclick = null;
+        // hide any previous role password errors
+        const err = document.getElementById('rolePassError');
+        if (err) { err.style.display = 'none'; clearTimeout(err._hideTimeout); }
     };
 
     submitBtn.onclick = function() {
@@ -199,7 +234,10 @@ function openRolePasswordModal(role) {
                 window.location.href = '/FACULTY/faculty-portal.html';
             }
         } else {
-            showNotification('error', 'Incorrect role password. Please try again.');
+            // Show inline error in modal and keep it open
+            showRolePassError('Incorrect role password. Only authorized persons may access this area.');
+            passwordInput.value = '';
+            passwordInput.focus();
         }
     };
 }
@@ -226,6 +264,8 @@ function showRoleSelection() {
     if (loginForm) {
         loginForm.classList.add('d-none');
         loginForm.style.display = 'none';
+        const loginErr = document.getElementById('loginFormError');
+        if (loginErr) { loginErr.style.display = 'none'; clearTimeout(loginErr._hideTimeout); }
     }
     if (signupForm) {
         signupForm.classList.add('d-none');
@@ -367,7 +407,7 @@ function handleLogin(e) {
     
     // Validate email and password are filled
     if (!email || !password) {
-        showNotification('error', 'Please enter both email and password.');
+        showLoginFormError('Please enter both email and password.');
         return;
     }
     
@@ -405,7 +445,11 @@ function handleLogin(e) {
             sessionStorage.setItem('currentUser', JSON.stringify(currentUser));
         }
         
-        showNotification('success', 'Login successful! Redirecting...');
+    // Clear any previous inline login errors
+    const loginErr = document.getElementById('loginFormError');
+    if (loginErr) { loginErr.style.display = 'none'; clearTimeout(loginErr._hideTimeout); }
+
+    showNotification('success', 'Login successful! Redirecting...');
         
         setTimeout(() => {
             // Route based on role
@@ -430,7 +474,8 @@ function handleLogin(e) {
             }
         }, 1500);
     } else {
-        showNotification('error', 'Invalid email or password for this role. Please try again.');
+        // Show inline error at top of login form for failed credential attempts
+        showLoginFormError('Invalid email or password. Please try again.');
     }
 }
 
@@ -588,6 +633,8 @@ function showLoginForm() {
         signupForm.style.display = 'none';
         loginForm.classList.remove('d-none');
         loginForm.style.display = 'block';
+        const loginErr = document.getElementById('loginFormError');
+        if (loginErr) { loginErr.style.display = 'none'; clearTimeout(loginErr._hideTimeout); }
         console.log('Successfully switched to login form');
     } else {
         console.error('Could not find login or signup form elements');

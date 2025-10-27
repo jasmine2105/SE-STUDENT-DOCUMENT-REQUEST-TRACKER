@@ -82,6 +82,8 @@
                             <a href="#" class="forgot-password">Forgot Password?</a>
                         </div>
                     </div>
+                    <!-- Inline login error shown below the forgot password link -->
+                    <div id="loginFormError" aria-live="polite" style="display:none; margin-top:0.5rem; color:#b71c1c; background:#ffebee; padding:0.5rem; border-radius:4px;"></div>
                     
                     <button type="submit" class="btn btn-primary btn-full">
                         <i class="fas fa-sign-in-alt"></i> Login
@@ -303,6 +305,8 @@
                     <div class="form-group">
                         <input type="password" id="rolePasswordInput" class="form-control" placeholder="Enter role password">
                     </div>
+                    <!-- Inline error for role password modal -->
+                    <div id="rolePassError" aria-live="polite" style="display:none; margin-top:0.5rem; color:#b71c1c; background:#ffebee; padding:0.5rem; border-radius:4px;"></div>
                     <div class="d-flex gap-2 mt-3">
                         <button class="btn btn-primary" id="rolePassSubmit">Submit</button>
                         <button class="btn btn-outline" onclick="closeModal()">Cancel</button>

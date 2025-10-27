@@ -31,6 +31,17 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Set up event listeners
     setupEventListeners();
+    // Allow clicking the overlay of the process modal to close it for convenience
+    (function attachProcessModalOverlayClose() {
+        const modal = document.getElementById('processModal');
+        if (!modal) return;
+        modal.addEventListener('click', function(e) {
+            // If the click target is the modal itself (i.e., the overlay), close it
+            if (e.target === modal) {
+                try { DocTracker.closeModal('processModal'); } catch (err) { /* ignore */ }
+            }
+        });
+    })();
     
     // Try to sync with backend if available
     fetchAdminRequests();

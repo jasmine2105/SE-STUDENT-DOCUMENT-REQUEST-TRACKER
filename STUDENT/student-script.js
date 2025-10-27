@@ -18,8 +18,16 @@ document.addEventListener('DOMContentLoaded', function() {
     updateWelcomeMessage();
     
     loadStudentData();
+    // Load local data first, then try to pull latest from server and update UI
     updateDashboard();
     loadRequests();
+    // Attempt to refresh from server so statuses reflect admin/faculty updates
+    fetchServerRequests().then(updated => {
+        if (updated) {
+            updateDashboard();
+            loadRequests();
+        }
+    });
     
     // Set up event listeners
     setupEventListeners();
@@ -338,11 +346,71 @@ function confirmPickup(requestId) {
 // Refresh requests
 function refreshRequests() {
     DocTracker.showNotification('info', 'Refreshing requests...');
-    setTimeout(() => {
+    // Try fetching latest requests from server and merge statuses into local requests
+    fetchServerRequests().then(updated => {
         loadRequests();
         updateDashboard();
-        DocTracker.showNotification('success', 'Requests refreshed successfully!');
-    }, 1000);
+        if (updated) {
+            DocTracker.showNotification('success', 'Requests refreshed from server.');
+        } else {
+            DocTracker.showNotification('warning', 'No server available or no updates. Showing local requests.');
+        }
+    }).catch(err => {
+        console.error('Error refreshing from server:', err);
+        // Fallback to local-only refresh
+        loadRequests();
+        updateDashboard();
+        DocTracker.showNotification('warning', 'Could not contact server. Showing local requests.');
+    });
+}
+
+// Fetch requests from backend and merge status/timeline/notes into local studentRequests
+async function fetchServerRequests() {
+    if (!currentStudent) return false;
+    try {
+        const res = await fetch('/api/requests');
+        if (!res.ok) return false;
+        const body = await res.json();
+        const serverRequests = Array.isArray(body) ? body : (body.requests || []);
+
+        // Find requests that belong to this student (match by studentId or studentEmail)
+        let foundAny = false;
+        serverRequests.forEach(sr => {
+            if (!sr) return;
+            const matchesStudent = sr.studentId === currentStudent.studentId || (sr.studentEmail && sr.studentEmail.toLowerCase() === (currentStudent.email || '').toLowerCase());
+            if (!matchesStudent) return;
+
+            // Try to find local entry by id
+            const idx = studentRequests.findIndex(r => r.id === sr.id);
+            if (idx !== -1) {
+                // Update status, timeline, notes and attachments if changed
+                const local = studentRequests[idx];
+                let changed = false;
+                if (local.status !== sr.status) { local.status = sr.status; changed = true; }
+                if (JSON.stringify(local.timeline || []) !== JSON.stringify(sr.timeline || [])) { local.timeline = sr.timeline || []; changed = true; }
+                if (local.notes !== sr.adminNotes && sr.adminNotes) { local.notes = sr.adminNotes; changed = true; }
+                if (changed) foundAny = true;
+                studentRequests[idx] = local;
+            } else {
+                // Local does not have it yet — insert server copy so student sees it
+                const copy = Object.assign({}, sr);
+                // Ensure necessary fields exist
+                copy.timeline = copy.timeline || [];
+                studentRequests.unshift(copy);
+                foundAny = true;
+            }
+        });
+
+        if (foundAny) {
+            // Persist merged results locally
+            localStorage.setItem(`requests_${currentStudent.studentId}`, JSON.stringify(studentRequests));
+        }
+
+        return true;
+    } catch (e) {
+        console.warn('fetchServerRequests failed:', e.message || e);
+        return false;
+    }
 }
 
 // Handle form submission

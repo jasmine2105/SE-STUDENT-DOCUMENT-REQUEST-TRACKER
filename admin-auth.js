@@ -22,6 +22,22 @@ const FACULTY_CREDENTIALS = {
     }
 };
 
+// Small helper to show inline errors
+function showAdminAuthError(message, timeout = 4000) {
+    const el = document.getElementById('adminAuthError');
+    if (!el) {
+        alert(message); // fallback
+        return;
+    }
+    el.textContent = message;
+    el.style.display = 'block';
+    // Auto-hide after timeout
+    clearTimeout(el._hideTimeout);
+    el._hideTimeout = setTimeout(() => {
+        el.style.display = 'none';
+    }, timeout);
+}
+
 document.getElementById('adminLoginForm').addEventListener('submit', function(e) {
     e.preventDefault();
     
@@ -42,7 +58,7 @@ document.getElementById('adminLoginForm').addEventListener('submit', function(e)
     }
 
     if (!credentials) {
-        alert('Invalid username');
+        showAdminAuthError('Invalid username. Please check and try again.');
         return;
     }
 
@@ -63,22 +79,20 @@ document.getElementById('adminLoginForm').addEventListener('submit', function(e)
 
         window.location.href = redirectPath;
     } else {
-        alert('Invalid password or user type');
+        showAdminAuthError('Invalid password for the selected role. Please try again.');
     }
 });
 
 function togglePassword() {
     const passwordInput = document.getElementById('password');
-    const icon = document.querySelector('.password-toggle');
+    const icon = document.querySelector('.toggle-password i');
     
     if (passwordInput.type === 'password') {
         passwordInput.type = 'text';
-        icon.classList.remove('fa-eye');
-        icon.classList.add('fa-eye-slash');
+        if (icon) { icon.classList.remove('fa-eye'); icon.classList.add('fa-eye-slash'); }
     } else {
         passwordInput.type = 'password';
-        icon.classList.remove('fa-eye-slash');
-        icon.classList.add('fa-eye');
+        if (icon) { icon.classList.remove('fa-eye-slash'); icon.classList.add('fa-eye'); }
     }
 }
 

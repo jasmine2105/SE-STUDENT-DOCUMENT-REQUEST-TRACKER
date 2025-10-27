@@ -1,4 +1,182 @@
 {
-  "requests": [],
+  "requests": [
+    {
+      "id": "REQ-SLUGCQQO",
+      "studentId": "2023025588",
+      "studentName": "mon cal",
+      "studentEmail": "mmncalledo@yahoo.com",
+      "documentType": "Other",
+      "purpose": "employment",
+      "termCoverage": "",
+      "copies": 1,
+      "deliveryMethod": "Pickup",
+      "deliveryAddress": "",
+      "recipientName": "mon cal",
+      "notes": "",
+      "status": "Action Required",
+      "dateSubmitted": "2025-10-27T09:01:42.324Z",
+      "attachments": [],
+      "timeline": [
+        {
+          "status": "Submitted",
+          "date": "2025-10-27T09:01:42.324Z",
+          "note": "Request submitted"
+        },
+        {
+          "status": "Action Required",
+          "date": "2025-10-27T09:24:45.161Z",
+          "note": "Sent to faculty for clearance",
+          "user": "Admin"
+        }
+      ],
+      "requiresClearance": true
+    },
+    {
+      "id": "REQ-C8DF_AWV",
+      "studentId": "2023025588",
+      "studentName": "mon cal",
+      "studentEmail": "mmncalledo@yahoo.com",
+      "documentType": "HonorableDismissal",
+      "purpose": "employment",
+      "termCoverage": "2ns semester ay 2025-2026",
+      "copies": 1,
+      "deliveryMethod": "Pickup",
+      "deliveryAddress": "",
+      "recipientName": "mon cal",
+      "notes": "",
+      "status": "Completed",
+      "dateSubmitted": "2025-10-27T08:59:42.362Z",
+      "attachments": [],
+      "timeline": [
+        {
+          "status": "Submitted",
+          "date": "2025-10-27T08:59:42.362Z",
+          "note": "Request submitted"
+        },
+        {
+          "status": "Processing",
+          "date": "2025-10-27T09:00:06.272Z",
+          "note": "Status changed from Submitted to Processing",
+          "user": "Admin"
+        },
+        {
+          "status": "Processing",
+          "date": "2025-10-27T09:00:07.040Z",
+          "note": "Status changed from Processing to Processing",
+          "user": "Admin"
+        },
+        {
+          "status": "Action Required",
+          "date": "2025-10-27T09:02:58.624Z",
+          "note": "Status changed from Processing to Action Required",
+          "user": "Admin"
+        },
+        {
+          "status": "Ready for Release",
+          "date": "2025-10-27T09:03:00.153Z",
+          "note": "Status changed from Action Required to Ready for Release",
+          "user": "Admin"
+        },
+        {
+          "status": "Completed",
+          "date": "2025-10-27T09:04:42.255Z",
+          "note": "Status changed from Ready for Release to Completed",
+          "user": "Admin"
+        },
+        {
+          "status": "Action Required",
+          "date": "2025-10-27T09:05:22.583Z",
+          "note": "Sent to faculty for clearance",
+          "user": "Admin"
+        },
+        {
+          "status": "Faculty Approved",
+          "date": "2025-10-27T09:05:53.549Z",
+          "note": "Approved by faculty",
+          "user": "Faculty"
+        },
+        {
+          "status": "Faculty Approved",
+          "date": "2025-10-27T09:06:24.481Z",
+          "note": "Approved by faculty",
+          "user": "Faculty"
+        },
+        {
+          "status": "Faculty Approved",
+          "date": "2025-10-27T09:06:25.246Z",
+          "note": "Approved by faculty",
+          "user": "Faculty"
+        },
+        {
+          "status": "Faculty Approved",
+          "date": "2025-10-27T09:06:33.342Z",
+          "note": "Approved by faculty",
+          "user": "Faculty"
+        },
+        {
+          "status": "Faculty Approved",
+          "date": "2025-10-27T09:06:37.796Z",
+          "note": "Approved by faculty",
+          "user": "Faculty"
+        },
+        {
+          "status": "Faculty Approved",
+          "date": "2025-10-27T09:06:46.121Z",
+          "note": "Approved by faculty",
+          "user": "Faculty"
+        },
+        {
+          "status": "Ready for Release",
+          "date": "2025-10-27T09:07:34.812Z",
+          "note": "Status changed from Processing to Ready for Release",
+          "user": "Admin"
+        },
+        {
+          "status": "Completed",
+          "date": "2025-10-27T09:07:41.090Z",
+          "note": "Status changed from Ready for Release to Completed",
+          "user": "Admin"
+        }
+      ],
+      "requiresClearance": true,
+      "facultyNotes": "Faculty cleared the request"
+    },
+    {
+      "id": "REQ-PJSKQDJ6",
+      "studentId": "2023025588",
+      "studentName": "mon cal",
+      "studentEmail": "mmncalledo@yahoo.com",
+      "documentType": "GoodMoral",
+      "purpose": "employment",
+      "termCoverage": "2ns semester ay 2025-2026",
+      "copies": 2,
+      "deliveryMethod": "Pickup",
+      "deliveryAddress": "",
+      "recipientName": "mon cal",
+      "notes": "",
+      "status": "Ready for Release",
+      "dateSubmitted": "2025-10-27T07:24:27.202Z",
+      "attachments": [],
+      "timeline": [
+        {
+          "status": "Submitted",
+          "date": "2025-10-27T07:24:27.202Z",
+          "note": "Request submitted"
+        },
+        {
+          "status": "Processing",
+          "date": "2025-10-27T09:00:14.847Z",
+          "note": "Status changed from Submitted to Processing",
+          "user": "Admin"
+        },
+        {
+          "status": "Ready for Release",
+          "date": "2025-10-27T09:07:24.527Z",
+          "note": "Status changed from Processing to Ready for Release",
+          "user": "Admin"
+        }
+      ]
+    }
+  ],
   "users": []
 }
