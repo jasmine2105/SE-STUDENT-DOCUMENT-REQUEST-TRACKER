@@ -192,6 +192,19 @@ This is a demonstration project showcasing the use case requirements for a stude
 
 This project is created for educational and demonstration purposes. Feel free to use and modify as needed for your specific requirements.
 
+## Contribution
+
+# Jasmine Omandam
+-
+
+# Martina Monica N. Calledo
+- Modified the Faculty, Student and Admin Dashboard
+- Navigation
+- Make the App user-friendly
+
+# Patrick Duron
+-
+
 ---
 
 **Note**: This is a frontend-only implementation with sample data. In a production environment, this would be connected to a backend server with a proper database and authentication system.
