@@ -195,16 +195,24 @@ This project is created for educational and demonstration purposes. Feel free to
 ## Contribution
 
 # Jasmine Omandam
--
+-Designed the layout, handled integration, testing, and debugging
+-Fixed errors during development, debugged issues, and improved the system’s performance.
+-Update the functionalities
+-Collaborated with team members during GitHub version control setup, handling merge conflicts and verifying c
+ode commits.
+-Integrated frontend and backend components, particularly linking the student request forms to the Node.js Express server.
+-Contributed to performance optimization by reducing redundant scripts and improving request-response handling.
 
 # Martina Monica N. Calledo
-- Modified the Faculty, Student and Admin Dashboard
-- Navigation
-- Make the App user-friendly
+-Modified the Faculty, Student, and Admin Dashboards for better accessibility and user flow.
+-Assisted in frontend testing and validation, providing visual and layout feedback during the testing phase.
+-Focused on creating a user-friendly experience, ensuring each portal was easy to navigate and accessible.
+-Enhanced and redesigned the Faculty, Student, and Admin dashboards to improve clarity, usability, and navigation flow.
 
 # Patrick Duron
-- Modified the structuring for better convience and easier debugging experience
-- structured the roles like ADMIN to have their own auth, scripts, styles and views
+-Modified the structuring for better convience and easier debugging experience
+-structured the roles like ADMIN to have their own auth, scripts, styles and views
+-Helped in repository setup and version control management via GitHub (branching, merging, and committing).
 
 ---
 
