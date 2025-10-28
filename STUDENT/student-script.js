@@ -16,11 +16,23 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Update welcome message
     updateWelcomeMessage();
+    // Prefill contact/email/date fields if present
+    try {
+        const emailInput = document.getElementById('studentEmailField');
+        if (emailInput && currentStudent && currentStudent.email) emailInput.value = currentStudent.email;
+        const contactInput = document.getElementById('contactNumber');
+        if (contactInput && currentStudent && currentStudent.phone) contactInput.value = currentStudent.phone;
+        const dateInput = document.getElementById('requestDate');
+        if (dateInput && !dateInput.value) dateInput.value = new Date().toISOString().slice(0,10);
+    } catch (e) {
+        console.warn('Prefill fields error', e);
+    }
     
     loadStudentData();
     // Load local data first, then try to pull latest from server and update UI
     updateDashboard();
     loadRequests();
+    loadNotifications();
     // Attempt to refresh from server so statuses reflect admin/faculty updates
     fetchServerRequests().then(updated => {
         if (updated) {
@@ -28,6 +40,8 @@ document.addEventListener('DOMContentLoaded', function() {
             loadRequests();
         }
     });
+    // start background polling for server updates (every 10s)
+    startPolling();
     
     // Set up event listeners
     setupEventListeners();
@@ -55,54 +69,22 @@ function loadStudentData() {
 
 // Setup event listeners
 function setupEventListeners() {
-    // Delivery method change
-    const deliveryMethod = document.getElementById('deliveryMethod');
-    if (deliveryMethod) {
-        deliveryMethod.addEventListener('change', function() {
-            const deliveryDetails = document.getElementById('deliveryDetails');
-            if (this.value === 'Delivery') {
-                deliveryDetails.classList.remove('d-none');
-            } else {
-                deliveryDetails.classList.add('d-none');
-            }
-        });
-    }
-
-    // Document type change - show/hide extra fields
+    // Document type change - show/hide extra fields ('Other')
     const documentType = document.getElementById('documentType');
     if (documentType) {
         documentType.addEventListener('change', function() {
+            const otherGroup = document.getElementById('otherTypeGroup');
             const otherField = document.getElementById('otherDocumentType');
-            const termField = document.getElementById('termCoverage');
             const selected = this.value;
-            // Show 'other' input when Other selected
             if (selected === 'Other') {
-                otherField.classList.remove('d-none');
+                otherGroup.classList.remove('d-none');
                 otherField.required = true;
             } else {
-                otherField.classList.add('d-none');
+                otherGroup.classList.add('d-none');
                 otherField.required = false;
             }
-
-            // For TOR and COE, show termCoverage input
-            if (selected === 'TOR' || selected === 'COE') {
-                termField.parentElement.classList.remove('d-none');
-            } else {
-                // Keep term coverage visible but optional for others
-                termField.parentElement.classList.remove('d-none');
-            }
+            // termCoverage remains optional and visible
         });
-    }
-
-    // Filter changes
-    const statusFilter = document.getElementById('statusFilter');
-    const typeFilter = document.getElementById('typeFilter');
-    
-    if (statusFilter) {
-        statusFilter.addEventListener('change', filterRequests);
-    }
-    if (typeFilter) {
-        typeFilter.addEventListener('change', filterRequests);
     }
     
     // Request form submission
@@ -143,183 +125,35 @@ function hideSubmitForm() {
 function loadRequests() {
     const requestsList = document.getElementById('requestsList');
     if (!requestsList) return;
-
+    // Render as table rows: Document requested | Submitted (status) | Date | Delete
     if (studentRequests.length === 0) {
-        requestsList.innerHTML = `
-            <div class="text-center py-4">
-                <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
-                <h4>No requests found</h4>
-                <p class="text-muted">You haven't submitted any document requests yet.</p>
-                <button class="btn btn-primary" onclick="showSubmitForm()">
-                    <i class="fas fa-plus"></i> Submit Your First Request
-                </button>
-            </div>
-        `;
+        requestsList.innerHTML = `<tr><td colspan="4" class="text-muted" style="padding:14px">You haven't submitted any requests yet.</td></tr>`;
         return;
     }
 
-    requestsList.innerHTML = studentRequests.map(request => `
-        <div class="card mb-3">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-start mb-3">
-                    <div>
-                        <h5 class="mb-1">${request.documentType}</h5>
-                        <p class="text-muted mb-0">Request ID: ${request.id}</p>
-                    </div>
-                    <span class="status-badge ${DocTracker.getStatusBadgeClass(request.status)}">
-                        ${request.status}
-                    </span>
-                </div>
-                
-                <div class="row">
-                    <div class="col-md-6">
-                        <p><strong>Purpose:</strong> ${request.purpose}</p>
-                        <p><strong>Copies:</strong> ${request.copies}</p>
-                        <p><strong>Delivery:</strong> ${request.deliveryMethod}</p>
-                    </div>
-                    <div class="col-md-6">
-                        <p><strong>Submitted:</strong> ${DocTracker.formatDate(request.dateSubmitted)}</p>
-                        <p><strong>Status:</strong> ${request.status}</p>
-                        ${request.notes ? `<p><strong>Notes:</strong> ${request.notes}</p>` : ''}
-                    </div>
-                </div>
-                
-                <div class="d-flex gap-2 mt-3">
-                    <button class="btn btn-primary btn-sm" onclick="viewRequestDetails('${request.id}')">
-                        <i class="fas fa-eye"></i> View Details
-                    </button>
-                    ${request.status === 'Ready for Release' ? `
-                        <button class="btn btn-success btn-sm" onclick="confirmPickup('${request.id}')">
-                            <i class="fas fa-check"></i> Confirm Pickup
-                        </button>
-                    ` : ''}
-                </div>
-            </div>
-        </div>
-    `).join('');
-}
-
-// Filter requests
-function filterRequests() {
-    const statusFilter = document.getElementById('statusFilter').value;
-    const typeFilter = document.getElementById('typeFilter').value;
-    
-    let filteredRequests = studentRequests;
-    
-    if (statusFilter) {
-        filteredRequests = filteredRequests.filter(r => r.status === statusFilter);
-    }
-    
-    if (typeFilter) {
-        filteredRequests = filteredRequests.filter(r => r.documentType === typeFilter);
-    }
-    
-    displayFilteredRequests(filteredRequests);
-}
-
-// Display filtered requests
-function displayFilteredRequests(requests) {
-    const requestsList = document.getElementById('requestsList');
-    if (!requestsList) return;
-
-    if (requests.length === 0) {
-        requestsList.innerHTML = `
-            <div class="text-center py-4">
-                <i class="fas fa-search fa-3x text-muted mb-3"></i>
-                <h4>No requests match your filters</h4>
-                <p class="text-muted">Try adjusting your filter criteria.</p>
-            </div>
+    const rows = studentRequests.map(r => {
+        const docLabel = (r.documentType === 'Other' && r.otherDocumentType) ? r.otherDocumentType : r.documentType;
+        const status = r.status || 'Submitted';
+        const dateDisplay = DocTracker.formatDateTime(r.dateSubmitted || r.requestDate || new Date().toISOString());
+        const submittedShort = r.id || '';
+        return `
+            <tr style="border-bottom:1px solid #f1f1f1">
+                <td style="padding:10px">${DocTracker.escape ? DocTracker.escape(docLabel) : docLabel}</td>
+                <td style="padding:10px">${submittedShort}</td>
+                <td style="padding:10px">${dateDisplay}</td>
+                <td style="padding:10px">
+                    <button class="btn btn-danger btn-sm" onclick="deleteRequest('${r.id}')"><i class="fas fa-trash"></i> Delete</button>
+                </td>
+            </tr>
         `;
-        return;
-    }
+    }).join('');
 
-    requestsList.innerHTML = requests.map(request => `
-        <div class="card mb-3">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-start mb-3">
-                    <div>
-                        <h5 class="mb-1">${request.documentType}</h5>
-                        <p class="text-muted mb-0">Request ID: ${request.id}</p>
-                    </div>
-                    <span class="status-badge ${DocTracker.getStatusBadgeClass(request.status)}">
-                        ${request.status}
-                    </span>
-                </div>
-                
-                <div class="row">
-                    <div class="col-md-6">
-                        <p><strong>Purpose:</strong> ${request.purpose}</p>
-                        <p><strong>Copies:</strong> ${request.copies}</p>
-                        <p><strong>Delivery:</strong> ${request.deliveryMethod}</p>
-                    </div>
-                    <div class="col-md-6">
-                        <p><strong>Submitted:</strong> ${DocTracker.formatDate(request.dateSubmitted)}</p>
-                        <p><strong>Status:</strong> ${request.status}</p>
-                        ${request.notes ? `<p><strong>Notes:</strong> ${request.notes}</p>` : ''}
-                    </div>
-                </div>
-                
-                <div class="d-flex gap-2 mt-3">
-                    <button class="btn btn-primary btn-sm" onclick="viewRequestDetails('${request.id}')">
-                        <i class="fas fa-eye"></i> View Details
-                    </button>
-                    ${request.status === 'Ready for Release' ? `
-                        <button class="btn btn-success btn-sm" onclick="confirmPickup('${request.id}')">
-                            <i class="fas fa-check"></i> Confirm Pickup
-                        </button>
-                    ` : ''}
-                </div>
-            </div>
-        </div>
-    `).join('');
+    requestsList.innerHTML = rows;
 }
 
-// View request details
-function viewRequestDetails(requestId) {
-    const request = studentRequests.find(r => r.id === requestId);
-    if (!request) return;
+// Filters removed from UI; requests are displayed as a compact summary list.
 
-    const modal = document.getElementById('requestModal');
-    const details = document.getElementById('requestDetails');
-    
-    details.innerHTML = `
-        <div class="row">
-            <div class="col-md-6">
-                <h5>Request Information</h5>
-                <p><strong>Request ID:</strong> ${request.id}</p>
-                <p><strong>Document Type:</strong> ${request.documentType}</p>
-                <p><strong>Purpose:</strong> ${request.purpose}</p>
-                <p><strong>Copies:</strong> ${request.copies}</p>
-                <p><strong>Delivery Method:</strong> ${request.deliveryMethod}</p>
-                        ${request.deliveryAddress ? `<p><strong>Delivery Address:</strong> ${request.deliveryAddress}</p>` : ''}
-                        ${request.notes ? `<p><strong>Notes:</strong> ${request.notes}</p>` : ''}
-            </div>
-            <div class="col-md-6">
-                <h5>Status Information</h5>
-                <p><strong>Current Status:</strong> 
-                    <span class="status-badge ${DocTracker.getStatusBadgeClass(request.status)}">${request.status}</span>
-                </p>
-                <p><strong>Date Submitted:</strong> ${DocTracker.formatDateTime(request.dateSubmitted)}</p>
-                
-                <h5 class="mt-3">Timeline</h5>
-                <div class="timeline">
-                    ${request.timeline.map(step => `
-                        <div class="timeline-item">
-                            <div class="timeline-marker"></div>
-                            <div class="timeline-content">
-                                <h6>${step.status}</h6>
-                                <p class="text-muted">${DocTracker.formatDateTime(step.date)}</p>
-                                <p>${step.note}</p>
-                            </div>
-                        </div>
-                    `).join('')}
-                </div>
-            </div>
-        </div>
-    `;
-    
-    DocTracker.openModal('requestModal');
-}
+// Request details modal removed — the student view shows a compact summary list instead.
 
 // Confirm pickup
 function confirmPickup(requestId) {
@@ -342,6 +176,43 @@ function confirmPickup(requestId) {
         }
     }
 }
+
+// Delete a request (student-initiated). Removes locally and attempts to mark deleted on server.
+function deleteRequest(requestId) {
+    if (!confirm('Are you sure you want to delete this request? This action cannot be undone.')) return;
+
+    const idx = studentRequests.findIndex(r => r.id === requestId);
+    if (idx === -1) {
+        DocTracker.showNotification('error', 'Request not found.');
+        return;
+    }
+
+    // Remove locally
+    studentRequests.splice(idx, 1);
+    localStorage.setItem(`requests_${currentStudent.studentId}`, JSON.stringify(studentRequests));
+    updateDashboard();
+    loadRequests();
+
+    // Try to update server to mark as deleted (server supports PUT)
+    fetch(`/api/requests/${requestId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'Deleted', timelineEntry: { status: 'Deleted', date: new Date().toISOString(), note: 'Student deleted the request' } })
+    }).then(r => r.json()).then(res => {
+        if (res && res.success) {
+            DocTracker.showNotification('success', 'Request deleted successfully.');
+        } else {
+            DocTracker.showNotification('warning', 'Local request deleted but server update failed.');
+            console.warn('Server delete/mark failed', res);
+        }
+    }).catch(err => {
+        console.warn('Error marking request deleted on server:', err);
+        DocTracker.showNotification('warning', 'Request removed locally. Server could not be reached.');
+    });
+}
+
+// expose deleteRequest globally for button onclick
+window.deleteRequest = deleteRequest;
 
 // Refresh requests
 function refreshRequests() {
@@ -387,7 +258,34 @@ async function fetchServerRequests() {
                 const local = studentRequests[idx];
                 let changed = false;
                 if (local.status !== sr.status) { local.status = sr.status; changed = true; }
-                if (JSON.stringify(local.timeline || []) !== JSON.stringify(sr.timeline || [])) { local.timeline = sr.timeline || []; changed = true; }
+
+                // Detect new timeline steps and convert them into notifications for the student
+                const localTimeline = local.timeline || [];
+                const serverTimeline = sr.timeline || [];
+                // find steps that are in serverTimeline but not in localTimeline (by date+status+note)
+                const newSteps = serverTimeline.filter(st => !localTimeline.some(lt => lt.date === st.date && lt.status === st.status && (lt.note || '') === (st.note || '')));
+                if (newSteps.length) {
+                    // add notifications for each new step
+                    const notifKey = `notifications_${currentStudent ? currentStudent.studentId : 'anon'}`;
+                    const existingNotifs = JSON.parse(localStorage.getItem(notifKey) || '[]');
+                    newSteps.forEach(ns => {
+                        existingNotifs.unshift({
+                            id: DocTracker.generateRequestId(),
+                            requestId: sr.id,
+                            title: `${ns.status} — ${sr.documentType}`,
+                            message: ns.note || `${sr.documentType} status updated to ${ns.status}`,
+                            date: ns.date || new Date().toISOString(),
+                            read: false
+                        });
+                    });
+                    localStorage.setItem(notifKey, JSON.stringify(existingNotifs));
+                    // update notification UI count if visible
+                    if (document.getElementById('notificationCount')) {
+                        loadNotifications();
+                    }
+                }
+
+                if (JSON.stringify(localTimeline) !== JSON.stringify(serverTimeline)) { local.timeline = serverTimeline || []; changed = true; }
                 if (local.notes !== sr.adminNotes && sr.adminNotes) { local.notes = sr.adminNotes; changed = true; }
                 if (changed) foundAny = true;
                 studentRequests[idx] = local;
@@ -420,19 +318,28 @@ function handleRequestSubmission(e) {
     const formElement = e.target;
     const formData = new FormData(formElement);
 
+    // read top-level fields that are outside the form
+    const recipientTop = document.getElementById('recipientNameTop') ? document.getElementById('recipientNameTop').value.trim() : '';
+    const contactNumber = document.getElementById('contactNumber') ? document.getElementById('contactNumber').value.trim() : '';
+    const studentEmailField = document.getElementById('studentEmailField') ? document.getElementById('studentEmailField').value.trim() : (currentStudent.email || '');
+    const requestDateField = document.getElementById('requestDate') ? document.getElementById('requestDate').value : '';
+
     // Build local request object for UI
+    const chosenDocType = formData.get('documentType') === 'Other' ? (document.getElementById('otherDocumentType') ? document.getElementById('otherDocumentType').value.trim() : '') : formData.get('documentType');
+
     const newRequest = {
         id: DocTracker.generateRequestId(),
         studentId: currentStudent.studentId,
         studentName: `${currentStudent.firstName} ${currentStudent.lastName}`,
-        studentEmail: currentStudent.email,
+        studentEmail: studentEmailField || currentStudent.email,
         documentType: formData.get('documentType'),
+        otherDocumentType: (formData.get('documentType') === 'Other') ? chosenDocType : '',
         purpose: formData.get('purpose'),
         termCoverage: formData.get('termCoverage'),
         copies: parseInt(formData.get('copies')),
-        deliveryMethod: formData.get('deliveryMethod'),
-        deliveryAddress: formData.get('deliveryAddress'),
-        recipientName: formData.get('recipientName'),
+        recipientName: recipientTop,
+        contactNumber: contactNumber,
+        requestDate: requestDateField || new Date().toISOString(),
         notes: formData.get('notes'),
         status: 'Submitted',
         dateSubmitted: new Date().toISOString(),
@@ -459,12 +366,13 @@ function handleRequestSubmission(e) {
     sendData.append('studentName', newRequest.studentName);
     sendData.append('studentEmail', newRequest.studentEmail);
     sendData.append('documentType', newRequest.documentType);
+    if (newRequest.otherDocumentType) sendData.append('otherDocumentType', newRequest.otherDocumentType);
     sendData.append('purpose', newRequest.purpose);
     sendData.append('termCoverage', newRequest.termCoverage || '');
     sendData.append('copies', newRequest.copies);
-    sendData.append('deliveryMethod', newRequest.deliveryMethod);
-    sendData.append('deliveryAddress', newRequest.deliveryAddress || '');
     sendData.append('recipientName', newRequest.recipientName || '');
+    sendData.append('contactNumber', newRequest.contactNumber || '');
+    sendData.append('requestDate', newRequest.requestDate || '');
     sendData.append('notes', newRequest.notes || '');
 
     // Append attachments from file input if any
@@ -632,6 +540,77 @@ function generateRequestId() {
     return `REQ${timestamp}${random}`;
 }
 
+// Start polling server for updates every N seconds
+let _pollIntervalId = null;
+function startPolling(intervalMs = 10000) {
+    if (_pollIntervalId) return;
+    _pollIntervalId = setInterval(async () => {
+        try {
+            const updated = await fetchServerRequests();
+            if (updated) {
+                updateDashboard();
+                loadRequests();
+            }
+        } catch (e) {
+            console.debug('Polling error:', e && e.message);
+        }
+    }, intervalMs);
+}
+
+function stopPolling() {
+    if (_pollIntervalId) {
+        clearInterval(_pollIntervalId);
+        _pollIntervalId = null;
+    }
+}
+
+// Load notifications from localStorage for current student
+function loadNotifications() {
+    const list = document.getElementById('notificationsList');
+    const countEl = document.getElementById('notificationCount');
+    if (!list || !currentStudent) return;
+    const key = `notifications_${currentStudent.studentId}`;
+    const items = JSON.parse(localStorage.getItem(key) || '[]');
+    if (!items || items.length === 0) {
+        list.innerHTML = `<p class="text-muted">No notifications</p>`;
+        if (countEl) countEl.style.display = 'none';
+        return;
+    }
+
+    // render items
+    list.innerHTML = items.map(n => `
+        <div style="padding:8px;border-bottom:1px solid #f1f1f1">
+            <div style="font-weight:700">${n.title}</div>
+            <div class="text-muted small">${n.message}</div>
+            <div class="text-muted xsmall" style="font-size:11px">${DocTracker.formatDateTime(n.date)}</div>
+        </div>
+    `).join('');
+
+    if (countEl) {
+        const unread = items.filter(i => !i.read).length;
+        if (unread > 0) {
+            countEl.textContent = unread;
+            countEl.style.display = 'inline-block';
+        } else {
+            countEl.style.display = 'none';
+        }
+    }
+}
+
+function toggleNotifications() {
+    const panel = document.getElementById('notificationsPanel');
+    if (!panel) return;
+    if (panel.style.display === 'none' || panel.style.display === '') {
+        loadNotifications();
+        panel.style.display = 'block';
+    } else {
+        panel.style.display = 'none';
+    }
+}
+
+// expose toggle to global scope for onclick
+window.toggleNotifications = toggleNotifications;
+
 // Expose closeModal globally
 window.closeModal = closeModal;
 
@@ -640,7 +619,6 @@ window.studentLogout = studentLogout;
 window.showSubmitForm = showSubmitForm;
 window.hideSubmitForm = hideSubmitForm;
 window.refreshRequests = refreshRequests;
-window.viewRequestDetails = viewRequestDetails;
 window.confirmPickup = confirmPickup;
 
 // Override Auth.logout if present

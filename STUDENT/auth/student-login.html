@@ -294,6 +294,37 @@
         </div>
     </div>
     
+    <!-- Forgot Password Modal -->
+    <div id="forgotPassModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3><i class="fas fa-key"></i> Reset Password</h3>
+                <span class="close" onclick="closeModal()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <form id="forgotPassForm">
+                    <div class="form-group">
+                        <label for="fpStudentId">Student ID *</label>
+                        <input type="text" id="fpStudentId" class="form-control" placeholder="Enter your 10-digit Student ID" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="fpNewPassword">New Password *</label>
+                        <input type="password" id="fpNewPassword" class="form-control" placeholder="Enter new password" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="fpConfirmPassword">Confirm New Password *</label>
+                        <input type="password" id="fpConfirmPassword" class="form-control" placeholder="Confirm new password" required>
+                    </div>
+                    <div id="fpError" style="display:none; color:#b71c1c; background:#ffebee; padding:0.5rem; border-radius:4px; margin-bottom:0.5rem;"></div>
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">Reset Password</button>
+                        <button type="button" class="btn btn-outline" onclick="closeModal()">Cancel</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
         <!-- Admin / Faculty Password Modal -->
         <div id="rolePassModal" class="modal">
             <div class="modal-content">
