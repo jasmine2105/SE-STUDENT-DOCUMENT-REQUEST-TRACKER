@@ -36,6 +36,32 @@ app.use(bodyParser.urlencoded({ extended: true }));
 // Serve static frontend files (so you can just start the server)
 app.use(express.static(__dirname));
 
+// 🔥 ADD THESE REDIRECT ROUTES - Fix "Cannot GET" errors
+app.get('/FACULTY/faculty-portal.html', (req, res) => {
+    res.redirect('/FACULTY/views/faculty-portal.html');
+});
+
+app.get('/ADMIN/admin-portal.html', (req, res) => {
+    res.redirect('/ADMIN/views/admin-portal.html');
+});
+
+app.get('/STUDENT/student-portal.html', (req, res) => {
+    res.redirect('/STUDENT/views/student-portal.html');
+});
+
+// Additional redirects for common patterns
+app.get('/faculty-portal.html', (req, res) => {
+    res.redirect('/FACULTY/views/faculty-portal.html');
+});
+
+app.get('/admin-portal.html', (req, res) => {
+    res.redirect('/ADMIN/views/admin-portal.html');
+});
+
+app.get('/student-portal.html', (req, res) => {
+    res.redirect('/STUDENT/views/student-portal.html');
+});
+
 // Uploads folder
 const uploadsDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir);

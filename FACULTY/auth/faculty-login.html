@@ -3,33 +3,25 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin/Faculty Login - DocTracker</title>
+    <title>Faculty Login - DocTracker</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="../../shared/styles-home.css">
-    <link rel="stylesheet" href="../styles/admin-portal.css">
+    <link rel="stylesheet" href="../styles/faculty-portal.css">
 </head>
 <body>
     <div class="auth-container">
         <div class="auth-box">
-            <h2>Login As</h2>
-            <form id="adminLoginForm">
+            <h2>Faculty Login</h2>
+            <form id="facultyLoginForm">
                 <div class="form-group">
-                    <select class="form-control" id="userType" required>
-                        <option value="">Select user</option>
-                        <option value="admin">Admin</option>
-                        <option value="faculty">Faculty</option>
-                    </select>
-                </div>
-
-                <div class="form-group">
-                    <label for="username">Username</label>
-                    <input type="text" class="form-control" id="username" required>
+                    <label for="username">Faculty ID</label>
+                    <input type="text" class="form-control" id="username" required placeholder="Enter your faculty ID">
                 </div>
 
                 <div class="form-group">
                     <label for="password">Password</label>
                     <div class="password-input">
-                        <input type="password" class="form-control" id="password" required>
+                        <input type="password" class="form-control" id="password" required placeholder="Enter your password">
                         <button type="button" class="toggle-password" onclick="togglePassword()">
                             <i class="fas fa-eye"></i>
                         </button>
@@ -46,8 +38,8 @@
                 <button type="submit" class="login-btn">Login</button>
             </form>
 
-            <!-- Inline error message area -->
-            <div id="adminAuthError" class="auth-error" aria-live="polite" style="display:none; margin-top:0.75rem; color:#b71c1c; background: #ffebee; padding:0.5rem; border-radius:4px;"></div>
+            <!-- Error message area -->
+            <div id="facultyAuthError" class="auth-error" aria-live="polite" style="display:none; margin-top:0.75rem; color:#b71c1c; background: #ffebee; padding:0.5rem; border-radius:4px;"></div>
 
             <div class="back-link">
                 <a href="../../index.html">
@@ -58,7 +50,6 @@
         </div>
     </div>
 
-    <!-- REMOVE this line: <script src="../scripts/admin-portal.js"></script> -->
-    <script src="admin-auth.js"></script>
+    <script src="faculty-auth.js"></script>
 </body>
 </html>

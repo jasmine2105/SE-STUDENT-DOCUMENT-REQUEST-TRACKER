@@ -244,14 +244,14 @@ function openRolePasswordModal(role) {
             // Directly navigate to admin portal (no signup/login required after password)
             try {
                 const origin = window.location.origin || '';
-                const portalPath = '/admin-portal.html';
+                const portalPath = '/ADMIN/views/admin-portal.html';
                 if (origin && origin.startsWith('http')) {
                     window.location.href = origin + portalPath;
                 } else {
                     window.location.href = portalPath;
                 }
             } catch (e) {
-                window.location.href = '/admin-portal.html';
+                window.location.href = '/ADMIN/views/admin-portal.html';
             }
         } else if (role === 'faculty' && val === FACULTY_PASSWORD) {
             selectedRole = 'faculty';
@@ -262,14 +262,14 @@ function openRolePasswordModal(role) {
             // Directly navigate to faculty portal
             try {
                 const origin = window.location.origin || '';
-                const portalPath = '/FACULTY/faculty-portal.html';
+                const portalPath = '/FACULTY/views/faculty-portal.html';
                 if (origin && origin.startsWith('http')) {
                     window.location.href = origin + portalPath;
                 } else {
                     window.location.href = portalPath;
                 }
             } catch (e) {
-                window.location.href = '/FACULTY/faculty-portal.html';
+                window.location.href = '/FACULTY/views/faculty-portal.html';
             }
         } else {
             // Show inline error in modal and keep it open
@@ -409,12 +409,12 @@ function checkAuthState() {
         currentUser = JSON.parse(currentUserData);
         // Redirect to appropriate portal based on role
         const role = currentUser.role || 'student';
-        let portalPath = '/STUDENT/student-portal.html';
+        let portalPath = '/STUDENT/views/student-portal.html';
         
         if (role === 'faculty') {
-            portalPath = '/FACULTY/faculty-portal.html';
+            portalPath = '/FACULTY/views/faculty-portal.html';
         } else if (role === 'admin') {
-            portalPath = '/admin-portal.html';
+            portalPath = '/ADMIN/views/admin-portal.html';
         }
         
         try {
@@ -495,11 +495,11 @@ function handleLogin(e) {
             // Route based on role
             let portalPath = '';
             if (selectedRole === 'student') {
-                portalPath = '/STUDENT/student-portal.html';
+                portalPath = '/STUDENT/views/student-portal.html';
             } else if (selectedRole === 'faculty') {
-                portalPath = '/FACULTY/faculty-portal.html';
+                portalPath = '/FACULTY/views/faculty-portal.html';
             } else if (selectedRole === 'admin') {
-                portalPath = '/admin-portal.html';
+                portalPath = '/ADMIN/views/admin-portal.html';
             }
             
             try {
@@ -684,12 +684,12 @@ function showLoginForm() {
 // Redirect to appropriate portal based on role
 function redirectToStudentPortal() {
     const user = getCurrentUser();
-    let portalPath = '/STUDENT/student-portal.html';
+    let portalPath = '/STUDENT/views/student-portal.html';
     
     if (user && user.role === 'faculty') {
-        portalPath = '/FACULTY/faculty-portal.html';
+        portalPath = '/FACULTY/views/faculty-portal.html';
     } else if (user && user.role === 'admin') {
-        portalPath = '/admin-portal.html';
+        portalPath = '/ADMIN/views/admin-portal.html';
     }
     
     try {

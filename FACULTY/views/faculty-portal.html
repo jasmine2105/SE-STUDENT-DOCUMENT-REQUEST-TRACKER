@@ -3,79 +3,183 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Faculty Portal - Document Request System</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <link rel="stylesheet" href="styles/dashboard.css">
-    <link rel="stylesheet" href="styles.css">
+    <title>Faculty Portal - Document Request Tracker</title>
+    <link rel="stylesheet" href="../styles/faculty-portal.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        /* Match student portal white card look for consistent layout */
+        .portal-container {
+            background: rgba(255,255,255,0.96);
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.06);
+            padding: 30px;
+            max-width: 1100px;
+            margin: 120px auto 40px; /* keep below fixed navbar */
+        }
+        .portal-header { margin-bottom: 1.25rem; }
+    </style>
 </head>
-<body class="dashboard-background">
-    <div class="container">
-        <div class="welcome-header">
-            <div class="welcome-message">
-                <i class="fas fa-chalkboard-teacher"></i>
-                <span id="facultyGreeting">Loading...</span>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-logo">
+                <i class="fas fa-file-alt"></i>
+                <span>DocTracker</span>
             </div>
-            <button class="btn btn-outline" onclick="handleLogout()">
-                <i class="fas fa-sign-out-alt"></i>
-                Logout
-            </button>
+            <div class="nav-menu">
+                <div class="nav-buttons">
+                    <span class="nav-link">Welcome, Dr. Faculty</span>
+                    <button class="btn btn-outline" onclick="logout()">Logout</button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="portal-container">
+        <div class="portal-header">
+            <div class="portal-icon"><i class="fas fa-user-check"></i></div>
+            <div>
+                <h1>Faculty Portal</h1>
+                <p>Approve academic clearance requests</p>
+            </div>
         </div>
 
-        <div class="portal-header faculty-header">
-            <h1><i class="fas fa-clipboard-check"></i> Faculty Clearance Portal</h1>
-            <p>Review and approve student document requests</p>
-        </div>
-
-        <div class="stats-grid">
+        <div class="portal-grid">
+            <div>
+                <!-- Dashboard Stats -->
+                <div class="dashboard-grid">
             <div class="stat-card">
-                <h3 id="pendingCount">0</h3>
-                <p>Pending Requests</p>
+                <h3 id="pendingClearances">0</h3>
+                <p>Pending Clearances</p>
             </div>
             <div class="stat-card">
-                <h3 id="approvedCount">0</h3>
-                <p>Approved Requests</p>
+                <h3 id="approvedToday">0</h3>
+                <p>Approved Today</p>
             </div>
             <div class="stat-card">
-                <h3 id="rejectedCount">0</h3>
-                <p>Rejected Requests</p>
+                <h3 id="rejectedToday">0</h3>
+                <p>Rejected Today</p>
+            </div>
+            <div class="stat-card">
+                <h3 id="totalProcessed">0</h3>
+                <p>Total Processed</p>
+            </div>
+            <aside>
+                <div class="card">
+                    <div class="card-header">
+                        <h3><i class="fas fa-chalkboard-teacher"></i> Faculty Menu</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-flex flex-column">
+                            <a href="faculty-portal.html" class="btn btn-outline" style="margin-bottom:8px; text-align:left;">Clearances</a>
+                            <button class="btn btn-outline" style="text-align:left;" onclick="logout()">Logout</button>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="card">
+            <div class="card-header">
+                <h3><i class="fas fa-bolt"></i> Quick Actions</h3>
+            </div>
+            <div class="card-body">
+                <div class="d-flex gap-2">
+                    <button class="btn btn-primary" onclick="showPendingClearances()">
+                        <i class="fas fa-clock"></i> Pending Clearances
+                    </button>
+                    <button class="btn btn-secondary" onclick="refreshData()">
+                        <i class="fas fa-sync"></i> Refresh
+                    </button>
+                </div>
             </div>
         </div>
 
-        <div class="auth-section">
-            <h2>Pending Requests</h2>
-            <div id="pendingRequests"></div>
+        <!-- Filters -->
+        <div class="card">
+            <div class="card-header">
+                <h3><i class="fas fa-filter"></i> Filter Clearances</h3>
+            </div>
+            <div class="card-body">
+                <div class="d-flex gap-2 mb-2">
+                    <select id="statusFilter" class="form-control">
+                        <option value="">All Status</option>
+                        <option value="Pending">Pending</option>
+                        <option value="Approved">Approved</option>
+                        <option value="Rejected">Rejected</option>
+                        <option value="Action Required">Action Required</option>
+                    </select>
+                    <select id="departmentFilter" class="form-control">
+                        <option value="">All Departments</option>
+                        <option value="Computer Science">Computer Science</option>
+                        <option value="Engineering">Engineering</option>
+                        <option value="Business">Business</option>
+                        <option value="Education">Education</option>
+                    </select>
+                    <input type="text" id="searchFilter" class="form-control" placeholder="Search by student name or ID...">
+                </div>
+                <button class="btn btn-primary" onclick="applyFilters()">
+                    <i class="fas fa-search"></i> Apply Filters
+                </button>
+            </div>
         </div>
 
-        <div class="auth-section" style="margin-top: 2rem;">
-            <h2>Request History</h2>
-            <div id="requestHistory"></div>
+        <!-- Clearances Table -->
+        <div class="card">
+            <div class="card-header">
+                <h3><i class="fas fa-table"></i> Academic Clearance Requests</h3>
+            </div>
+            <div class="card-body">
+                <div id="clearancesTable">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Request ID</th>
+                                <th>Student</th>
+                                <th>Department</th>
+                                <th>Document Type</th>
+                                <th>Status</th>
+                                <th>Date Submitted</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="clearancesTableBody">
+                            <!-- Clearances will be loaded here -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
-    </div>
 
-    <!-- Request Action Modal -->
-    <div class="modal" id="actionModal" style="display: none;">
+        <!-- Notifications -->
+        <div class="card">
+            <div class="card-header">
+                <h3><i class="fas fa-bell"></i> Recent Notifications</h3>
+            </div>
+            <div class="card-body">
+                <div id="notificationsList">
+                    <!-- Notifications will be loaded here -->
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Clearance Review Modal -->
+    <div id="clearanceModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h3>Review Request</h3>
+                <h3>Review Academic Clearance</h3>
+                <span class="close" onclick="closeModal()">&times;</span>
             </div>
-            <div class="modal-body">
-                <div class="form-group">
-                    <label class="form-label" for="comments">Comments/Remarks</label>
-                    <textarea class="form-control" id="comments" rows="3"></textarea>
-                </div>
-                <div style="display: flex; gap: 1rem; justify-content: flex-end;">
-                    <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
-                    <button class="btn btn-primary" id="approveBtn" onclick="handleAction('approved')">
-                        <i class="fas fa-check"></i> Approve
-                    </button>
-                    <button class="btn btn-secondary" id="rejectBtn" onclick="handleAction('rejected')">
-                        <i class="fas fa-times"></i> Reject
-                    </button>
-                </div>
+            <div id="clearanceDetails">
+                <!-- Clearance details will be loaded here -->
             </div>
         </div>
     </div>
 
-    <script src="faculty-script.js"></script>
+    <!-- FIXED JAVASCRIPT PATHS -->
+    <script src="../../shared/utils.js"></script>
+    <script src="../scripts/faculty-portal.js"></script>
 </body>
 </html>

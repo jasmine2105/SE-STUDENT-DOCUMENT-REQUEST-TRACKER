@@ -51,10 +51,10 @@ document.getElementById('adminLoginForm').addEventListener('submit', function(e)
 
     if (userType === 'admin') {
         credentials = ADMIN_CREDENTIALS[username];
-        redirectPath = 'admin-portal.html';
+        redirectPath = '../views/admin-portal.html'; // ← FIXED PATH
     } else if (userType === 'faculty') {
         credentials = FACULTY_CREDENTIALS[username];
-        redirectPath = 'faculty-portal.html';
+        redirectPath = '../../FACULTY/views/faculty-portal.html'; // ← FIXED PATH
     }
 
     if (!credentials) {
@@ -101,6 +101,10 @@ window.addEventListener('load', function() {
     const adminData = JSON.parse(localStorage.getItem('adminData') || sessionStorage.getItem('adminData') || '{}');
     
     if (adminData.authenticated) {
-        window.location.href = adminData.role === 'admin' ? 'admin-portal.html' : 'faculty-portal.html';
+        if (adminData.role === 'admin') {
+            window.location.href = '../views/admin-portal.html'; // ← FIXED PATH
+        } else if (adminData.role === 'faculty') {
+            window.location.href = '../../FACULTY/views/faculty-portal.html'; // ← FIXED PATH
+        }
     }
 });
