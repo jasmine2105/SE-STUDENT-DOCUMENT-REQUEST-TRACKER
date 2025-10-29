@@ -400,6 +400,91 @@ function setupEventListeners() {
     if (signupForm) {
         signupForm.addEventListener('submit', handleSignup);
     }
+
+    // Forgot password link and form
+    const forgotLink = document.querySelector('.forgot-password');
+    if (forgotLink) {
+        forgotLink.addEventListener('click', function(e) {
+            e.preventDefault();
+            openForgotPasswordModal();
+        });
+    }
+
+    const fpForm = document.getElementById('forgotPassForm');
+    if (fpForm) {
+        fpForm.addEventListener('submit', handleForgotPassword);
+    }
+}
+
+// Open forgot password modal
+function openForgotPasswordModal() {
+    const modal = document.getElementById('forgotPassModal');
+    if (!modal) return;
+    // reset fields
+    const idInput = document.getElementById('fpStudentId');
+    const p1 = document.getElementById('fpNewPassword');
+    const p2 = document.getElementById('fpConfirmPassword');
+    const err = document.getElementById('fpError');
+    if (idInput) idInput.value = '';
+    if (p1) p1.value = '';
+    if (p2) p2.value = '';
+    if (err) { err.style.display = 'none'; err.textContent = ''; }
+    modal.style.display = 'block';
+    document.body.style.overflow = 'hidden';
+    if (idInput) idInput.focus();
+}
+
+// Handle forgot password submit
+function handleForgotPassword(e) {
+    e.preventDefault();
+    const idInput = document.getElementById('fpStudentId');
+    const newP = document.getElementById('fpNewPassword');
+    const confirmP = document.getElementById('fpConfirmPassword');
+    const err = document.getElementById('fpError');
+    if (!idInput || !newP || !confirmP) return;
+
+    const sid = (idInput.value || '').trim();
+    const np = newP.value || '';
+    const cp = confirmP.value || '';
+
+    // Validate student ID length exactly 10 and numeric
+    if (!/^\d{10}$/.test(sid)) {
+        showFPError('Student ID must be exactly 10 digits.');
+        return;
+    }
+
+    if (np.length < 8) {
+        showFPError('New password must be at least 8 characters long.');
+        return;
+    }
+    if (np !== cp) {
+        showFPError('Passwords do not match.');
+        return;
+    }
+
+    // Find user by studentId
+    const user = users.find(u => String(u.studentId) === sid || u.studentId === sid);
+    if (!user) {
+        showFPError('No user found with that Student ID.');
+        return;
+    }
+
+    // Update password
+    user.password = np;
+    saveUsers();
+
+    // Success
+    closeModal();
+    showNotification('success', 'Password reset successful. You can now login with your new password.');
+}
+
+function showFPError(message, timeout = 4000) {
+    const el = document.getElementById('fpError');
+    if (!el) { showNotification('error', message); return; }
+    el.textContent = message;
+    el.style.display = 'block';
+    clearTimeout(el._hideTimeout);
+    el._hideTimeout = setTimeout(() => { el.style.display = 'none'; }, timeout);
 }
 
 // Check authentication state
@@ -489,6 +574,8 @@ function handleLogin(e) {
     const loginErr = document.getElementById('loginFormError');
     if (loginErr) { loginErr.style.display = 'none'; clearTimeout(loginErr._hideTimeout); }
 
+    // ensure selectedRole reflects the actual user role for routing
+    selectedRole = user.role || 'student';
     showNotification('success', 'Login successful! Redirecting...');
         
         setTimeout(() => {
@@ -623,9 +710,9 @@ function validateSignupForm(data) {
         isValid = false;
     }
     
-    // Validate student ID format (more flexible)
-    if (data.studentId.length < 3) {
-        showNotification('error', 'Student ID must be at least 3 characters long.');
+    // Validate student ID format: must be exactly 10 digits
+    if (!/^\d{10}$/.test(String(data.studentId))) {
+        showNotification('error', 'Student ID must be exactly 10 digits.');
         isValid = false;
     }
     
