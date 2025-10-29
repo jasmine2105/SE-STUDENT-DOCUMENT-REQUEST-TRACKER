@@ -11,6 +11,30 @@
     </script>
     <link rel="stylesheet" href="../styles/student-portal.css">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        /* small form layout helpers (local overrides) */
+        .form-row{display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap}
+        .form-group{margin-bottom:8px}
+    /* make flex columns distribute evenly when used together */
+    .col-flex{flex:1 1 0;min-width:160px}
+        .col-auto{flex:0 0 auto}
+    .input-short{max-width:160px}
+    .input-tiny{max-width:140px}
+    .input-long{flex:1 1 100%;min-width:220px}
+    textarea.form-control{min-height:96px}
+    /* single-line inputs used for first/last/contact/email to match size */
+    .input-box{width:100%;min-height:44px;padding:10px;border-radius:6px;border:1px solid #e5e7eb;box-sizing:border-box}
+    /* make term/reference/copies visually identical — force exact height for consistency */
+    .input-equal{width:100%;height:60px;min-height:60px;padding:10px;border-radius:6px;box-sizing:border-box}
+    textarea.input-equal{height:60px;min-height:60px;resize:vertical}
+    input.input-equal, input[type=number].input-equal{height:60px;min-height:60px;padding:10px}
+    /* equal visual inputs used on the Term/Reference/Copies row (for multi-line/number fields) */
+    
+        label{display:block;margin-bottom:6px}
+        @media(max-width:720px){.form-row{flex-direction:column;align-items:stretch}}
+        /* center table headers/cells in My Requests */
+        .center-table th, .center-table td { text-align:center; vertical-align:middle; padding:10px }
+    </style>
 </head>
 <body>
     <nav class="navbar bg-usjrg text-white">
@@ -22,7 +46,7 @@
             <div class="nav-menu">
                 <div class="nav-buttons">
                     <span id="welcomeMessage" class="nav-link">Welcome, Student</span>
-                    <button class="btn btn-outline" id="logoutBtn" onclick="logout()">Logout</button>
+                    <button class="btn btn-outline" id="logoutBtn">Logout</button>
                 </div>
             </div>
         </div>
@@ -61,10 +85,10 @@
             </div>
             <div class="card-body">
                 <div class="d-flex gap-2">
-                    <button class="btn btn-primary bg-green-700 hover:bg-green-800 text-white transition duration-150 ease-out transform hover:scale-105" onclick="showSubmitForm()">
+                    <button id="showSubmitBtn" class="btn btn-primary bg-green-700 hover:bg-green-800 text-white transition duration-150 ease-out transform hover:scale-105">
                         <i class="fas fa-plus"></i> Submit New Request
                     </button>
-                    <button class="btn btn-secondary bg-yellow-500 hover:bg-yellow-600 text-black transition duration-150 ease-out transform hover:scale-105" onclick="refreshRequests()">
+                    <button id="refreshBtn" class="btn btn-secondary bg-yellow-500 hover:bg-yellow-600 text-black transition duration-150 ease-out transform hover:scale-105">
                         <i class="fas fa-sync"></i> Refresh
                     </button>
                 </div>
@@ -75,6 +99,31 @@
         <div id="submitForm" class="form-container d-none">
             <h3><i class="fas fa-file-plus"></i> Submit Document Request</h3>
             <form id="requestForm">
+                <!-- top row: recipient first + last name (equal boxes) and contact -->
+                <div class="form-row">
+                    <!-- Two equal columns: left = First Name + Contact, right = Last Name + Student Email -->
+                    <div class="col-flex">
+                        <div class="form-group">
+                            <label for="recipientFirstName">First Name</label>
+                            <input type="text" id="recipientFirstName" name="recipientFirstName" class="form-control input-box" placeholder="First name">
+                        </div>
+                        <div class="form-group">
+                            <label for="contactNumber">Contact Number</label>
+                            <input type="tel" id="contactNumber" name="contactNumber" class="form-control input-box" placeholder="e.g., +63 912 345 6789">
+                        </div>
+                    </div>
+                    <div class="col-flex">
+                        <div class="form-group">
+                            <label for="recipientLastName">Last Name</label>
+                            <input type="text" id="recipientLastName" name="recipientLastName" class="form-control input-box" placeholder="Last name">
+                        </div>
+                        <div class="form-group">
+                            <label for="studentEmail">Student Email (Gmail)</label>
+                            <input type="email" id="studentEmail" name="studentEmail" class="form-control input-box" readonly placeholder="student@school.edu">
+                        </div>
+                    </div>
+                </div>
+
                 <div class="form-group">
                     <label for="documentType">Document Type *</label>
                     <select id="documentType" name="documentType" class="form-control" required>
@@ -87,46 +136,53 @@
                         <option value="Diploma">Diploma</option>
                         <option value="Other">Other</option>
                     </select>
-                    <input type="text" id="otherDocumentType" name="otherDocumentType" class="form-control d-none mt-2" placeholder="Please specify the document type">
+                    <input type="text" id="otherDocumentType" name="otherDocumentType" class="form-control d-none mt-2 input-short" placeholder="Please specify the document type">
                 </div>
 
-                <div class="form-group">
-                    <label for="purpose">Purpose *</label>
-                    <input type="text" id="purpose" name="purpose" class="form-control" required placeholder="e.g., Employment, Further Studies, etc.">
+                <!-- Purpose + optional details to fill extra horizontal space -->
+                <div class="form-row">
+                    <div class="col-flex">
+                        <div class="form-group">
+                            <label for="purpose">Purpose *</label>
+                            <textarea id="purpose" name="purpose" class="form-control input-long" required placeholder="e.g., Employment, Further Studies, etc."></textarea>
+                        </div>
+                    </div>
+                    <div class="col-flex">
+                        <div class="form-group">
+                            <label for="purposeDetails">Details (optional)</label>
+                            <textarea id="purposeDetails" name="purposeDetails" class="form-control input-long" placeholder="Extra details, address line, or additional instructions"></textarea>
+                        </div>
+                    </div>
                 </div>
 
-                <div class="form-group">
-                    <label for="termCoverage">Term/Coverage</label>
-                    <input type="text" id="termCoverage" name="termCoverage" class="form-control" placeholder="e.g., 1st Semester AY 2023-2024">
+                <div class="form-row">
+                    <div class="col-flex">
+                        <div class="form-group">
+                            <label for="termCoverage">Term/Coverage</label>
+                            <textarea id="termCoverage" name="termCoverage" class="form-control input-equal" rows="2" placeholder="e.g., 1st Semester AY 2023-2024"></textarea>
+                        </div>
+                    </div>
+                    <div class="col-flex">
+                        <div class="form-group">
+                            <label for="termExtra">Reference (optional)</label>
+                            <input type="text" id="termExtra" name="termExtra" class="form-control input-equal" placeholder="Reference, PO#, or extra info">
+                        </div>
+                    </div>
+                    <div class="col-flex">
+                        <div class="form-group">
+                            <label for="copies">Number of Copies *</label>
+                            <input type="number" id="copies" name="copies" class="form-control input-equal" min="1" max="10" value="1" required>
+                        </div>
+                    </div>
                 </div>
 
-                <div class="form-group">
-                    <label for="copies">Number of Copies *</label>
-                    <input type="number" id="copies" name="copies" class="form-control" min="1" max="10" value="1" required>
-                </div>
+                <!-- Delivery method removed per UX request -->
 
-                <div class="form-group">
-                    <label for="deliveryMethod">Delivery Method *</label>
-                    <select id="deliveryMethod" name="deliveryMethod" class="form-control" required>
-                        <option value="">Select delivery method</option>
-                        <option value="Pickup">Pickup at Registrar's Office</option>
-                        <option value="Delivery">Delivery to Address</option>
-                    </select>
-                </div>
-
-                <div id="deliveryDetails" class="form-group d-none">
-                    <label for="deliveryAddress">Delivery Address</label>
-                    <textarea id="deliveryAddress" name="deliveryAddress" class="form-control" rows="3" placeholder="Enter complete delivery address"></textarea>
-                </div>
-
-                <div class="form-group">
-                    <label for="recipientName">Recipient Name</label>
-                    <input type="text" id="recipientName" name="recipientName" class="form-control" placeholder="Name of person/company receiving the document">
-                </div>
+                <!-- duplicate Recipient removed (kept the top, short field) -->
 
                 <div class="form-group">
                     <label for="notes">Additional Notes</label>
-                    <textarea id="notes" name="notes" class="form-control" rows="3" placeholder="Any additional information or special instructions"></textarea>
+                    <textarea id="notes" name="notes" class="form-control" rows="4" placeholder="Any additional information or special instructions"></textarea>
                 </div>
 
                 <div class="form-group">
@@ -136,10 +192,10 @@
                 </div>
 
                 <div class="d-flex gap-2">
-                    <button type="submit" class="btn btn-primary">
+                    <button type="submit" id="submitRequestBtn" class="btn btn-primary">
                         <i class="fas fa-paper-plane"></i> Submit Request
                     </button>
-                    <button type="button" class="btn btn-outline" onclick="hideSubmitForm()">
+                    <button type="button" id="cancelRequestBtn" class="btn btn-outline">
                         Cancel
                     </button>
                 </div>
@@ -152,29 +208,22 @@
                 <h3><i class="fas fa-list"></i> My Requests</h3>
             </div>
             <div class="card-body">
-                <div class="d-flex gap-2 mb-3">
-                    <select id="statusFilter" class="form-control" style="max-width: 200px;">
-                        <option value="">All Status</option>
-                        <option value="Submitted">Submitted</option>
-                        <option value="Processing">Processing</option>
-                        <option value="Ready for Release">Ready for Release</option>
-                        <option value="Completed">Completed</option>
-                        <option value="Declined">Declined</option>
-                    </select>
-                    <select id="typeFilter" class="form-control" style="max-width: 200px;">
-                        <option value="">All Types</option>
-                        <option value="TOR">TOR</option>
-                        <option value="GoodMoral">Good Moral</option>
-                        <option value="COE">COE</option>
-                        <option value="COG">COG</option>
-                        <option value="HonorableDismissal">Honorable Dismissal</option>
-                        <option value="Diploma">Diploma</option>
-                        <option value="Other">Other</option>
-                    </select>
-                </div>
                 <div id="requestsList">
-                    <!-- Requests will be loaded here -->
-                    <div class="text-muted">Loading your requests...</div>
+                    <table class="table w-full center-table" style="width:100%;border-collapse:collapse">
+                        <thead>
+                            <tr style="border-bottom:1px solid #e5e7eb">
+                                <th>Request ID</th>
+                                <th>Type</th>
+                                <th>Status</th>
+                                <th>Time</th>
+                                <th>Purpose</th>
+                                <th>Delete</th>
+                            </tr>
+                        </thead>
+                        <tbody id="requestsTableBody">
+                            <tr><td colspan="6" class="text-muted" style="padding:12px;text-align:center">Loading your requests...</td></tr>
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </div>
@@ -185,7 +234,7 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h3>Request Details</h3>
-                <span class="close" onclick="closeModal()">&times;</span>
+                <span class="close" id="modalCloseBtn">&times;</span>
             </div>
             <div id="requestDetails">
                 <!-- Request details will be loaded here -->

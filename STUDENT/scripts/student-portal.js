@@ -27,7 +27,11 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Update welcome message
     updateWelcomeMessage();
-    
+    // Prefill the student email in the form (read-only) so it appears below Last Name
+    const emailInput = document.getElementById('studentEmail');
+    if (emailInput && currentStudent && currentStudent.email) {
+        emailInput.value = currentStudent.email;
+    }
     loadStudentData();
     updateDashboard();
     loadRequests();
@@ -66,18 +70,7 @@ function loadStudentData() {
 
 // Setup event listeners
 function setupEventListeners() {
-    // Delivery method change
-    const deliveryMethod = document.getElementById('deliveryMethod');
-    if (deliveryMethod) {
-        deliveryMethod.addEventListener('change', function() {
-            const deliveryDetails = document.getElementById('deliveryDetails');
-            if (this.value === 'Delivery') {
-                deliveryDetails.classList.remove('d-none');
-            } else {
-                deliveryDetails.classList.add('d-none');
-            }
-        });
-    }
+    // Delivery method removed from UI — no handler required
 
     // Document type change - show/hide extra fields
     const documentType = document.getElementById('documentType');
@@ -106,20 +99,45 @@ function setupEventListeners() {
     }
 
     // Filter changes
-    const statusFilter = document.getElementById('statusFilter');
-    const typeFilter = document.getElementById('typeFilter');
-    
-    if (statusFilter) {
-        statusFilter.addEventListener('change', filterRequests);
-    }
-    if (typeFilter) {
-        typeFilter.addEventListener('change', filterRequests);
-    }
+    // Status/type filters removed from UI per UX request
     
     // Request form submission
     const requestForm = document.getElementById('requestForm');
     if (requestForm) {
         requestForm.addEventListener('submit', handleRequestSubmission);
+    }
+
+    // Attach non-inline button handlers (remove reliance on onclick attributes)
+    const logoutBtn = document.getElementById('logoutBtn');
+    if (logoutBtn) logoutBtn.addEventListener('click', logout);
+
+    const showSubmitBtn = document.getElementById('showSubmitBtn');
+    if (showSubmitBtn) showSubmitBtn.addEventListener('click', showSubmitForm);
+
+    const refreshBtn = document.getElementById('refreshBtn');
+    if (refreshBtn) refreshBtn.addEventListener('click', refreshRequests);
+
+    const cancelBtn = document.getElementById('cancelRequestBtn');
+    if (cancelBtn) cancelBtn.addEventListener('click', hideSubmitForm);
+
+    const modalCloseBtn = document.getElementById('modalCloseBtn');
+    if (modalCloseBtn) modalCloseBtn.addEventListener('click', closeModal);
+
+    // Table delegation for delete/view actions
+    const requestsTableBody = document.getElementById('requestsTableBody');
+    if (requestsTableBody) {
+        requestsTableBody.addEventListener('click', function (e) {
+            const btn = e.target.closest('button');
+            if (!btn) return;
+            const action = btn.dataset.action;
+            const rid = btn.dataset.requestId;
+            if (!action || !rid) return;
+            if (action === 'delete') {
+                deleteRequest(rid);
+            } else if (action === 'view') {
+                viewRequestDetails(rid);
+            }
+        });
     }
 }
 
@@ -152,140 +170,68 @@ function hideSubmitForm() {
 
 // Load and display requests
 function loadRequests() {
-    const requestsList = document.getElementById('requestsList');
-    if (!requestsList) return;
+    const tableBody = document.getElementById('requestsTableBody');
+    if (!tableBody) return;
 
     if (studentRequests.length === 0) {
-        requestsList.innerHTML = `
-            <div class="text-center py-4">
-                <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
-                <h4>No requests found</h4>
-                <p class="text-muted">You haven't submitted any document requests yet.</p>
-                <button class="btn btn-primary" onclick="showSubmitForm()">
-                    <i class="fas fa-plus"></i> Submit Your First Request
-                </button>
-            </div>
-        `;
+        tableBody.innerHTML = `<tr><td colspan="6" class="text-center py-4 text-muted">You haven't submitted any document requests yet.</td></tr>`;
         return;
     }
 
-    requestsList.innerHTML = studentRequests.map(request => `
-        <div class="card mb-3">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-start mb-3">
-                    <div>
-                        <h5 class="mb-1">${request.documentType}</h5>
-                        <p class="text-muted mb-0">Request ID: ${request.id}</p>
-                    </div>
-                    <span class="status-badge ${DocTracker.getStatusBadgeClass(request.status)}">
-                        ${request.status}
-                    </span>
+    tableBody.innerHTML = studentRequests.map(request => `
+        <tr>
+            <td style="border-bottom:1px solid #f3f4f6">${request.id}</td>
+            <td style="border-bottom:1px solid #f3f4f6">${request.documentType}</td>
+            <td style="border-bottom:1px solid #f3f4f6"><span class="status-badge ${DocTracker.getStatusBadgeClass(request.status)}">${request.status}</span></td>
+            <td style="border-bottom:1px solid #f3f4f6">${DocTracker.formatDateTime(request.dateSubmitted)}</td>
+            <td style="border-bottom:1px solid #f3f4f6">${request.purpose || ''}</td>
+            <td style="border-bottom:1px solid #f3f4f6">
+                <div style="display:flex;gap:6px;justify-content:center;align-items:center">
+                    <button class="btn btn-primary btn-sm" data-action="view" data-request-id="${request.id}">View</button>
+                    <button class="btn btn-danger btn-sm" data-action="delete" data-request-id="${request.id}">Delete</button>
                 </div>
-                
-                <div class="row">
-                    <div class="col-md-6">
-                        <p><strong>Purpose:</strong> ${request.purpose}</p>
-                        <p><strong>Copies:</strong> ${request.copies}</p>
-                        <p><strong>Delivery:</strong> ${request.deliveryMethod}</p>
-                    </div>
-                    <div class="col-md-6">
-                        <p><strong>Submitted:</strong> ${DocTracker.formatDate(request.dateSubmitted)}</p>
-                        <p><strong>Status:</strong> ${request.status}</p>
-                        ${request.notes ? `<p><strong>Notes:</strong> ${request.notes}</p>` : ''}
-                    </div>
-                </div>
-                
-                <div class="d-flex gap-2 mt-3">
-                    <button class="btn btn-primary btn-sm" onclick="viewRequestDetails('${request.id}')">
-                        <i class="fas fa-eye"></i> View Details
-                    </button>
-                    ${request.status === 'Ready for Release' ? `
-                        <button class="btn btn-success btn-sm" onclick="confirmPickup('${request.id}')">
-                            <i class="fas fa-check"></i> Confirm Pickup
-                        </button>
-                    ` : ''}
-                </div>
-            </div>
-        </div>
+            </td>
+        </tr>
     `).join('');
 }
 
-// Filter requests
-function filterRequests() {
-    const statusFilter = document.getElementById('statusFilter').value;
-    const typeFilter = document.getElementById('typeFilter').value;
-    
-    let filteredRequests = studentRequests;
-    
-    if (statusFilter) {
-        filteredRequests = filteredRequests.filter(r => r.status === statusFilter);
-    }
-    
-    if (typeFilter) {
-        filteredRequests = filteredRequests.filter(r => r.documentType === typeFilter);
-    }
-    
-    displayFilteredRequests(filteredRequests);
-}
-
-// Display filtered requests
-function displayFilteredRequests(requests) {
-    const requestsList = document.getElementById('requestsList');
-    if (!requestsList) return;
-
-    if (requests.length === 0) {
-        requestsList.innerHTML = `
-            <div class="text-center py-4">
-                <i class="fas fa-search fa-3x text-muted mb-3"></i>
-                <h4>No requests match your filters</h4>
-                <p class="text-muted">Try adjusting your filter criteria.</p>
-            </div>
-        `;
-        return;
-    }
-
-    requestsList.innerHTML = requests.map(request => `
-        <div class="card mb-3">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-start mb-3">
-                    <div>
-                        <h5 class="mb-1">${request.documentType}</h5>
-                        <p class="text-muted mb-0">Request ID: ${request.id}</p>
-                    </div>
-                    <span class="status-badge ${DocTracker.getStatusBadgeClass(request.status)}">
-                        ${request.status}
-                    </span>
-                </div>
-                
-                <div class="row">
-                    <div class="col-md-6">
-                        <p><strong>Purpose:</strong> ${request.purpose}</p>
-                        <p><strong>Copies:</strong> ${request.copies}</p>
-                        <p><strong>Delivery:</strong> ${request.deliveryMethod}</p>
-                    </div>
-                    <div class="col-md-6">
-                        <p><strong>Submitted:</strong> ${DocTracker.formatDate(request.dateSubmitted)}</p>
-                        <p><strong>Status:</strong> ${request.status}</p>
-                        ${request.notes ? `<p><strong>Notes:</strong> ${request.notes}</p>` : ''}
-                    </div>
-                </div>
-                
-                <div class="d-flex gap-2 mt-3">
-                    <button class="btn btn-primary btn-sm" onclick="viewRequestDetails('${request.id}')">
-                        <i class="fas fa-eye"></i> View Details
-                    </button>
-                    ${request.status === 'Ready for Release' ? `
-                        <button class="btn btn-success btn-sm" onclick="confirmPickup('${request.id}')">
-                            <i class="fas fa-check"></i> Confirm Pickup
-                        </button>
-                    ` : ''}
-                </div>
-            </div>
-        </div>
-    `).join('');
-}
+// Note: status/type filters removed; requests displayed in table via loadRequests()
 
 // View request details
+// Delete a request (student-facing) — removes locally and attempts server update
+function deleteRequest(requestId) {
+    if (!confirm('Are you sure you want to delete this request? This action cannot be undone.')) return;
+    const idx = studentRequests.findIndex(r => r.id === requestId);
+    if (idx === -1) return;
+
+    // Remove locally
+    studentRequests.splice(idx, 1);
+    localStorage.setItem(`requests_${currentStudent.studentId}`, JSON.stringify(studentRequests));
+    updateDashboard();
+    loadRequests();
+    DocTracker.showNotification('success', 'Request deleted locally. Attempting to remove from server...');
+
+    // Try to mark deleted on server (best-effort). If server not available, leave local deletion as source of truth until sync.
+    (async () => {
+        try {
+            const res = await fetch(`/api/requests/${requestId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: 'Deleted', timelineEntry: { status: 'Deleted', date: new Date().toISOString(), note: 'Deleted by student' } })
+            });
+            if (res.ok) {
+                const body = await res.json();
+                if (body && body.success) {
+                    DocTracker.showNotification('success', 'Request removed from server.');
+                }
+            }
+        } catch (e) {
+            console.warn('Could not update server to delete request:', e.message || e);
+            DocTracker.showNotification('warning', 'Could not update server. Deletion is local only until server is available.');
+        }
+    })();
+}
+
 function viewRequestDetails(requestId) {
     const request = studentRequests.find(r => r.id === requestId);
     if (!request) return;
@@ -293,6 +239,37 @@ function viewRequestDetails(requestId) {
     const modal = document.getElementById('requestModal');
     const details = document.getElementById('requestDetails');
     
+    // Helper: convert a server-side stored path to a web-accessible URL
+    function getAttachmentUrl(p) {
+        if (!p) return '';
+        const s = String(p);
+        // If it's already a blob/data/http/absolute path, return as-is
+        if (s.startsWith('blob:') || s.startsWith('data:') || s.startsWith('http') || s.startsWith('/')) return s;
+        // normalize backslashes
+        let norm = s.replace(/\\\\/g, '/');
+        // find the first occurrence of /uploads and return from there
+        const idx = norm.indexOf('/uploads');
+        if (idx !== -1) return norm.slice(idx);
+        const idx2 = norm.indexOf('uploads/');
+        if (idx2 !== -1) return '/' + norm.slice(idx2);
+        // fallback: return /uploads/<filename>
+        return '/uploads/' + norm.split('/').pop();
+    }
+
+    function renderAttachmentsHTML(attachments) {
+        if (!attachments || !attachments.length) return '<p class="text-muted">No attachments</p>';
+        return attachments.map(a => {
+            const url = getAttachmentUrl(a.path || a);
+            const name = a.originalName || (typeof a === 'string' ? a.split('/').pop() : 'attachment');
+            const ext = (name.split('.').pop() || '').toLowerCase();
+            const imageExts = ['jpg','jpeg','png','gif','webp'];
+            if (imageExts.includes(ext)) {
+                return `<div style="margin-bottom:8px"><a href="${url}" target="_blank"><img src="${url}" alt="${name}" style="max-width:240px;max-height:240px;border:1px solid #e5e7eb;padding:4px;border-radius:4px;display:block"></a><div><a href="${url}" target="_blank">${name}</a></div></div>`;
+            }
+            return `<div style="margin-bottom:6px"><a href="${url}" target="_blank">${name}</a></div>`;
+        }).join('');
+    }
+
     details.innerHTML = `
         <div class="row">
             <div class="col-md-6">
@@ -300,10 +277,11 @@ function viewRequestDetails(requestId) {
                 <p><strong>Request ID:</strong> ${request.id}</p>
                 <p><strong>Document Type:</strong> ${request.documentType}</p>
                 <p><strong>Purpose:</strong> ${request.purpose}</p>
-                <p><strong>Copies:</strong> ${request.copies}</p>
-                <p><strong>Delivery Method:</strong> ${request.deliveryMethod}</p>
-                        ${request.deliveryAddress ? `<p><strong>Delivery Address:</strong> ${request.deliveryAddress}</p>` : ''}
+        <p><strong>Copies:</strong> ${request.copies}</p>
+            ${request.notes ? `<p><strong>Notes:</strong> ${request.notes}</p>` : ''}
                         ${request.notes ? `<p><strong>Notes:</strong> ${request.notes}</p>` : ''}
+                <h5 class="mt-3">Attachments</h5>
+                ${renderAttachmentsHTML(request.attachments || [])}
             </div>
             <div class="col-md-6">
                 <h5>Status Information</h5>
@@ -393,13 +371,19 @@ async function fetchServerRequests() {
 
             // Try to find local entry by id
             const idx = studentRequests.findIndex(r => r.id === sr.id);
-            if (idx !== -1) {
+                if (idx !== -1) {
                 // Update status, timeline, notes and attachments if changed
                 const local = studentRequests[idx];
                 let changed = false;
                 if (local.status !== sr.status) { local.status = sr.status; changed = true; }
                 if (JSON.stringify(local.timeline || []) !== JSON.stringify(sr.timeline || [])) { local.timeline = sr.timeline || []; changed = true; }
                 if (local.notes !== sr.adminNotes && sr.adminNotes) { local.notes = sr.adminNotes; changed = true; }
+                
+                // Update attachments if server has them and they're different
+                if (JSON.stringify(local.attachments || []) !== JSON.stringify(sr.attachments || [])) {
+                    local.attachments = sr.attachments || [];
+                    changed = true;
+                }
                 if (changed) foundAny = true;
                 studentRequests[idx] = local;
             } else {
@@ -425,13 +409,45 @@ async function fetchServerRequests() {
 }
 
 // Handle form submission
-function handleRequestSubmission(e) {
+async function handleRequestSubmission(e) {
     e.preventDefault();
 
     const formElement = e.target;
     const formData = new FormData(formElement);
 
+    // Collect attachments for immediate preview and to send to server
+    const attachmentsInput = document.getElementById('attachments');
+    const files = (attachmentsInput && attachmentsInput.files) ? Array.from(attachmentsInput.files) : [];
+
+    // Helper to read image files as data URLs for persistence in localStorage
+    const fileToDataURL = (file) => new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = (err) => reject(err);
+        reader.readAsDataURL(file);
+    });
+
+    const attachmentsPreview = [];
+    for (const f of files) {
+        try {
+            if (f.type && f.type.startsWith('image/')) {
+                const dataUrl = await fileToDataURL(f);
+                attachmentsPreview.push({ originalName: f.name, path: dataUrl, _data: true });
+            } else {
+                // non-image: create a session blob URL for immediate preview (won't persist across sessions)
+                attachmentsPreview.push({ originalName: f.name, path: URL.createObjectURL(f), _local: true });
+            }
+        } catch (e) {
+            // fallback to blob URL if FileReader fails
+            attachmentsPreview.push({ originalName: f.name, path: URL.createObjectURL(f), _local: true });
+        }
+    }
+
     // Build local request object for UI
+    const recipientFirst = formData.get('recipientFirstName') || '';
+    const recipientLast = formData.get('recipientLastName') || '';
+    const combinedRecipient = `${recipientFirst} ${recipientLast}`.trim();
+
     const newRequest = {
         id: DocTracker.generateRequestId(),
         studentId: currentStudent.studentId,
@@ -439,11 +455,14 @@ function handleRequestSubmission(e) {
         studentEmail: currentStudent.email,
         documentType: formData.get('documentType'),
         purpose: formData.get('purpose'),
+        purposeDetails: formData.get('purposeDetails') || '',
         termCoverage: formData.get('termCoverage'),
+        termExtra: formData.get('termExtra') || '',
         copies: parseInt(formData.get('copies')),
-        deliveryMethod: formData.get('deliveryMethod'),
-        deliveryAddress: formData.get('deliveryAddress'),
-        recipientName: formData.get('recipientName'),
+        recipientFirstName: recipientFirst,
+        recipientLastName: recipientLast,
+        recipientName: combinedRecipient,
+        contactNumber: formData.get('contactNumber'),
         notes: formData.get('notes'),
         status: 'Submitted',
         dateSubmitted: new Date().toISOString(),
@@ -453,6 +472,9 @@ function handleRequestSubmission(e) {
             note: 'Request submitted successfully'
         }]
     };
+
+    // Attach preview objects so the student sees uploaded files immediately
+    newRequest.attachments = attachmentsPreview;
 
     // Add to requests locally for immediate feedback
     studentRequests.unshift(newRequest);
@@ -471,18 +493,20 @@ function handleRequestSubmission(e) {
     sendData.append('studentEmail', newRequest.studentEmail);
     sendData.append('documentType', newRequest.documentType);
     sendData.append('purpose', newRequest.purpose);
+    sendData.append('purposeDetails', newRequest.purposeDetails || '');
     sendData.append('termCoverage', newRequest.termCoverage || '');
+    sendData.append('termExtra', newRequest.termExtra || '');
     sendData.append('copies', newRequest.copies);
-    sendData.append('deliveryMethod', newRequest.deliveryMethod);
-    sendData.append('deliveryAddress', newRequest.deliveryAddress || '');
     sendData.append('recipientName', newRequest.recipientName || '');
+    sendData.append('recipientFirstName', newRequest.recipientFirstName || '');
+    sendData.append('recipientLastName', newRequest.recipientLastName || '');
+    sendData.append('contactNumber', newRequest.contactNumber || '');
     sendData.append('notes', newRequest.notes || '');
 
     // Append attachments from file input if any
-    const attachmentsInput = document.getElementById('attachments');
-    if (attachmentsInput && attachmentsInput.files && attachmentsInput.files.length) {
-        for (let i = 0; i < attachmentsInput.files.length; i++) {
-            sendData.append('attachments', attachmentsInput.files[i], attachmentsInput.files[i].name);
+    if (files && files.length) {
+        for (let i = 0; i < files.length; i++) {
+            sendData.append('attachments', files[i], files[i].name);
         }
     }
 
@@ -493,10 +517,17 @@ function handleRequestSubmission(e) {
       .then(result => {
           if (result && result.success) {
               DocTracker.showNotification('success', 'Request sent to server. You will receive an email confirmation shortly.');
-              // Optionally update the local entry with server id
-              const serverId = result.request.id;
-              // replace the local request id with server id
-              studentRequests = studentRequests.map(r => r.id === newRequest.id ? Object.assign({}, r, { id: serverId }) : r);
+              // Replace the local temporary request with the server-provided request (which includes stored attachments)
+              const serverRequest = result.request;
+              studentRequests = studentRequests.map(r => {
+                  if (r.id === newRequest.id) {
+                      // Revoke local object URLs to avoid leaks
+                      (r.attachments || []).forEach(a => { try { if (a && a.path && a._local) URL.revokeObjectURL(a.path); } catch (e) {} });
+                      // Merge server request; keep local studentName/studentEmail if missing
+                      return Object.assign({}, r, serverRequest, { studentName: r.studentName, studentEmail: r.studentEmail });
+                  }
+                  return r;
+              });
               localStorage.setItem(`requests_${currentStudent.studentId}`, JSON.stringify(studentRequests));
               loadRequests();
           } else {
@@ -625,6 +656,12 @@ function closeModal() {
 function showNotification(type, message) {
     // Simple notification - just use alert for now
     alert(message);
+}
+
+// Compatibility: filters were removed from the UI; keep a noop function so references don't break
+function filterRequests() {
+    // no-op: filters removed
+    return;
 }
 
 function generateRequestId() {

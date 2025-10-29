@@ -198,8 +198,9 @@ body {
 /* New hero card layout to make the dashboard home more modern */
 .hero-card {
     display: grid;
-    grid-template-columns: 1fr 360px;
-    gap: 2rem;
+    /* narrower right column so the illustration sits closer to the content and appears centered */
+    grid-template-columns: 1fr 240px;
+    gap: 1.5rem;
     align-items: center;
     background: rgba(255,255,255,0.96);
     padding: 2.5rem;
@@ -220,17 +221,18 @@ body {
 
 .hero-right .illustration {
     display: flex;
-    align-items: center;
-    justify-content: center;
-    height: 220px;
-    width: 220px;
+    align-items: center; /* vertically center */
+    justify-content: center; /* horizontally center within the right column */
+    height: 180px;
+    width: 180px;
     border-radius: 12px;
     background: linear-gradient(135deg, rgba(18,165,101,0.12), rgba(54,217,123,0.06));
     box-shadow: inset 0 -6px 18px rgba(13,125,78,0.03);
+    margin-left: auto; /* push to the far right of the column */
 }
 
 .hero-right .illustration i {
-    font-size: 5.5rem;
+    font-size: 4.5rem;
     color: var(--usjr-green);
     opacity: 0.95;
 }

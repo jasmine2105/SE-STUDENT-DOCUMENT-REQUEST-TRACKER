@@ -284,6 +284,33 @@ function viewClearanceDetails(clearanceId) {
     const modal = document.getElementById('clearanceModal');
     const details = document.getElementById('clearanceDetails');
     
+    // Helpers for attachments (convert server path to web URL and render previews)
+    function getAttachmentUrl(p) {
+        if (!p) return '';
+        const s = String(p);
+        if (s.startsWith('blob:') || s.startsWith('data:') || s.startsWith('http') || s.startsWith('/')) return s;
+        let norm = s.replace(/\\\\/g, '/');
+        const idx = norm.indexOf('/uploads');
+        if (idx !== -1) return norm.slice(idx);
+        const idx2 = norm.indexOf('uploads/');
+        if (idx2 !== -1) return '/' + norm.slice(idx2);
+        return '/uploads/' + norm.split('/').pop();
+    }
+
+    function renderAttachmentsHTML(attachments) {
+        if (!attachments || !attachments.length) return '<p class="text-muted">No attachments</p>';
+        return attachments.map(a => {
+            const url = getAttachmentUrl(a.path || a);
+            const name = a.originalName || (typeof a === 'string' ? a.split('/').pop() : 'attachment');
+            const ext = (name.split('.').pop() || '').toLowerCase();
+            const imageExts = ['jpg','jpeg','png','gif','webp'];
+            if (imageExts.includes(ext)) {
+                return `<div style="margin-bottom:8px"><a href="${url}" target="_blank"><img src="${url}" alt="${name}" style="max-width:240px;max-height:240px;border:1px solid #e5e7eb;padding:4px;border-radius:4px;display:block"></a><div><a href="${url}" target="_blank">${name}</a></div></div>`;
+            }
+            return `<div style="margin-bottom:6px"><a href="${url}" target="_blank">${name}</a></div>`;
+        }).join('');
+    }
+    
     details.innerHTML = `
         <div class="row">
             <div class="col-md-6">
@@ -297,6 +324,8 @@ function viewClearanceDetails(clearanceId) {
                 <p><strong>Request ID:</strong> ${clearance.requestId}</p>
                 <p><strong>Document Type:</strong> ${clearance.documentType}</p>
                 <p><strong>Purpose:</strong> ${clearance.purpose}</p>
+                <h5 class="mt-3">Attachments</h5>
+                ${renderAttachmentsHTML(clearance.attachments || [])}
             </div>
             <div class="col-md-6">
                 <h5>Academic Record</h5>
