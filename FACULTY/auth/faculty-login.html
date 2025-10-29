@@ -4,6 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Faculty Login - DocTracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        window.tailwind = window.tailwind || {};
+        tailwind.config = { theme: { extend: { colors: { usjrg: '#0f3b2e', usjrgold: '#e8a90c', usjrbg: '#fff7e6', usjrdark: '#0a2a20', usjrgray: '#E5E7EB', 'usjr-green': '#0f3b2e', 'usjr-deep': '#0a2a20', 'usjr-gold': '#e8a90c', 'usjr-gold-dark': '#c58f08', 'usjr-cream': '#fff7e6' } } } };
+    </script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="../../shared/styles-home.css">
     <link rel="stylesheet" href="../styles/faculty-portal.css">
@@ -35,7 +40,7 @@
                     </label>
                 </div>
 
-                <button type="submit" class="login-btn">Login</button>
+                <button type="submit" class="login-btn bg-green-700 hover:bg-green-800 text-white transition duration-150 ease-out transform hover:scale-105 rounded-md">Login</button>
             </form>
 
             <!-- Error message area -->

@@ -4,12 +4,31 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Authentication - Document Request Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        window.tailwind = window.tailwind || {};
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        usjrg: '#0f3b2e', usjrgold: '#e8a90c', usjrbg: '#fff7e6', usjrdark: '#0a2a20', usjrgray: '#E5E7EB',
+                        'usjr-green': '#0f3b2e', 'usjr-deep': '#0a2a20', 'usjr-gold': '#e8a90c', 'usjr-gold-dark': '#c58f08', 'usjr-cream': '#fff7e6'
+                    }
+                }
+            }
+        }
+    </script>
     <link rel="stylesheet" href="../../shared/styles-home.css">
     <link rel="stylesheet" href="../styles/student-portal.css">
+    <style>
+        /* Auth page should use a lightweight background to avoid jank */
+        body { background-image: none !important; background-attachment: scroll !important; }
+        html, body { overflow: auto !important; }
+    </style>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 </head>
 <body>
-    <nav class="navbar">
+    <nav class="navbar bg-usjrg text-white">
         <div class="nav-container">
             <div class="nav-logo">
                 <i class="fas fa-file-alt"></i>
@@ -86,7 +105,7 @@
                     <!-- Inline login error shown below the forgot password link -->
                     <div id="loginFormError" aria-live="polite" style="display:none; margin-top:0.5rem; color:#b71c1c; background:#ffebee; padding:0.5rem; border-radius:4px;"></div>
                     
-                    <button type="submit" class="btn btn-primary btn-full">
+                    <button type="submit" class="btn btn-primary btn-full bg-green-700 hover:bg-green-800 text-white transition duration-150 ease-out transform hover:scale-105 rounded-md">
                         <i class="fas fa-sign-in-alt"></i> Login
                     </button>
                     
@@ -94,7 +113,7 @@
                         <span>Don't have an account?</span>
                     </div>
                     
-                    <button type="button" class="btn btn-outline btn-full" id="showSignupBtn" onclick="showSignupForm()">
+                    <button type="button" class="btn btn-outline btn-full border-usjrg text-usjrg hover:bg-usjrg hover:text-white transition duration-150 ease-out" id="showSignupBtn" onclick="showSignupForm()">
                         <i class="fas fa-user-plus"></i> Create Account
                     </button>
                     
@@ -102,7 +121,7 @@
                         <span>OR</span>
                     </div>
                     
-                    <button type="button" class="btn btn-outline btn-full" onclick="goBackToRoleSelection()">
+                    <button type="button" class="btn btn-outline btn-full border-usjrg text-usjrg hover:bg-usjrg hover:text-white transition duration-150 ease-out" onclick="goBackToRoleSelection()">
                         <i class="fas fa-arrow-left"></i> Back to Role Selection
                     </button>
                 </form>
@@ -206,7 +225,7 @@
                         </label>
                     </div>
                     
-                    <button type="submit" class="btn btn-primary btn-full">
+                    <button type="submit" class="btn btn-primary btn-full bg-green-700 hover:bg-green-800 text-white transition duration-150 ease-out transform hover:scale-105 rounded-md">
                         <i class="fas fa-user-plus"></i> Create Account
                     </button>
                     
@@ -214,7 +233,7 @@
                         <span>Already have an account?</span>
                     </div>
                     
-                    <button type="button" class="btn btn-outline btn-full" onclick="showLoginForm()">
+                    <button type="button" class="btn btn-outline btn-full border-usjrg text-usjrg hover:bg-usjrg hover:text-white transition duration-150 ease-out" onclick="showLoginForm()">
                         <i class="fas fa-sign-in-alt"></i> Login
                     </button>
                     
@@ -263,10 +282,10 @@
                 <p>For support or inquiries, please contact the Registrar's Office or visit <a href="mailto:registrar@usjr.edu.ph">registrar@usjr.edu.ph</a></p>
                 
                 <div class="d-flex gap-2 mt-3">
-                    <button class="btn btn-primary" onclick="acceptTerms()">
+                    <button class="btn btn-primary bg-green-700 hover:bg-green-800 text-white transition duration-150 ease-out transform hover:scale-105 rounded-md" onclick="acceptTerms()">
                         <i class="fas fa-check"></i> I Accept
                     </button>
-                    <button class="btn btn-outline" onclick="closeTermsModal()">
+                    <button class="btn btn-outline border-usjrg text-usjrg hover:bg-usjrg hover:text-white transition duration-150 ease-out" onclick="closeTermsModal()">
                         <i class="fas fa-times"></i> Decline
                     </button>
                 </div>
@@ -348,7 +367,6 @@
         </div>
 
 
-    <script src="../scripts/student-portal.js"></script>
     <script src="student-auth.js"></script>
 </body>
 </html>

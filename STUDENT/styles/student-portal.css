@@ -8,8 +8,8 @@
 body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     line-height: 1.6;
-    color: #333;
-    background-color: #f8f9fa;
+    color: #1A1A1A;
+    background-color: #F9F6EE;
     font-size: 16px;
     background-image: url('../assets/school-bg.jpg');
     background-size: cover;
@@ -20,11 +20,13 @@ body {
 
 /* USJR Theme Colors */
 :root {
-    --usjr-green: #12a565;
-    --usjr-green-light: #36d97b;
-    --usjr-yellow: #ffb300;
-    --usjr-yellow-light: #ffc84d;
-    --usjr-yellow-dark: #ff9800;
+    --usjr-green: #0f3b2e;
+    --usjr-green-light: #0a2a20;
+    --usjr-yellow: #e8a90c;
+    --usjr-yellow-light: #e8a90c;
+    --usjr-yellow-dark: #c58f08;
+    --usjr-gray: #E5E7EB;
+    --usjr-text: #0a2a20;
 }
 
 /* Navigation - USJR Theme */
@@ -106,10 +108,7 @@ body {
     color: white;
 }
 
-.btn-primary:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 5px 15px rgba(13, 125, 78, 0.4);
-}
+.btn-primary:hover { transform: translateY(-2px) scale(1.02); box-shadow: 0 5px 15px rgba(0, 66, 37, 0.35); }
 
 .btn-secondary {
     background: var(--usjr-yellow);
@@ -117,11 +116,7 @@ body {
     font-weight: 600;
 }
 
-.btn-secondary:hover {
-    background: var(--usjr-yellow-dark);
-    transform: translateY(-2px);
-    color: white;
-}
+.btn-secondary:hover { background: var(--usjr-yellow-dark); transform: translateY(-2px) scale(1.02); color: white; }
 
 .btn-outline {
     border: 2px solid var(--usjr-green);

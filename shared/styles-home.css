@@ -8,18 +8,20 @@
 body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     line-height: 1.6;
-    color: #333;
-    background-color: #f8f9fa;
+    color: #1A1A1A;
+    background-color: #F9F6EE;
     font-size: 16px; /* Clear, readable font size */
 }
 
 /* USJR Theme Colors */
 :root {
-    --usjr-green: #12a565; /* USJR Green (lighter) */
-    --usjr-green-light: #36d97b; /* lighter accent */
-    --usjr-yellow: #ffb300; /* USJR Yellow/Orange */
-    --usjr-yellow-light: #ffc84d;
-    --usjr-yellow-dark: #ff9800;
+    --usjr-green: #0f3b2e;
+    --usjr-green-light: #0a2a20;
+    --usjr-yellow: #e8a90c;
+    --usjr-yellow-light: #e8a90c;
+    --usjr-yellow-dark: #c58f08;
+    --usjr-gray: #E5E7EB;
+    --usjr-text: #0a2a20;
 }
 
 .container {
@@ -611,30 +613,15 @@ aside .card {
     font-weight: 500;
 }
 
-.status-submitted {
-    background: #fff3cd;
-    color: #856404;
-}
+.status-submitted { background: #fef3c7; color: #92400e; }
 
-.status-processing {
-    background: #d1ecf1;
-    color: #0c5460;
-}
+.status-processing { background: #dbeafe; color: #1e40af; }
 
-.status-completed {
-    background: #d4edda;
-    color: #155724;
-}
+.status-completed { background: #dcfce7; color: #166534; }
 
-.status-declined {
-    background: #f8d7da;
-    color: #721c24;
-}
+.status-declined { background: #fee2e2; color: #991b1b; }
 
-.status-ready {
-    background: #d1ecf1;
-    color: #0c5460;
-}
+.status-ready { background: #e0f2fe; color: #075985; }
 
 /* Tables */
 .table {
@@ -647,7 +634,7 @@ aside .card {
 .table td {
     padding: 12px;
     text-align: left;
-    border-bottom: 1px solid #dee2e6;
+    border-bottom: 1px solid var(--usjr-gray);
 }
 
 .table th {

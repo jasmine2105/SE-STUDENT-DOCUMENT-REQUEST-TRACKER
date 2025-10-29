@@ -93,6 +93,16 @@ function initializeApp() {
 
     // Initialize form validation
     initializeFormValidation();
+
+    // Highlight active nav link if hash matches
+    try {
+        const path = window.location.pathname || '';
+        document.querySelectorAll('.nav-link').forEach(a => {
+            if (a.getAttribute('href') && path.endsWith(a.getAttribute('href'))) {
+                a.classList.add('text-usjrgold');
+            }
+        });
+    } catch (e) { /* ignore */ }
 }
 
 // Form validation
@@ -191,27 +201,52 @@ function handleFormSubmission(form) {
 }
 
 // Show notification
-function showNotification(type, message, duration = 5000) {
-    const notification = document.createElement('div');
-    notification.className = `notification notification-${type}`;
-    notification.innerHTML = `
-        <div class="d-flex justify-content-between align-items-center">
-            <span>${message}</span>
-            <button onclick="this.parentElement.parentElement.remove()" style="background: none; border: none; color: inherit; cursor: pointer;">
-                <i class="fas fa-times"></i>
-            </button>
-        </div>
+function showNotification(type, message, duration = 4000) {
+    // Tailwind-based toast (bottom right)
+    const id = 'toast-container';
+    let container = document.getElementById(id);
+    if (!container) {
+        container = document.createElement('div');
+        container.id = id;
+        container.style.position = 'fixed';
+        container.style.right = '1rem';
+        container.style.bottom = '1rem';
+        container.style.zIndex = '3000';
+        container.style.display = 'flex';
+        container.style.flexDirection = 'column';
+        container.style.gap = '0.5rem';
+        document.body.appendChild(container);
+    }
+
+    const palette = {
+        success: 'bg-green-600',
+        error: 'bg-red-600',
+        warning: 'bg-yellow-600',
+        info: 'bg-blue-600'
+    };
+
+    const toast = document.createElement('div');
+    toast.setAttribute('role', 'status');
+    toast.className = `text-white shadow-lg rounded-md px-4 py-3 flex items-start gap-3 transition transform duration-200 ease-out ${palette[type] || 'bg-green-600'}`;
+    toast.style.opacity = '0';
+    toast.style.transform = 'translateY(6px)';
+    toast.innerHTML = `
+        <div class="flex-1">${message}</div>
+        <button aria-label="Close" class="opacity-80 hover:opacity-100" style="background:none;border:none;color:inherit;">
+            <i class="fas fa-times"></i>
+        </button>
     `;
-
-    // Add to page
-    const container = document.querySelector('.portal-container') || document.body;
-    container.insertBefore(notification, container.firstChild);
-
-    // Auto remove after duration
+    const closeBtn = toast.querySelector('button');
+    closeBtn.addEventListener('click', () => toast.remove());
+    container.appendChild(toast);
+    // animate in
+    requestAnimationFrame(() => { toast.style.opacity = '1'; toast.style.transform = 'translateY(0)'; });
+    // auto dismiss
     setTimeout(() => {
-        if (notification.parentNode) {
-            notification.remove();
-        }
+        if (!toast.parentNode) return;
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(6px)';
+        setTimeout(() => toast.remove(), 200);
     }, duration);
 }
 

@@ -4,6 +4,30 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Student Document Request Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        window.tailwind = window.tailwind || {};
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        // Legacy aliases kept working but mapped to the new palette
+                        usjrg: '#0f3b2e',
+                        usjrgold: '#e8a90c',
+                        usjrbg: '#fff7e6',
+                        usjrdark: '#0a2a20',
+                        usjrgray: '#E5E7EB',
+                        // Blade palette names
+                        'usjr-green': '#0f3b2e',
+                        'usjr-deep': '#0a2a20',
+                        'usjr-gold': '#e8a90c',
+                        'usjr-gold-dark': '#c58f08',
+                        'usjr-cream': '#fff7e6'
+                    }
+                }
+            }
+        }
+    </script>
 
     <!-- Main Shared Styles -->
     <link rel="stylesheet" href="shared/styles-home.css">
@@ -12,7 +36,7 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
 </head>
 <body>
-    <nav class="navbar">
+    <nav class="navbar bg-usjrg text-white border-b-4" style="border-color:#E4B429;">
         <div class="nav-container">
             <div class="nav-logo">
                 <i class="fas fa-file-alt"></i>
@@ -23,8 +47,8 @@
                 <a href="#features" class="nav-link">Features</a>
                 <a href="#about" class="nav-link">About</a>
                 <div class="nav-buttons">
-                    <a href="STUDENT/auth/student-login.html" class="btn btn-outline">Student Login</a>
-                    <a href="ADMIN/auth/admin-login.html" class="btn btn-primary">Portal</a>
+                    <a href="STUDENT/auth/student-login.html" class="btn btn-outline border-usjrgold text-usjrgold hover:bg-usjrgold hover:text-usjrg transition duration-150 ease-out">Student Login</a>
+                    <a href="ADMIN/auth/admin-login.html" class="btn btn-primary bg-usjrgold hover:bg-yellow-500 text-usjrdark transition duration-150 ease-out transform hover:scale-105">Portal</a>
                 </div>
             </div>
         </div>
@@ -35,16 +59,19 @@
             <div class="container">
                 <div class="hero-card">
                     <div class="hero-left">
-                        <h1>Request School Documents Online</h1>
+                        <div class="inline-flex items-center gap-2 mb-2">
+                            <span class="inline-block rounded-full bg-usjrgold/20 text-usjrg px-3 py-1 text-sm font-semibold">USJ-R Themed</span>
+                        </div>
+                        <h1 class="text-usjrdark">Request School Documents Online</h1>
                         <p class="hero-subtitle">Fast, tracked, and paperless document requests</p>
                         <p>Streamline your academic document requests with our comprehensive tracking system. Submit, track, and manage your TOR, Good Moral, COE, and other academic documents efficiently.</p>
 
                         <div class="hero-buttons">
-                            <a href="STUDENT/auth/student-login.html" class="btn btn-primary btn-large">
+                            <a href="STUDENT/auth/student-login.html" class="btn btn-primary btn-large bg-usjrgold hover:bg-yellow-500 text-usjrdark transition duration-150 ease-out transform hover:scale-105">
                                 <i class="fas fa-sign-in-alt"></i>
                                 Login / Sign Up
                             </a>
-                            <a href="#how-it-works" class="btn btn-outline btn-large">
+                            <a href="#how-it-works" class="btn btn-outline btn-large border-usjrg text-usjrg hover:bg-usjrg hover:text-white transition duration-150 ease-out">
                                 <i class="fas fa-info-circle"></i>
                                 How It Works
                             </a>
@@ -61,7 +88,7 @@
 
         <section id="features" class="features">
             <div class="container">
-                <h2>Common Document Types</h2>
+                <h2 class="inline-flex items-center gap-2"><span class="w-2 h-6 bg-usjrgold inline-block rounded"></span> Common Document Types</h2>
                 <div class="features-grid">
                     <div class="feature-card">
                         <div class="feature-icon">
@@ -111,7 +138,7 @@
 
         <section id="how-it-works" class="how-it-works">
             <div class="container">
-                <h2>How It Works</h2>
+                <h2 class="inline-flex items-center gap-2"><span class="w-2 h-6 bg-usjrgold inline-block rounded"></span> How It Works</h2>
                 <div class="steps-grid">
                     <div class="step-card">
                         <div class="step-number">1</div>
@@ -144,7 +171,7 @@
 
         <section id="about" class="about">
             <div class="container">
-                <h2>About DocTracker</h2>
+                <h2 class="inline-flex items-center gap-2"><span class="w-2 h-6 bg-usjrgold inline-block rounded"></span> About DocTracker</h2>
                 <p>DocTracker is a comprehensive document request management system designed to streamline the process of requesting and tracking academic documents. Our system ensures transparency, efficiency, and timely delivery of important academic documents.</p>
                 <div class="stats">
                     <div class="stat">
