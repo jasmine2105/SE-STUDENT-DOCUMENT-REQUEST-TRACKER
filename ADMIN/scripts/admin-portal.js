@@ -664,6 +664,14 @@ function refreshData() {
     }, 1000);
 }
 
+// Logout function
+function logout() {
+    localStorage.removeItem('currentUser');
+    sessionStorage.removeItem('currentUser');
+    sessionStorage.removeItem('roleVerified'); // Clear admin role verification
+    window.location.href = '/'; // Go to root home page
+}
+
 // Add timeline styles (same as student portal)
 const timelineStyles = `
 <style>
@@ -684,9 +692,9 @@ const timelineStyles = `
     width: 10px;
     height: 10px;
     border-radius: 50%;
-    background: #667eea;
+    background: var(--usjr-green);
     border: 2px solid white;
-    box-shadow: 0 0 0 2px #667eea;
+    box-shadow: 0 0 0 2px var(--usjr-green);
 }
 
 .timeline-item:not(:last-child) .timeline-marker::after {
@@ -714,7 +722,8 @@ const timelineStyles = `
 // Add timeline styles to head
 document.head.insertAdjacentHTML('beforeend', timelineStyles);
 
-// Expose admin functions globally (in case inline onclicks need them)
+// Make functions globally available
+window.logout = logout;
 window.viewRequestDetails = viewRequestDetails;
 window.processRequest = processRequest;
 window.addNotes = addNotes;

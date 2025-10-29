@@ -462,6 +462,14 @@ function refreshData() {
     }, 1000);
 }
 
+// Logout function
+function logout() {
+    localStorage.removeItem('currentUser');
+    sessionStorage.removeItem('currentUser');
+    sessionStorage.removeItem('roleVerified'); // Clear faculty role verification
+    window.location.href = '../../index.html'; // Fixed path to home page
+}
+
 // Add timeline styles (same as other portals)
 const timelineStyles = `
 <style>
@@ -482,9 +490,9 @@ const timelineStyles = `
     width: 10px;
     height: 10px;
     border-radius: 50%;
-    background: #667eea;
+    background: var(--usjr-green);
     border: 2px solid white;
-    box-shadow: 0 0 0 2px #667eea;
+    box-shadow: 0 0 0 2px var(--usjr-green);
 }
 
 .timeline-item:not(:last-child) .timeline-marker::after {
@@ -511,3 +519,13 @@ const timelineStyles = `
 
 // Add timeline styles to head
 document.head.insertAdjacentHTML('beforeend', timelineStyles);
+
+// Make functions globally available
+window.logout = logout;
+window.viewClearanceDetails = viewClearanceDetails;
+window.approveClearance = approveClearance;
+window.rejectClearance = rejectClearance;
+window.refreshData = refreshData;
+window.showPendingClearances = showPendingClearances;
+window.markNotificationRead = markNotificationRead;
+window.applyFilters = applyFilters;

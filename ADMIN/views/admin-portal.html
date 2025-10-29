@@ -4,7 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Portal - Document Request Tracker</title>
-    <link rel="stylesheet" href="styles.css">
+    <!-- FIXED CSS PATHS -->
+    <link rel="stylesheet" href="../styles/admin-portal.css">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
         /* Make admin portal use the same white card container as student portal */
@@ -215,9 +216,6 @@
         </div>
     </div>
 
-    <script src="utils.js"></script>
-    <script src="ui.js"></script>
-    <script src="auth-script.js"></script>
     <!-- Admin entry modal: require role password when opening admin portal -->
     <div id="adminEntryModal" class="modal" style="display:none;">
         <div class="modal-content">
@@ -236,6 +234,10 @@
             </div>
         </div>
     </div>
+
+    <!-- FIXED JAVASCRIPT PATHS -->
+    <script src="../../shared/utils.js"></script>
+    <script src="../scripts/admin-portal.js"></script>
 
     <script>
         // Require admin password when loading this page if not already verified in this session
@@ -300,6 +302,5 @@
             });
         })();
     </script>
-    <script src="ADMIN/admin-script.js"></script>
 </body>
 </html>
