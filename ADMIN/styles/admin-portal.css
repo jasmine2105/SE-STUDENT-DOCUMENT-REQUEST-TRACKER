@@ -15,13 +15,13 @@ body {
 
 /* USJR Theme Colors */
 :root {
-    --usjr-green: #0f3b2e;
-    --usjr-green-light: #0a2a20;
+    --usjr-green: #2f855a;
+    --usjr-green-light: #14532d;
     --usjr-yellow: #e8a90c;
     --usjr-yellow-light: #e8a90c;
     --usjr-yellow-dark: #c58f08;
     --usjr-gray: #E5E7EB;
-    --usjr-text: #0a2a20;
+    --usjr-text: #14532d;
 }
 
 /* Navigation - USJR Theme */
