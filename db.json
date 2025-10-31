@@ -1,6 +1,35 @@
 {
   "requests": [
     {
+      "id": "REQ-PHYZWUOM",
+      "studentId": "2023444449",
+      "studentName": "monica calledo",
+      "studentEmail": "martina@gmail.com",
+      "documentType": "COG",
+      "purpose": "educational",
+      "termCoverage": "2025",
+      "copies": 5,
+      "deliveryMethod": "Pickup",
+      "deliveryAddress": "",
+      "recipientName": "Jasmine Omandam",
+      "notes": "na",
+      "status": "Submitted",
+      "dateSubmitted": "2025-10-31T11:56:50.249Z",
+      "attachments": [
+        {
+          "originalName": "JMP_USE CASE.pdf",
+          "path": "C:\\Users\\Admin\\Documents\\SOFTENG\\uploads\\cdd07a6dea9b1305c2d84d7cd3db5111"
+        }
+      ],
+      "timeline": [
+        {
+          "status": "Submitted",
+          "date": "2025-10-31T11:56:50.249Z",
+          "note": "Request submitted"
+        }
+      ]
+    },
+    {
       "id": "REQ-CFAVA-A1",
       "studentId": "2023444449",
       "studentName": "monica calledo",
@@ -31,6 +60,11 @@
           "status": "Deleted",
           "date": "2025-10-31T11:15:00.928Z",
           "note": "Deleted by student"
+        },
+        {
+          "status": "Deleted",
+          "date": "2025-10-31T11:31:53.057Z",
+          "note": "Deleted by student"
         }
       ]
     },
@@ -47,7 +81,7 @@
       "deliveryAddress": "",
       "recipientName": "jasmine",
       "notes": "dsads",
-      "status": "Submitted",
+      "status": "Deleted",
       "dateSubmitted": "2025-10-29T17:30:33.538Z",
       "attachments": [],
       "timeline": [
@@ -55,6 +89,11 @@
           "status": "Submitted",
           "date": "2025-10-29T17:30:33.538Z",
           "note": "Request submitted"
+        },
+        {
+          "status": "Deleted",
+          "date": "2025-10-31T11:30:19.062Z",
+          "note": "Deleted by student"
         }
       ]
     },

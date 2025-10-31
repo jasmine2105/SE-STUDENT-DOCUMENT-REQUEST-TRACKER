@@ -148,20 +148,113 @@ body {
     text-align: center;
     margin-bottom: 2rem;
     padding: 2rem;
-    background: linear-gradient(135deg, var(--usjr-green) 0%, var(--usjr-green-light) 100%);
-    color: white;
+    background: white; /* make header a white card like the home hero-card */
+    color: var(--usjr-text);
     border-radius: 10px;
+    border: 2px solid var(--usjr-green); /* green outline to match home page */
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    position: relative; /* for pseudo accent bars */
 }
 
 .portal-header h1 {
     font-size: 3rem;
-    margin-bottom: 0.5rem;
+    margin-bottom: 0.25rem;
+    color: var(--usjr-green); /* green title to match home */
 }
 
 .portal-header p {
-    font-size: 1.2rem;
-    opacity: 0.9;
+    font-size: 1.05rem;
+    opacity: 0.95;
     margin: 0;
+    color: #445; /* slightly darker than body text */
+}
+
+/* center yellow accent bar appears below via ::after */
+
+/* larger, centered yellow accent bar for a more striking yet formal look */
+.portal-header::after {
+    content: '';
+    display: block;
+    width: 220px; /* longer center line per request */
+    height: 8px;
+    border-radius: 6px;
+    background: linear-gradient(90deg, var(--usjr-yellow) 0%, var(--usjr-yellow-dark) 100%);
+    margin-top: 0.65rem;
+    box-shadow: 0 3px 8px rgba(232,169,12,0.12);
+}
+
+/* decorative subtle crest behind the icon/title for a formal, branded look */
+.portal-header::before {
+    content: '';
+    position: absolute;
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 140px;
+    height: 140px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 30% 30%, rgba(47,133,90,0.06), rgba(20,83,45,0.02));
+    z-index: 0;
+}
+
+/* make sure header content sits above decorative crest */
+.portal-header > * { z-index: 1; }
+
+.portal-header h1 { 
+    letter-spacing: 0.6px;
+    font-weight: 700;
+}
+
+.portal-header .header-icon {
+    font-size: 3.2rem; /* larger mortarboard */
+    color: var(--usjr-green-light);
+    margin-bottom: 0.2rem;
+}
+
+/* If the header contains an illustration or image (second photo), give it a yellow edge */
+.portal-header .illustration,
+.portal-header img,
+.hero-right .illustration,
+.card img {
+    box-shadow: 0 0 0 4px transparent; /* reserve space for border */
+    border-radius: 8px;
+}
+
+.portal-header .illustration::after,
+.portal-header img.edge-yellow,
+.hero-right .illustration.edge-yellow,
+.card img.edge-yellow {
+    content: '';
+    display: block;
+    position: relative;
+    margin-left: auto;
+    box-shadow: 0 0 0 4px rgba(0,0,0,0.03), 6px 0 0 0 var(--usjr-yellow); /* yellow edge on the right */
+}
+
+/* fallback for images without the .edge-yellow helper: add thin yellow right border */
+.portal-header img,
+.hero-right .illustration img,
+.card img {
+    border-right: 6px solid var(--usjr-yellow);
+}
+
+/* CTA in header (if present) - yellow button matching home page */
+.portal-header .header-cta {
+    margin-top: 0.6rem;
+}
+
+.portal-header .btn-cta {
+    background: var(--usjr-yellow);
+    color: #222;
+    border: 2px solid rgba(0,0,0,0.06);
+}
+
+.portal-header .btn-cta:hover {
+    background: var(--usjr-yellow-dark);
+    color: #fff;
 }
 
 /* Dashboard Grid */
