@@ -46,7 +46,124 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Set up event listeners
     setupEventListeners();
+    // Init notification UI
+    initNotificationUI();
 });
+
+// --- Notifications (in-app) ---
+function notificationsStorageKey() {
+    return `notifications_${currentStudent ? currentStudent.studentId : 'guest'}`;
+}
+
+function loadNotifications() {
+    try {
+        const raw = localStorage.getItem(notificationsStorageKey());
+        return raw ? JSON.parse(raw) : [];
+    } catch (e) { return []; }
+}
+
+function saveNotifications(list) {
+    localStorage.setItem(notificationsStorageKey(), JSON.stringify(list || []));
+}
+
+function initNotificationUI() {
+    // Insert a bell + badge into .nav-buttons
+    const navButtons = document.querySelector('.nav-buttons');
+    if (!navButtons) return;
+    const existing = document.getElementById('notifBtn');
+    if (existing) return;
+
+    const wrapper = document.createElement('div');
+    wrapper.style.position = 'relative';
+    wrapper.style.display = 'inline-block';
+    wrapper.style.marginLeft = '8px';
+
+    const btn = document.createElement('button');
+    btn.id = 'notifBtn';
+    btn.className = 'btn btn-outline';
+    btn.innerHTML = `<i class="fas fa-bell"></i> <span id="notifCount" style="margin-left:6px"></span>`;
+    wrapper.appendChild(btn);
+
+    const dropdown = document.createElement('div');
+    dropdown.id = 'notifDropdown';
+    dropdown.style.position = 'absolute';
+    dropdown.style.right = '0';
+    dropdown.style.top = '36px';
+    dropdown.style.minWidth = '320px';
+    dropdown.style.maxWidth = '420px';
+    dropdown.style.background = 'white';
+    dropdown.style.border = '1px solid #e9ecef';
+    dropdown.style.borderRadius = '8px';
+    dropdown.style.boxShadow = '0 8px 24px rgba(0,0,0,0.12)';
+    dropdown.style.display = 'none';
+    dropdown.style.zIndex = 2000;
+    dropdown.innerHTML = `<div id="notifList" style="max-height:320px;overflow:auto;padding:8px"></div><div style="padding:8px;border-top:1px solid #f1f1f1;text-align:right"><button id="markAllRead" class="btn btn-outline">Mark all read</button></div>`;
+    wrapper.appendChild(dropdown);
+
+    navButtons.insertBefore(wrapper, navButtons.firstChild);
+
+    btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        dropdown.style.display = dropdown.style.display === 'block' ? 'none' : 'block';
+        renderNotificationList();
+    });
+
+    document.addEventListener('click', () => { dropdown.style.display = 'none'; });
+
+    const markAll = dropdown.querySelector('#markAllRead');
+    markAll.addEventListener('click', (ev) => { ev.stopPropagation(); const list = loadNotifications().map(n => ({ ...n, read: true })); saveNotifications(list); renderNotificationBadge(); renderNotificationList(); });
+
+    renderNotificationBadge();
+}
+
+function renderNotificationBadge() {
+    const list = loadNotifications();
+    const unread = list.filter(n => !n.read).length;
+    const badge = document.getElementById('notifCount');
+    if (badge) badge.textContent = unread ? `(${unread})` : '';
+}
+
+function renderNotificationList() {
+    const container = document.getElementById('notifList');
+    if (!container) return;
+    const list = loadNotifications();
+    if (!list.length) { container.innerHTML = '<div style="padding:12px;color:#666">No notifications</div>'; return; }
+    container.innerHTML = list.map(n => `
+        <div class="notif-item" data-id="${n.id}" data-request-id="${n.requestId}" style="padding:8px;border-bottom:1px solid #f3f4f6;cursor:pointer;background:${n.read? 'transparent':'rgba(238,245,233,0.6)'}">
+            <div style="font-weight:600;color:#14532d">${n.title}</div>
+            <div style="font-size:0.9rem;color:#444">${n.message}</div>
+            <div style="font-size:0.75rem;color:#777;margin-top:6px">${new Date(n.date).toLocaleString()}</div>
+        </div>
+    `).join('');
+
+    // click handlers
+    container.querySelectorAll('.notif-item').forEach(el => {
+        el.addEventListener('click', (ev) => {
+            ev.stopPropagation();
+            const id = el.dataset.id; const reqId = el.dataset.requestId;
+            // mark read
+            const list = loadNotifications().map(n => n.id === id ? { ...n, read: true } : n);
+            saveNotifications(list);
+            renderNotificationBadge();
+            renderNotificationList();
+            // open request modal
+            if (reqId) viewRequestDetails(reqId);
+        });
+    });
+}
+
+function generateNotifId() {
+    return `N${Date.now().toString(36)}${Math.random().toString(36).slice(2,6)}`;
+}
+
+function createNotification(requestId, title, message, date) {
+    const list = loadNotifications();
+    const n = { id: generateNotifId(), requestId: requestId, title: title || 'Update', message: message || '', date: date || new Date().toISOString(), read: false };
+    list.unshift(n);
+    // keep max 200 notifications
+    saveNotifications(list.slice(0, 200));
+    renderNotificationBadge();
+}
 
 // Update welcome message
 function updateWelcomeMessage() {
@@ -381,15 +498,33 @@ async function fetchServerRequests() {
                 // Update status, timeline, notes and attachments if changed
                 const local = studentRequests[idx];
                 let changed = false;
-                if (local.status !== sr.status) { local.status = sr.status; changed = true; }
-                if (JSON.stringify(local.timeline || []) !== JSON.stringify(sr.timeline || [])) { local.timeline = sr.timeline || []; changed = true; }
-                if (local.notes !== sr.adminNotes && sr.adminNotes) { local.notes = sr.adminNotes; changed = true; }
-                
-                // Update attachments if server has them and they're different
-                if (JSON.stringify(local.attachments || []) !== JSON.stringify(sr.attachments || [])) {
-                    local.attachments = sr.attachments || [];
-                    changed = true;
-                }
+                    if (local.status !== sr.status) { local.status = sr.status; changed = true; }
+
+                    // Compare timelines and create notifications for newly added timeline entries
+                    const localTimeline = local.timeline || [];
+                    const serverTimeline = sr.timeline || [];
+                    if (JSON.stringify(localTimeline) !== JSON.stringify(serverTimeline)) {
+                        // If server has more entries than local, create notification(s)
+                        if (serverTimeline.length > localTimeline.length) {
+                            for (let i = localTimeline.length; i < serverTimeline.length; i++) {
+                                const te = serverTimeline[i];
+                                const title = `${sr.documentType || 'Request'} (${sr.id || ''})`;
+                                const message = te && (te.note || (`Status: ${te.status || ''}`)) || 'Update on your request';
+                                const date = te && te.date ? te.date : new Date().toISOString();
+                                createNotification(sr.id, title, message, date);
+                            }
+                        }
+                        local.timeline = serverTimeline;
+                        changed = true;
+                    }
+
+                    if (local.notes !== sr.adminNotes && sr.adminNotes) { local.notes = sr.adminNotes; changed = true; }
+
+                    // Update attachments if server has them and they're different
+                    if (JSON.stringify(local.attachments || []) !== JSON.stringify(sr.attachments || [])) {
+                        local.attachments = sr.attachments || [];
+                        changed = true;
+                    }
                 if (changed) foundAny = true;
                 studentRequests[idx] = local;
             } else {

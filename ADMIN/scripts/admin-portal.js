@@ -511,6 +511,13 @@ function viewRequestDetails(requestId) {
                     </button>
                 ` : ''}
             </div>
+            <div class="mt-3">
+                <h6>Send Feedback / Message to Student</h6>
+                <textarea id="adminFeedbackText" class="form-control" rows="3" placeholder="Write feedback or instructions to the student..."></textarea>
+                <div style="margin-top:8px">
+                    <button class="btn btn-primary" onclick="sendFeedback('${request.id}')"><i class="fas fa-paper-plane"></i> Send Feedback</button>
+                </div>
+            </div>
         </div>
     `;
     
@@ -618,6 +625,37 @@ function declineRequest(requestId) {
                 });
         }
     }
+}
+
+// Send feedback to student (adds timeline entry + adminNotes and persists)
+function sendFeedback(requestId) {
+    const request = adminRequests.find(r => r.id === requestId);
+    if (!request) return;
+    const textarea = document.getElementById('adminFeedbackText');
+    if (!textarea) return;
+    const text = (textarea.value || '').trim();
+    if (!text) { alert('Please enter feedback before sending.'); return; }
+
+    const timelineEntry = { status: request.status, date: new Date().toISOString(), note: `Feedback: ${text}`, user: 'Admin' };
+
+    // Optimistic local update
+    request.adminNotes = (request.adminNotes ? request.adminNotes + '\n' : '') + text;
+    request.timeline.push(timelineEntry);
+
+    persistRequestUpdate(requestId, { adminNotes: request.adminNotes, timelineEntry })
+        .then(success => {
+            if (success) {
+                DocTracker.showNotification('success', 'Feedback sent to student.');
+            } else {
+                DocTracker.showNotification('warning', 'Feedback saved locally but failed to sync with server.');
+            }
+            // Add an admin-side notification for reference
+            adminNotifications.unshift({ id: adminNotifications.length + 1, type: 'info', title: 'Feedback sent', message: `Feedback sent for ${request.studentName}`, timestamp: new Date().toISOString(), read: false, requestId });
+            loadNotifications();
+            document.getElementById('adminFeedbackText').value = '';
+            loadRequests();
+            DocTracker.closeModal();
+        });
 }
 
 // Send request to faculty for clearance
