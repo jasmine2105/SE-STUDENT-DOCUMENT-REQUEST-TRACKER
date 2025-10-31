@@ -245,8 +245,10 @@ function viewRequestDetails(requestId) {
         const s = String(p);
         // If it's already a blob/data/http/absolute path, return as-is
         if (s.startsWith('blob:') || s.startsWith('data:') || s.startsWith('http') || s.startsWith('/')) return s;
-        // normalize backslashes
-        let norm = s.replace(/\\\\/g, '/');
+        // normalize backslashes (handle Windows paths sent by server)
+        let norm = s.replace(/\\/g, '/');
+        // also handle single backslashes (defensive)
+        norm = norm.replace(/\\/g, '/');
         // find the first occurrence of /uploads and return from there
         const idx = norm.indexOf('/uploads');
         if (idx !== -1) return norm.slice(idx);
@@ -264,50 +266,54 @@ function viewRequestDetails(requestId) {
             const ext = (name.split('.').pop() || '').toLowerCase();
             const imageExts = ['jpg','jpeg','png','gif','webp'];
             if (imageExts.includes(ext)) {
-                return `<div style="margin-bottom:8px"><a href="${url}" target="_blank"><img src="${url}" alt="${name}" style="max-width:240px;max-height:240px;border:1px solid #e5e7eb;padding:4px;border-radius:4px;display:block"></a><div><a href="${url}" target="_blank">${name}</a></div></div>`;
+                // Return a clickable thumbnail which opens an inline preview in the modal
+                return `<div style="margin-bottom:8px"><a href="#" class="attachment-link" data-url="${url}" data-name="${name}"><img src="${url}" alt="${name}" style="max-width:240px;max-height:240px;border:1px solid #e5e7eb;padding:4px;border-radius:4px;display:block"></a><div><a href="#" class="attachment-link" data-url="${url}" data-name="${name}">${name}</a></div></div>`;
             }
-            return `<div style="margin-bottom:6px"><a href="${url}" target="_blank">${name}</a></div>`;
+            // For non-images show a clickable link that opens inline preview (PDF/doc will open in iframe)
+            return `<div style="margin-bottom:6px"><a href="#" class="attachment-link" data-url="${url}" data-name="${name}">${name}</a></div>`;
         }).join('');
     }
 
+    // Minimal preview-focused layout: show only Document Type and the preview pane
     details.innerHTML = `
-        <div class="row">
-            <div class="col-md-6">
-                <h5>Request Information</h5>
-                <p><strong>Request ID:</strong> ${request.id}</p>
-                <p><strong>Document Type:</strong> ${request.documentType}</p>
-                <p><strong>Purpose:</strong> ${request.purpose}</p>
-        <p><strong>Copies:</strong> ${request.copies}</p>
-            ${request.notes ? `<p><strong>Notes:</strong> ${request.notes}</p>` : ''}
-                        ${request.notes ? `<p><strong>Notes:</strong> ${request.notes}</p>` : ''}
-                <h5 class="mt-3">Attachments</h5>
-                ${renderAttachmentsHTML(request.attachments || [])}
-            </div>
-            <div class="col-md-6">
-                <h5>Status Information</h5>
-                <p><strong>Current Status:</strong> 
-                    <span class="status-badge ${DocTracker.getStatusBadgeClass(request.status)}">${request.status}</span>
-                </p>
-                <p><strong>Date Submitted:</strong> ${DocTracker.formatDateTime(request.dateSubmitted)}</p>
-                
-                <h5 class="mt-3">Timeline</h5>
-                <div class="timeline">
-                    ${request.timeline.map(step => `
-                        <div class="timeline-item">
-                            <div class="timeline-marker"></div>
-                            <div class="timeline-content">
-                                <h6>${step.status}</h6>
-                                <p class="text-muted">${DocTracker.formatDateTime(step.date)}</p>
-                                <p>${step.note}</p>
-                            </div>
-                        </div>
-                    `).join('')}
-                </div>
-            </div>
+        <div class="simple-view">
+            <h5 class="preview-title">Document Type: <span class="doc-type">${request.documentType}</span></h5>
+            <div id="attachmentPreview" class="attachment-preview text-center text-muted">Click an attachment below to preview it here.</div>
+            <div id="attachmentList" class="attachment-list" style="margin-top:12px">${renderAttachmentsHTML(request.attachments || [])}</div>
         </div>
     `;
-    
+
     DocTracker.openModal('requestModal');
+
+    // Attach click handlers for inline attachment preview and auto-show first file
+    try {
+        const previewContainer = document.getElementById('attachmentPreview');
+        const attachmentLinks = details.querySelectorAll('.attachment-link');
+        if (attachmentLinks && attachmentLinks.length) {
+            attachmentLinks.forEach(link => {
+                link.addEventListener('click', function (ev) {
+                    ev.preventDefault();
+                    const url = this.dataset.url;
+                    const name = this.dataset.name || '';
+                    if (!url) return;
+                    const ext = (name.split('.').pop() || '').toLowerCase();
+                    const imageExts = ['jpg','jpeg','png','gif','webp'];
+                    if (imageExts.includes(ext) || url.startsWith('data:') || url.startsWith('blob:')) {
+                        previewContainer.innerHTML = `<div style="display:flex;justify-content:center"><img src="${url}" alt="${name}" style="max-width:100%;max-height:520px;border-radius:8px;border:1px solid #e9ecef"/></div>`;
+                    } else if (ext === 'pdf' || url.toLowerCase().endsWith('.pdf')) {
+                        previewContainer.innerHTML = `<iframe src="${url}" style="width:100%;height:520px;border:0;border-radius:6px"></iframe>`;
+                    } else {
+                        previewContainer.innerHTML = `<div style="padding:12px"><p>${name}</p><a href="${url}" target="_blank" class="btn btn-outline">Open in new tab</a></div>`;
+                    }
+                });
+            });
+
+            // auto-open first attachment
+            setTimeout(() => attachmentLinks[0].click(), 50);
+        }
+    } catch (e) {
+        console.warn('Could not attach attachment preview handlers', e);
+    }
 }
 
 // Confirm pickup
@@ -406,12 +412,12 @@ async function fetchServerRequests() {
         console.warn('fetchServerRequests failed:', e.message || e);
         return false;
     }
+
 }
 
 // Handle form submission
 async function handleRequestSubmission(e) {
     e.preventDefault();
-
     const formElement = e.target;
     const formData = new FormData(formElement);
 
@@ -419,7 +425,6 @@ async function handleRequestSubmission(e) {
     const attachmentsInput = document.getElementById('attachments');
     const files = (attachmentsInput && attachmentsInput.files) ? Array.from(attachmentsInput.files) : [];
 
-    // Helper to read image files as data URLs for persistence in localStorage
     const fileToDataURL = (file) => new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => resolve(reader.result);
@@ -434,16 +439,13 @@ async function handleRequestSubmission(e) {
                 const dataUrl = await fileToDataURL(f);
                 attachmentsPreview.push({ originalName: f.name, path: dataUrl, _data: true });
             } else {
-                // non-image: create a session blob URL for immediate preview (won't persist across sessions)
                 attachmentsPreview.push({ originalName: f.name, path: URL.createObjectURL(f), _local: true });
             }
-        } catch (e) {
-            // fallback to blob URL if FileReader fails
+        } catch (err) {
             attachmentsPreview.push({ originalName: f.name, path: URL.createObjectURL(f), _local: true });
         }
     }
 
-    // Build local request object for UI
     const recipientFirst = formData.get('recipientFirstName') || '';
     const recipientLast = formData.get('recipientLastName') || '';
     const combinedRecipient = `${recipientFirst} ${recipientLast}`.trim();
@@ -458,7 +460,7 @@ async function handleRequestSubmission(e) {
         purposeDetails: formData.get('purposeDetails') || '',
         termCoverage: formData.get('termCoverage'),
         termExtra: formData.get('termExtra') || '',
-        copies: parseInt(formData.get('copies')),
+        copies: parseInt(formData.get('copies')) || 1,
         recipientFirstName: recipientFirst,
         recipientLastName: recipientLast,
         recipientName: combinedRecipient,
@@ -466,17 +468,11 @@ async function handleRequestSubmission(e) {
         notes: formData.get('notes'),
         status: 'Submitted',
         dateSubmitted: new Date().toISOString(),
-        timeline: [{
-            status: 'Submitted',
-            date: new Date().toISOString(),
-            note: 'Request submitted successfully'
-        }]
+        timeline: [{ status: 'Submitted', date: new Date().toISOString(), note: 'Request submitted successfully' }]
     };
 
-    // Attach preview objects so the student sees uploaded files immediately
     newRequest.attachments = attachmentsPreview;
 
-    // Add to requests locally for immediate feedback
     studentRequests.unshift(newRequest);
     localStorage.setItem(`requests_${currentStudent.studentId}`, JSON.stringify(studentRequests));
     updateDashboard();
@@ -484,10 +480,8 @@ async function handleRequestSubmission(e) {
     hideSubmitForm();
     DocTracker.showNotification('success', 'Document request submitted locally. Sending request to server...');
 
-    // Send to backend (attempt). Backend will persist and send Gmail notification.
-    // Build FormData to include files if any
+    // Send to backend
     const sendData = new FormData();
-    // Append fields
     sendData.append('studentId', newRequest.studentId);
     sendData.append('studentName', newRequest.studentName);
     sendData.append('studentEmail', newRequest.studentEmail);
@@ -503,42 +497,34 @@ async function handleRequestSubmission(e) {
     sendData.append('contactNumber', newRequest.contactNumber || '');
     sendData.append('notes', newRequest.notes || '');
 
-    // Append attachments from file input if any
     if (files && files.length) {
-        for (let i = 0; i < files.length; i++) {
-            sendData.append('attachments', files[i], files[i].name);
-        }
+        for (let i = 0; i < files.length; i++) sendData.append('attachments', files[i], files[i].name);
     }
 
-    fetch('/api/requests', {
-        method: 'POST',
-        body: sendData
-    }).then(r => r.json())
-      .then(result => {
-          if (result && result.success) {
-              DocTracker.showNotification('success', 'Request sent to server. You will receive an email confirmation shortly.');
-              // Replace the local temporary request with the server-provided request (which includes stored attachments)
-              const serverRequest = result.request;
-              studentRequests = studentRequests.map(r => {
-                  if (r.id === newRequest.id) {
-                      // Revoke local object URLs to avoid leaks
-                      (r.attachments || []).forEach(a => { try { if (a && a.path && a._local) URL.revokeObjectURL(a.path); } catch (e) {} });
-                      // Merge server request; keep local studentName/studentEmail if missing
-                      return Object.assign({}, r, serverRequest, { studentName: r.studentName, studentEmail: r.studentEmail });
-                  }
-                  return r;
-              });
-              localStorage.setItem(`requests_${currentStudent.studentId}`, JSON.stringify(studentRequests));
-              loadRequests();
-          } else {
-              DocTracker.showNotification('error', 'Server error: could not save request. It remains saved locally.');
-              console.error('Server response', result);
-          }
-      }).catch(err => {
-          console.error('Error sending to server:', err);
-          DocTracker.showNotification('warning', 'Could not reach server. Your request is saved locally and will not trigger email until server is running.');
-      });
-};
+    try {
+        const res = await fetch('/api/requests', { method: 'POST', body: sendData });
+        const result = await res.json();
+        if (result && result.success) {
+            DocTracker.showNotification('success', 'Request sent to server. You will receive an email confirmation shortly.');
+            const serverRequest = result.request;
+            studentRequests = studentRequests.map(r => {
+                if (r.id === newRequest.id) {
+                    try { (r.attachments || []).forEach(a => { if (a && a.path && a._local) URL.revokeObjectURL(a.path); }); } catch (e) {}
+                    return Object.assign({}, r, serverRequest, { studentName: r.studentName, studentEmail: r.studentEmail });
+                }
+                return r;
+            });
+            localStorage.setItem(`requests_${currentStudent.studentId}`, JSON.stringify(studentRequests));
+            loadRequests();
+        } else {
+            DocTracker.showNotification('error', 'Server error: could not save request. It remains saved locally.');
+            console.error('Server response', result);
+        }
+    } catch (err) {
+        console.error('Error sending to server:', err);
+        DocTracker.showNotification('warning', 'Could not reach server. Your request is saved locally and will not trigger email until server is running.');
+    }
+}
 
 // Add timeline styles
 const timelineStyles = `

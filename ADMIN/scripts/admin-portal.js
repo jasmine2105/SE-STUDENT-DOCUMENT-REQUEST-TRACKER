@@ -412,11 +412,14 @@ function viewRequestDetails(requestId) {
         if (!p) return '';
         const s = String(p);
         if (s.startsWith('blob:') || s.startsWith('data:') || s.startsWith('http') || s.startsWith('/')) return s;
-        let norm = s.replace(/\\\\/g, '/');
+        // Normalize Windows backslashes to forward slashes
+        let norm = s.split('\\').join('/');
+        // If the server returned an absolute filesystem path, extract the uploads portion
         const idx = norm.indexOf('/uploads');
         if (idx !== -1) return norm.slice(idx);
         const idx2 = norm.indexOf('uploads/');
         if (idx2 !== -1) return '/' + norm.slice(idx2);
+        // Fallback: return /uploads/<basename>
         return '/uploads/' + norm.split('/').pop();
     }
 

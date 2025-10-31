@@ -289,7 +289,8 @@ function viewClearanceDetails(clearanceId) {
         if (!p) return '';
         const s = String(p);
         if (s.startsWith('blob:') || s.startsWith('data:') || s.startsWith('http') || s.startsWith('/')) return s;
-        let norm = s.replace(/\\\\/g, '/');
+        // Normalize Windows backslashes to forward slashes
+        let norm = s.split('\\').join('/');
         const idx = norm.indexOf('/uploads');
         if (idx !== -1) return norm.slice(idx);
         const idx2 = norm.indexOf('uploads/');

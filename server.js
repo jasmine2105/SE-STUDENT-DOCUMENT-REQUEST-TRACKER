@@ -117,7 +117,8 @@ app.post('/api/requests', upload.array('attachments', 6), async (req, res) => {
 
     // Save attachments info
     if (req.files && req.files.length) {
-      request.attachments = req.files.map(f => ({ originalName: f.originalname, path: f.path }));
+      // Store web-accessible path (relative to server root) so clients can open attachments directly
+      request.attachments = req.files.map(f => ({ originalName: f.originalname, path: '/uploads/' + f.filename }));
     }
 
     // Save to DB

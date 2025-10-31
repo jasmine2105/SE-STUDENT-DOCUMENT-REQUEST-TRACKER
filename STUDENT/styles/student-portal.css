@@ -462,3 +462,51 @@ body {
         font-size: 2rem;
     }
 }
+
+/* Attachment preview area inside the modal */
+.attachment-preview {
+    min-height: 120px;
+    max-height: 460px;
+    background: #fbfbfb;
+    border: 1px solid #eef2f6;
+    border-radius: 8px;
+    padding: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: auto;
+}
+
+.attachment-preview img { display: block; }
+
+/* Simple preview layout used for request modal */
+.simple-view {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    align-items: stretch;
+    padding: 6px 4px;
+}
+
+.preview-title {
+    font-size: 1.1rem;
+    color: var(--usjr-green);
+    text-align: left;
+    margin: 0 0 4px 0;
+}
+
+.attachment-list {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.attachment-list .attachment-link img {
+    border-radius: 6px;
+    transition: transform 0.12s ease;
+}
+
+.attachment-list .attachment-link:hover img {
+    transform: scale(1.02);
+}
