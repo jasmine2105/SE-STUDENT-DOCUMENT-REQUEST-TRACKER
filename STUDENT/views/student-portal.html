@@ -53,10 +53,33 @@
     </nav>
 
     <main class="portal-container">
-        <div class="portal-header">
-            <h1><i class="fas fa-user-graduate"></i> Student Portal</h1>
-            <p>Welcome — submit and track your document requests</p>
+        <div class="portal-header dashboard-overview">
+            <h1><i class="fas fa-tachometer-alt"></i> Dashboard Overview</h1>
+            <p id="dashboardSubtitle">Welcome back — here’s an overview of your document requests.</p>
+
+            <div class="dashboard-summary" id="dashboardSummary">
+                <!-- Quick Status Summary (populated by JS) -->
+                <div class="status-chips">
+                    <div class="status-chip"><div class="status-number" id="dsPending">0</div><div class="status-label">Pending</div></div>
+                    <div class="status-chip"><div class="status-number" id="dsProcessing">0</div><div class="status-label">Processing</div></div>
+                    <div class="status-chip"><div class="status-number" id="dsCompleted">0</div><div class="status-label">Completed</div></div>
+                </div>
+                <div class="status-progress">
+                    <div class="progress-label">Requests Completed</div>
+                    <div class="progress-bar"><div id="dsProgressBar" class="progress-fill" style="width:0%"></div></div>
+                </div>
+            </div>
+
+            <div class="dashboard-actions" id="dashboardActions">
+                <button id="quickNew" class="btn btn-primary"><i class="fas fa-plus"></i> New Request</button>
+                <button id="quickTrack" class="btn btn-outline"><i class="fas fa-search"></i> Track Request</button>
+                <button id="quickDownload" class="btn btn-secondary"><i class="fas fa-download"></i> Download Completed</button>
+            </div>
+
         </div>
+
+        
+
 
         <!-- Dashboard Stats -->
         <div class="dashboard-grid">
@@ -238,6 +261,21 @@
             </div>
             <div id="requestDetails">
                 <!-- Request details will be loaded here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Notification Center Modal (large) -->
+    <div id="notifCenterModal" class="notif-center-modal" aria-hidden="true">
+        <div class="notif-center-content">
+            <div class="notif-center-header">
+                <h3>Notifications</h3>
+                <div>
+                    <button id="closeNotifCenter" class="btn btn-outline">Close</button>
+                </div>
+            </div>
+            <div id="notifCenterList" class="notif-center-list">
+                <!-- Populated by JS -->
             </div>
         </div>
     </div>

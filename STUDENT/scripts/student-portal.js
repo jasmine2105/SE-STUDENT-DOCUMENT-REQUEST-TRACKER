@@ -67,51 +67,47 @@ function saveNotifications(list) {
 }
 
 function initNotificationUI() {
-    // Insert a bell + badge into .nav-buttons
+    // Build notification bell and dropdown and insert after the logout button (so it's to the right of 'Logout')
     const navButtons = document.querySelector('.nav-buttons');
     if (!navButtons) return;
-    const existing = document.getElementById('notifBtn');
-    if (existing) return;
+    if (document.getElementById('notifBtn')) return;
 
     const wrapper = document.createElement('div');
-    wrapper.style.position = 'relative';
-    wrapper.style.display = 'inline-block';
-    wrapper.style.marginLeft = '8px';
+    wrapper.className = 'notif-wrapper';
+    wrapper.style.marginLeft = '6px';
 
     const btn = document.createElement('button');
     btn.id = 'notifBtn';
-    btn.className = 'btn btn-outline';
-    btn.innerHTML = `<i class="fas fa-bell"></i> <span id="notifCount" style="margin-left:6px"></span>`;
+    btn.className = 'notif-bell';
+    btn.setAttribute('aria-haspopup', 'true');
+    btn.setAttribute('aria-expanded', 'false');
+    btn.innerHTML = `<i class="fas fa-bell"></i><span id="notifCount" class="notif-badge" style="margin-left:6px"></span>`;
     wrapper.appendChild(btn);
 
     const dropdown = document.createElement('div');
+    dropdown.className = 'notif-dropdown';
     dropdown.id = 'notifDropdown';
-    dropdown.style.position = 'absolute';
-    dropdown.style.right = '0';
-    dropdown.style.top = '36px';
-    dropdown.style.minWidth = '320px';
-    dropdown.style.maxWidth = '420px';
-    dropdown.style.background = 'white';
-    dropdown.style.border = '1px solid #e9ecef';
-    dropdown.style.borderRadius = '8px';
-    dropdown.style.boxShadow = '0 8px 24px rgba(0,0,0,0.12)';
-    dropdown.style.display = 'none';
-    dropdown.style.zIndex = 2000;
-    dropdown.innerHTML = `<div id="notifList" style="max-height:320px;overflow:auto;padding:8px"></div><div style="padding:8px;border-top:1px solid #f1f1f1;text-align:right"><button id="markAllRead" class="btn btn-outline">Mark all read</button></div>`;
+    dropdown.innerHTML = `<div class="notif-list" id="notifList" style="padding:6px"></div><div style="padding:8px;border-top:1px solid #f1f1f1;text-align:right"><button id="markAllRead" class="btn btn-outline">Mark all read</button></div>`;
     wrapper.appendChild(dropdown);
 
-    navButtons.insertBefore(wrapper, navButtons.firstChild);
+    // Place wrapper after logout button so it's to the right
+    const logoutBtn = document.getElementById('logoutBtn');
+    if (logoutBtn && logoutBtn.parentNode) {
+        logoutBtn.parentNode.insertBefore(wrapper, logoutBtn.nextSibling);
+    } else {
+        navButtons.appendChild(wrapper);
+    }
 
-    btn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        dropdown.style.display = dropdown.style.display === 'block' ? 'none' : 'block';
-        renderNotificationList();
-    });
+    // Open on hover/focus, do not persist on click
+    let hoverTimeout = null;
+    wrapper.addEventListener('mouseenter', () => { clearTimeout(hoverTimeout); dropdown.style.display = 'block'; btn.setAttribute('aria-expanded', 'true'); renderNotificationList(); });
+    wrapper.addEventListener('mouseleave', () => { hoverTimeout = setTimeout(() => { dropdown.style.display = 'none'; btn.setAttribute('aria-expanded', 'false'); }, 180); });
+    btn.addEventListener('focus', () => { clearTimeout(hoverTimeout); dropdown.style.display = 'block'; btn.setAttribute('aria-expanded', 'true'); renderNotificationList(); });
+    btn.addEventListener('blur', () => { hoverTimeout = setTimeout(() => { dropdown.style.display = 'none'; btn.setAttribute('aria-expanded', 'false'); }, 180); });
 
-    document.addEventListener('click', () => { dropdown.style.display = 'none'; });
-
+    // Mark all read button
     const markAll = dropdown.querySelector('#markAllRead');
-    markAll.addEventListener('click', (ev) => { ev.stopPropagation(); const list = loadNotifications().map(n => ({ ...n, read: true })); saveNotifications(list); renderNotificationBadge(); renderNotificationList(); });
+    if (markAll) markAll.addEventListener('click', (ev) => { ev.stopPropagation(); const lst = loadNotifications().map(n => ({ ...n, read: true })); saveNotifications(lst); renderNotificationBadge(); renderNotificationList(); });
 
     renderNotificationBadge();
 }
@@ -120,7 +116,10 @@ function renderNotificationBadge() {
     const list = loadNotifications();
     const unread = list.filter(n => !n.read).length;
     const badge = document.getElementById('notifCount');
-    if (badge) badge.textContent = unread ? `(${unread})` : '';
+    if (badge) {
+        badge.textContent = unread ? unread : '';
+        if (unread) badge.classList.add('unread'); else badge.classList.remove('unread');
+    }
 }
 
 function renderNotificationList() {
@@ -128,28 +127,87 @@ function renderNotificationList() {
     if (!container) return;
     const list = loadNotifications();
     if (!list.length) { container.innerHTML = '<div style="padding:12px;color:#666">No notifications</div>'; return; }
+
     container.innerHTML = list.map(n => `
-        <div class="notif-item" data-id="${n.id}" data-request-id="${n.requestId}" style="padding:8px;border-bottom:1px solid #f3f4f6;cursor:pointer;background:${n.read? 'transparent':'rgba(238,245,233,0.6)'}">
-            <div style="font-weight:600;color:#14532d">${n.title}</div>
-            <div style="font-size:0.9rem;color:#444">${n.message}</div>
-            <div style="font-size:0.75rem;color:#777;margin-top:6px">${new Date(n.date).toLocaleString()}</div>
+        <div class="notif-card ${n.read ? 'read' : 'unread'}" data-id="${n.id}" data-request-id="${n.requestId}">
+            <div class="meta">
+                <h6>${escapeHtml(n.title || 'Update')}</h6>
+                <p>${escapeHtml((n.message || '').slice(0, 160))}${(n.message||'').length>160? '...':''}</p>
+                <small>${new Date(n.date).toLocaleString()}</small>
+            </div>
+            <div class="actions">
+                <button class="btn btn-primary btn-sm view-notif" data-id="${n.id}" data-request-id="${n.requestId}">View</button>
+            </div>
         </div>
     `).join('');
 
-    // click handlers
-    container.querySelectorAll('.notif-item').forEach(el => {
-        el.addEventListener('click', (ev) => {
+    // click handlers for each View button
+    container.querySelectorAll('.view-notif').forEach(btn => {
+        btn.addEventListener('click', (ev) => {
             ev.stopPropagation();
-            const id = el.dataset.id; const reqId = el.dataset.requestId;
-            // mark read
-            const list = loadNotifications().map(n => n.id === id ? { ...n, read: true } : n);
-            saveNotifications(list);
+            const id = btn.dataset.id; const reqId = btn.dataset.requestId;
+            // mark notification read
+            const updated = loadNotifications().map(n => n.id === id ? { ...n, read: true } : n);
+            saveNotifications(updated);
             renderNotificationBadge();
             renderNotificationList();
-            // open request modal
-            if (reqId) viewRequestDetails(reqId);
+            // Open the full Notification Center and focus the notification
+            openNotificationCenter(id);
+            const dd = document.getElementById('notifDropdown'); if (dd) dd.style.display = 'none';
         });
     });
+}
+
+// Open a large notification center modal; if highlightId provided, scroll to it
+function openNotificationCenter(highlightId) {
+    const modal = document.getElementById('notifCenterModal');
+    const listEl = document.getElementById('notifCenterList');
+    if (!modal || !listEl) return;
+    const items = loadNotifications();
+    if (!items.length) {
+        listEl.innerHTML = '<div class="text-muted">No notifications</div>';
+    } else {
+        listEl.innerHTML = items.map(n => `
+            <div class="notif-center-item" id="nc_${n.id}">
+                <div class="title">${escapeHtml(n.title || 'Update')}</div>
+                <div class="message">${escapeHtml(n.message || '')}</div>
+                <div class="meta">${new Date(n.date).toLocaleString()} ${n.requestId? ' — Request: ' + n.requestId : ''}</div>
+                <div style="margin-top:8px;text-align:right"><button class="btn btn-primary btn-sm open-request" data-request-id="${n.requestId}">Open Request</button></div>
+            </div>
+        `).join('');
+
+        // wire open-request buttons
+        listEl.querySelectorAll('.open-request').forEach(b => {
+            b.addEventListener('click', (ev) => {
+                const rid = b.dataset.requestId;
+                if (rid) {
+                    viewRequestDetails(rid);
+                    closeNotificationCenter();
+                }
+            });
+        });
+    }
+
+    modal.style.display = 'block';
+    modal.setAttribute('aria-hidden','false');
+    // scroll to highlight
+    if (highlightId) {
+        const el = document.getElementById('nc_' + highlightId);
+        if (el) { el.scrollIntoView({behavior:'smooth', block:'center'}); el.style.boxShadow = '0 0 0 4px rgba(47,133,90,0.08)'; setTimeout(() => { el.style.boxShadow = ''; }, 2500); }
+    }
+}
+
+function closeNotificationCenter() {
+    const modal = document.getElementById('notifCenterModal');
+    if (!modal) return;
+    modal.style.display = 'none';
+    modal.setAttribute('aria-hidden','true');
+}
+
+// Small HTML escape utility for safe insertion
+function escapeHtml(str) {
+    if (!str) return '';
+    return String(str).replace(/[&<>"']/g, function (s) { return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"})[s]; });
 }
 
 function generateNotifId() {
@@ -169,7 +227,8 @@ function createNotification(requestId, title, message, date) {
 function updateWelcomeMessage() {
     const welcomeElement = document.getElementById('welcomeMessage');
     if (welcomeElement && currentStudent) {
-        welcomeElement.textContent = `Welcome, ${currentStudent.firstName} ${currentStudent.lastName}`;
+        // Per request: show only the student's name (no 'Welcome')
+        welcomeElement.textContent = `${currentStudent.firstName} ${currentStudent.lastName}`;
     }
 }
 
@@ -240,6 +299,21 @@ function setupEventListeners() {
     const modalCloseBtn = document.getElementById('modalCloseBtn');
     if (modalCloseBtn) modalCloseBtn.addEventListener('click', closeModal);
 
+    // Quick dashboard action buttons
+    const quickNew = document.getElementById('quickNew'); if (quickNew) quickNew.addEventListener('click', showSubmitForm);
+    const quickTrack = document.getElementById('quickTrack'); if (quickTrack) quickTrack.addEventListener('click', refreshRequests);
+    const quickDownload = document.getElementById('quickDownload'); if (quickDownload) quickDownload.addEventListener('click', function() {
+        // Simple behavior: show completed requests with download links if available
+        const completed = studentRequests.filter(r => r.status === 'Completed');
+        if (!completed.length) { DocTracker.showNotification('info', 'No completed documents available for download.'); return; }
+        // For now, present the notif center and show a message
+        openNotificationCenter();
+        DocTracker.showNotification('info', `There are ${completed.length} completed requests. Use the Request view to download attachments.`);
+    });
+
+    // Notification center close
+    const closeNotifCenter = document.getElementById('closeNotifCenter'); if (closeNotifCenter) closeNotifCenter.addEventListener('click', closeNotificationCenter);
+
     // Table delegation for delete/view actions
     const requestsTableBody = document.getElementById('requestsTableBody');
     if (requestsTableBody) {
@@ -269,6 +343,27 @@ function updateDashboard() {
     document.getElementById('pendingRequests').textContent = pendingRequests;
     document.getElementById('processingRequests').textContent = processingRequests;
     document.getElementById('completedRequests').textContent = completedRequests;
+    // Also render dashboard overview summary (center rectangle)
+    try { renderDashboardOverview(); } catch (e) { /* ignore */ }
+}
+
+// Render the dashboard summary (progress and recent requests)
+function renderDashboardOverview() {
+    const pending = studentRequests.filter(r => r.status === 'Submitted' || r.status === 'Pending').length || 0;
+    const processing = studentRequests.filter(r => r.status === 'Processing' || r.status === 'Ready for Release').length || 0;
+    const completed = studentRequests.filter(r => r.status === 'Completed').length || 0;
+    const total = pending + processing + completed || Math.max(1, (studentRequests.length || 0));
+
+    const pct = Math.round((completed / (total || 1)) * 100);
+    const elPending = document.getElementById('dsPending'); if (elPending) elPending.textContent = pending;
+    const elProcessing = document.getElementById('dsProcessing'); if (elProcessing) elProcessing.textContent = processing;
+    const elCompleted = document.getElementById('dsCompleted'); if (elCompleted) elCompleted.textContent = completed;
+    const fill = document.getElementById('dsProgressBar'); if (fill) fill.style.width = `${pct}%`;
+
+    // Update subtitle with student's name
+    const subtitle = document.getElementById('dashboardSubtitle');
+    if (subtitle && currentStudent) subtitle.textContent = `Welcome back, ${currentStudent.firstName}! Here's an overview of your document requests.`;
+    
 }
 
 // Show submit form
