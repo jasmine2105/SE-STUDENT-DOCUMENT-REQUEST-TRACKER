@@ -4,42 +4,60 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Student Document Request Tracker</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Main Shared Styles - Load first -->
+    <link rel="stylesheet" href="shared/styles-home.css">
+    
+    <!-- Tailwind CDN with error handling -->
+    <script src="https://cdn.tailwindcss.com" onerror="console.error('Tailwind CDN failed to load')"></script>
     <script>
-        window.tailwind = window.tailwind || {};
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        // Legacy aliases kept working but mapped to the new palette
-                        usjrg: '#2f855a',
-                        usjrgold: '#e8a90c',
-                        usjrbg: '#fff7e6',
-                        usjrdark: '#14532d',
-                        usjrgray: '#E5E7EB',
-                        // Blade palette names
-                        'usjr-green': '#2f855a',
-                        'usjr-deep': '#14532d',
-                        'usjr-gold': '#e8a90c',
-                        'usjr-gold-dark': '#c58f08',
-                        'usjr-cream': '#fff7e6'
+        // Wait for Tailwind to load before configuring
+        if (typeof tailwind !== 'undefined') {
+            window.tailwind = window.tailwind || {};
+            tailwind.config = {
+                theme: {
+                    extend: {
+                        colors: {
+                            // Legacy aliases kept working but mapped to the new palette
+                            usjrg: '#48bb78',
+                            usjrgold: '#e8a90c',
+                            usjrbg: '#fff7e6',
+                            usjrdark: '#38a169',
+                            usjrgray: '#E5E7EB',
+                            // Blade palette names
+                            'usjr-green': '#48bb78',
+                            'usjr-deep': '#38a169',
+                            'usjr-gold': '#e8a90c',
+                            'usjr-gold-dark': '#c58f08',
+                            'usjr-cream': '#fff7e6'
+                        }
                     }
                 }
-            }
+            };
         }
     </script>
 
-    <!-- Main Shared Styles -->
-    <link rel="stylesheet" href="shared/styles-home.css">
-
     <!-- FontAwesome Icons -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <!-- Poppins font for modern headings and buttons -->
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700&display=swap" rel="stylesheet">
 </head>
-<body>
+<body style="margin: 0; padding: 0; min-height: 100vh; background: #f7f7f7;">
+    <!-- Ensure content is visible -->
+    <noscript>
+        <div style="padding: 20px; background: #fff; color: #000;">
+            <h1>JavaScript Required</h1>
+            <p>Please enable JavaScript to use this application.</p>
+        </div>
+    </noscript>
+    
     <nav class="navbar bg-usjrg text-white border-b-4" style="border-color:#E4B429;">
         <div class="nav-container">
             <div class="nav-logo">
-                <i class="fas fa-file-alt"></i>
+                <span style="position: relative; display: inline-block; margin-right: 10px;">
+                    <i class="fas fa-file-alt" style="font-size: 1.8rem;"></i>
+                    <i class="fas fa-route" style="position: absolute; font-size: 0.7rem; bottom: -2px; right: -2px; color: #e8a90c; background: white; border-radius: 50%; padding: 2px;"></i>
+                </span>
                 <span>DocTracker</span>
             </div>
             <div class="nav-menu">
@@ -65,11 +83,11 @@
                         <p>Streamline your academic document requests with our comprehensive tracking system. Submit, track, and manage your TOR, Good Moral, COE, and other academic documents efficiently.</p>
 
                         <div class="hero-buttons">
-                            <a href="STUDENT/auth/student-login.html" class="btn btn-primary btn-large bg-usjrgold hover:bg-yellow-500 text-usjrdark transition duration-150 ease-out transform hover:scale-105">
+                            <a href="STUDENT/auth/student-login.html" class="btn btn-primary btn-large">
                                 <i class="fas fa-sign-in-alt"></i>
                                 Login / Sign Up
                             </a>
-                            <a href="#how-it-works" class="btn btn-outline btn-large border-usjrg text-usjrg hover:bg-usjrg hover:text-white transition duration-150 ease-out">
+                            <a href="#how-it-works" class="btn btn-outline btn-large">
                                 <i class="fas fa-info-circle"></i>
                                 How It Works
                             </a>
@@ -77,7 +95,10 @@
                     </div>
                     <div class="hero-right">
                         <div class="illustration">
-                            <i class="fas fa-file-contract"></i>
+                            <span style="position: relative; display: inline-block;">
+                                <i class="fas fa-file-contract" style="font-size: 4.5rem;"></i>
+                                <i class="fas fa-route" style="position: absolute; font-size: 1.2rem; bottom: 10px; right: 10px; color: #e8a90c; background: rgba(255,255,255,0.9); border-radius: 50%; padding: 4px;"></i>
+                            </span>
                         </div>
                     </div>
                 </div>
@@ -220,6 +241,18 @@
     </footer>
 
     <!-- Shared Scripts -->
-    <script src="shared/utils.js"></script>
+    <script src="shared/utils.js" onerror="console.error('Failed to load utils.js')"></script>
+    <!-- Debug: Check if page loaded -->
+    <script>
+        console.log('Page loaded successfully');
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('DOM Content Loaded');
+            // Verify main content exists
+            const main = document.querySelector('main');
+            const nav = document.querySelector('nav');
+            if (!main) console.error('Main element not found!');
+            if (!nav) console.error('Nav element not found!');
+        });
+    </script>
 </body>
 </html>

@@ -3,6 +3,25 @@
 let studentRequests = [];
 let currentStudent = null;
 
+// Button loading helper: adds/removes spinner and disables button
+function setButtonLoading(btn, isLoading, text) {
+    if (!btn) return;
+    if (isLoading) {
+        btn.dataset.origHtml = btn.innerHTML;
+        btn.disabled = true;
+        // show spinner (spinner styled in student CSS)
+        btn.innerHTML = `${text || 'Processing...'} <span class="spinner" aria-hidden="true"></span>`;
+        btn.classList.add('btn-disabled');
+    } else {
+        btn.disabled = false;
+        if (btn.dataset.origHtml) {
+            btn.innerHTML = btn.dataset.origHtml;
+            delete btn.dataset.origHtml;
+        }
+        btn.classList.remove('btn-disabled');
+    }
+}
+
 // Initialize student portal
 document.addEventListener('DOMContentLoaded', function() {
     // Check authentication first
@@ -292,6 +311,16 @@ function setupEventListeners() {
 
     const refreshBtn = document.getElementById('refreshBtn');
     if (refreshBtn) refreshBtn.addEventListener('click', refreshRequests);
+    
+    // How It Works button functionality
+    const howItWorksBtn = document.getElementById('howItWorksBtn');
+    if (howItWorksBtn) {
+        howItWorksBtn.addEventListener('click', function() {
+            // Scroll to the "How It Works" section on the home page, or show a modal
+            // Since we're in the portal, show a modal with the steps
+            showHowItWorksModal();
+        });
+    }
 
     const cancelBtn = document.getElementById('cancelRequestBtn');
     if (cancelBtn) cancelBtn.addEventListener('click', hideSubmitForm);
@@ -301,7 +330,27 @@ function setupEventListeners() {
 
     // Quick dashboard action buttons
     const quickNew = document.getElementById('quickNew'); if (quickNew) quickNew.addEventListener('click', showSubmitForm);
-    const quickTrack = document.getElementById('quickTrack'); if (quickTrack) quickTrack.addEventListener('click', refreshRequests);
+    const quickTrack = document.getElementById('quickTrack'); if (quickTrack) quickTrack.addEventListener('click', function() {
+        // Show tracking view - scroll to requests table and highlight it
+        const requestsCard = document.querySelector('.card:has(#requestsList)') || document.querySelector('#requestsList')?.closest('.card');
+        if (requestsCard) {
+            requestsCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            // Add a highlight effect
+            requestsCard.style.boxShadow = '0 0 0 4px rgba(72,187,120,0.3)';
+            setTimeout(() => {
+                requestsCard.style.boxShadow = '';
+            }, 2000);
+            DocTracker.showNotification('info', 'Showing your request tracking. Click "View" on any request to see detailed tracking information.');
+        } else {
+            // If no requests, show message
+            if (studentRequests.length === 0) {
+                DocTracker.showNotification('info', 'You have no requests to track yet. Submit a new request to get started!');
+                showSubmitForm();
+            } else {
+                refreshRequests();
+            }
+        }
+    });
     const quickDownload = document.getElementById('quickDownload'); if (quickDownload) quickDownload.addEventListener('click', function() {
         // Simple behavior: show completed requests with download links if available
         const completed = studentRequests.filter(r => r.status === 'Completed');
@@ -446,7 +495,10 @@ function deleteRequest(requestId) {
 
 function viewRequestDetails(requestId) {
     const request = studentRequests.find(r => r.id === requestId);
-    if (!request) return;
+    if (!request) {
+        DocTracker.showNotification('error', 'Request not found.');
+        return;
+    }
 
     const modal = document.getElementById('requestModal');
     const details = document.getElementById('requestDetails');
@@ -486,12 +538,52 @@ function viewRequestDetails(requestId) {
         }).join('');
     }
 
-    // Minimal preview-focused layout: show only Document Type and the preview pane
+    // Render timeline for tracking
+    function renderTimelineHTML(timeline) {
+        if (!timeline || !timeline.length) {
+            return '<p class="text-muted">No tracking information available yet.</p>';
+        }
+        return `
+            <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #e5e7eb;">
+                <h5 style="margin-bottom: 1rem;"><i class="fas fa-route"></i> Request Timeline</h5>
+                <div style="position: relative; padding-left: 2rem;">
+                    ${timeline.map((entry, index) => {
+                        const date = entry.date ? new Date(entry.date).toLocaleString() : 'N/A';
+                        const isLast = index === timeline.length - 1;
+                        return `
+                            <div style="position: relative; margin-bottom: ${isLast ? '0' : '1.5rem'};">
+                                <div style="position: absolute; left: -1.75rem; top: 0.25rem; width: 12px; height: 12px; background: ${isLast ? 'var(--usjr-green, #48bb78)' : '#cbd5e0'}; border-radius: 50%; border: 2px solid white; box-shadow: 0 0 0 2px ${isLast ? 'var(--usjr-green, #48bb78)' : '#cbd5e0'};"></div>
+                                ${!isLast ? '<div style="position: absolute; left: -1.69rem; top: 0.75rem; width: 2px; height: calc(100% + 0.5rem); background: #e5e7eb;"></div>' : ''}
+                                <div>
+                                    <strong style="color: #333;">${escapeHtml(entry.status || 'Update')}</strong>
+                                    <p style="color: #666; margin: 0.25rem 0;">${escapeHtml(entry.note || '')}</p>
+                                    <small style="color: #999;">${date}</small>
+                                </div>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            </div>
+        `;
+    }
+
+    // Full tracking view with timeline and details
     details.innerHTML = `
-        <div class="simple-view">
-            <h5 class="preview-title">Document Type: <span class="doc-type">${request.documentType}</span></h5>
-            <div id="attachmentPreview" class="attachment-preview text-center text-muted">Click an attachment below to preview it here.</div>
-            <div id="attachmentList" class="attachment-list" style="margin-top:12px">${renderAttachmentsHTML(request.attachments || [])}</div>
+        <div>
+            <div style="margin-bottom: 1.5rem;">
+                <h4 style="margin-bottom: 0.5rem;">Request ID: <span style="color: var(--usjr-green, #48bb78);">${request.id}</span></h4>
+                <p style="color: #666; margin-bottom: 0.5rem;"><strong>Document Type:</strong> ${request.documentType}</p>
+                <p style="color: #666; margin-bottom: 0.5rem;"><strong>Status:</strong> <span class="status-badge ${DocTracker.getStatusBadgeClass(request.status)}">${request.status}</span></p>
+                <p style="color: #666;"><strong>Submitted:</strong> ${DocTracker.formatDateTime(request.dateSubmitted)}</p>
+            </div>
+            
+            ${renderTimelineHTML(request.timeline || [])}
+            
+            <div style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid #e5e7eb;">
+                <h5 style="margin-bottom: 1rem;"><i class="fas fa-paperclip"></i> Attachments</h5>
+                <div id="attachmentPreview" class="attachment-preview text-center text-muted" style="min-height: 200px; display: flex; align-items: center; justify-content: center; border: 1px dashed #e5e7eb; border-radius: 8px; margin-bottom: 1rem;">Click an attachment below to preview it here.</div>
+                <div id="attachmentList" class="attachment-list">${renderAttachmentsHTML(request.attachments || [])}</div>
+            </div>
         </div>
     `;
 
@@ -649,6 +741,9 @@ async function fetchServerRequests() {
 async function handleRequestSubmission(e) {
     e.preventDefault();
     const formElement = e.target;
+    const submitBtn = document.getElementById('submitRequestBtn');
+    // Show loading state immediately
+    setButtonLoading(submitBtn, true, 'Processing...');
     const formData = new FormData(formElement);
 
     // Collect attachments for immediate preview and to send to server
@@ -753,6 +848,9 @@ async function handleRequestSubmission(e) {
     } catch (err) {
         console.error('Error sending to server:', err);
         DocTracker.showNotification('warning', 'Could not reach server. Your request is saved locally and will not trigger email until server is running.');
+    } finally {
+        // clear loading state on submit button regardless of outcome
+        setButtonLoading(submitBtn, false);
     }
 }
 
@@ -889,6 +987,79 @@ function generateRequestId() {
 // Expose closeModal globally
 window.closeModal = closeModal;
 
+// Show How It Works modal
+function showHowItWorksModal() {
+    const modal = document.createElement('div');
+    modal.className = 'modal';
+    modal.id = 'howItWorksModal';
+    modal.style.display = 'block';
+    modal.innerHTML = `
+        <div class="modal-content" style="max-width: 700px;">
+            <div class="modal-header">
+                <h3><i class="fas fa-info-circle"></i> How It Works</h3>
+                <span class="close" onclick="this.closest('.modal').remove(); document.body.style.overflow='auto';">&times;</span>
+            </div>
+            <div class="modal-body" style="padding: 2rem;">
+                <div style="display: grid; gap: 1.5rem;">
+                    <div style="display: flex; gap: 1rem; align-items: start;">
+                        <div style="width: 40px; height: 40px; background: var(--usjr-green, #48bb78); color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; flex-shrink: 0;">1</div>
+                        <div>
+                            <h4 style="margin-bottom: 0.5rem;">Sign Up & Login</h4>
+                            <p style="color: #666;">Create your student account and login with your credentials.</p>
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 1rem; align-items: start;">
+                        <div style="width: 40px; height: 40px; background: var(--usjr-green, #48bb78); color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; flex-shrink: 0;">2</div>
+                        <div>
+                            <h4 style="margin-bottom: 0.5rem;">Select Document Type</h4>
+                            <p style="color: #666;">Choose the document you need (TOR, Good Moral, COE, etc.) and fill out the required information.</p>
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 1rem; align-items: start;">
+                        <div style="width: 40px; height: 40px; background: var(--usjr-green, #48bb78); color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; flex-shrink: 0;">3</div>
+                        <div>
+                            <h4 style="margin-bottom: 0.5rem;">Submit Request</h4>
+                            <p style="color: #666;">Review your request details and submit it for processing. You'll receive a confirmation email.</p>
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 1rem; align-items: start;">
+                        <div style="width: 40px; height: 40px; background: var(--usjr-green, #48bb78); color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; flex-shrink: 0;">4</div>
+                        <div>
+                            <h4 style="margin-bottom: 0.5rem;">Track Progress</h4>
+                            <p style="color: #666;">Monitor your request status in real-time. Click "Track Request" or "View" on any request to see the timeline and updates.</p>
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 1rem; align-items: start;">
+                        <div style="width: 40px; height: 40px; background: var(--usjr-green, #48bb78); color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; flex-shrink: 0;">5</div>
+                        <div>
+                            <h4 style="margin-bottom: 0.5rem;">Receive Document</h4>
+                            <p style="color: #666;">Once your document is ready, you'll be notified. Pick it up or receive it via your preferred delivery method.</p>
+                        </div>
+                    </div>
+                </div>
+                <div style="margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid #e5e7eb;">
+                    <button class="btn btn-primary" onclick="this.closest('.modal').remove(); document.body.style.overflow='auto'; showSubmitForm();">
+                        <i class="fas fa-plus"></i> Submit Your First Request
+                    </button>
+                    <button class="btn btn-outline" onclick="this.closest('.modal').remove(); document.body.style.overflow='auto';" style="margin-left: 0.5rem;">
+                        Close
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+    document.body.style.overflow = 'hidden';
+    
+    // Close on outside click
+    modal.addEventListener('click', function(e) {
+        if (e.target === modal) {
+            modal.remove();
+            document.body.style.overflow = 'auto';
+        }
+    });
+}
+
 // Expose all functions globally for onclick handlers - CONSISTENT NAMING
 window.logout = logout;
 window.showSubmitForm = showSubmitForm;
@@ -897,6 +1068,7 @@ window.refreshRequests = refreshRequests;
 window.viewRequestDetails = viewRequestDetails;
 window.confirmPickup = confirmPickup;
 window.filterRequests = filterRequests;
+window.showHowItWorksModal = showHowItWorksModal;
 
 // Override Auth.logout if present
 if (window.Auth && typeof window.Auth === 'object') {

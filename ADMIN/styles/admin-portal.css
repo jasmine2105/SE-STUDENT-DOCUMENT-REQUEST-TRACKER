@@ -13,15 +13,20 @@ body {
     font-size: 16px;
 }
 
-/* USJR Theme Colors */
+/* USJR Theme Colors (unified palette) */
 :root {
-    --usjr-green: #2f855a;
-    --usjr-green-light: #14532d;
-    --usjr-yellow: #e8a90c;
-    --usjr-yellow-light: #e8a90c;
-    --usjr-yellow-dark: #c58f08;
+    --usjr-deep: #48bb78;
+    --usjr-deep-dark: #38a169;
+    --usjr-gold: #FFD700;
+    --usjr-gold-dark: #E6C200;
     --usjr-gray: #E5E7EB;
-    --usjr-text: #14532d;
+    --usjr-text: #1E293B;
+
+    /* compatibility aliases used elsewhere */
+    --usjr-green: var(--usjr-deep);
+    --usjr-green-light: var(--usjr-deep-dark);
+    --usjr-yellow: var(--usjr-gold);
+    --usjr-yellow-dark: var(--usjr-gold-dark);
 }
 
 /* Navigation - USJR Theme */

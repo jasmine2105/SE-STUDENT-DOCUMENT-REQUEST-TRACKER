@@ -305,8 +305,9 @@ function viewClearanceDetails(clearanceId) {
             const name = a.originalName || (typeof a === 'string' ? a.split('/').pop() : 'attachment');
             const ext = (name.split('.').pop() || '').toLowerCase();
             const imageExts = ['jpg','jpeg','png','gif','webp'];
+            // Do not render inline image previews — only provide a link to the attachment.
             if (imageExts.includes(ext)) {
-                return `<div style="margin-bottom:8px"><a href="${url}" target="_blank"><img src="${url}" alt="${name}" style="max-width:240px;max-height:240px;border:1px solid #e5e7eb;padding:4px;border-radius:4px;display:block"></a><div><a href="${url}" target="_blank">${name}</a></div></div>`;
+                return `<div style="margin-bottom:8px"><a href="${url}" target="_blank"><i class=\"fas fa-file-image\" style=\"margin-right:8px;color:var(--usjr-green)\"></i>${name}</a></div>`;
             }
             return `<div style="margin-bottom:6px"><a href="${url}" target="_blank">${name}</a></div>`;
         }).join('');

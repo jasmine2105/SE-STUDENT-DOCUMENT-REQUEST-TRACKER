@@ -36,6 +36,21 @@ app.use(bodyParser.urlencoded({ extended: true }));
 // Serve static frontend files (so you can just start the server)
 app.use(express.static(__dirname));
 
+// Explicitly serve index.html at root
+app.get('/', (req, res) => {
+    try {
+        res.sendFile(path.join(__dirname, 'index.html'), (err) => {
+            if (err) {
+                console.error('Error serving index.html:', err);
+                res.status(500).send('Error loading page');
+            }
+        });
+    } catch (error) {
+        console.error('Error in root route:', error);
+        res.status(500).send('Server error');
+    }
+});
+
 // 🔥 ADD THESE REDIRECT ROUTES - Fix "Cannot GET" errors
 app.get('/FACULTY/faculty-portal.html', (req, res) => {
     res.redirect('/FACULTY/views/faculty-portal.html');

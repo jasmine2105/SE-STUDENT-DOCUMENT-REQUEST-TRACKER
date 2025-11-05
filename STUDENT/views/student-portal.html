@@ -7,8 +7,10 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         window.tailwind = window.tailwind || {};
-    tailwind.config = { theme: { extend: { colors: { usjrg: '#2f855a', usjrgold: '#e8a90c', usjrbg: '#fff7e6', usjrdark: '#14532d', usjrgray: '#E5E7EB', 'usjr-green': '#2f855a', 'usjr-deep': '#14532d', 'usjr-gold': '#e8a90c', 'usjr-gold-dark': '#c58f08', 'usjr-cream': '#fff7e6' } } } };
+    tailwind.config = { theme: { extend: { colors: { usjrg: '#48bb78', usjrgold: '#e8a90c', usjrbg: '#fff7e6', usjrdark: '#38a169', usjrgray: '#E5E7EB', 'usjr-green': '#48bb78', 'usjr-deep': '#38a169', 'usjr-gold': '#e8a90c', 'usjr-gold-dark': '#c58f08', 'usjr-cream': '#fff7e6' } } } };
     </script>
+    <!-- Poppins font for buttons/headings -->
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="../styles/student-portal.css">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
@@ -40,12 +42,15 @@
     <nav class="navbar bg-usjrg text-white">
         <div class="nav-container">
             <div class="nav-logo">
-                <i class="fas fa-file-alt"></i>
+                <span style="position: relative; display: inline-block;">
+                    <i class="fas fa-file-alt" style="font-size: 2rem;"></i>
+                    <i class="fas fa-route" style="position: absolute; font-size: 0.8rem; bottom: -2px; right: -2px; color: #e8a90c; background: white; border-radius: 50%; padding: 2px;"></i>
+                </span>
                 <span>DocTracker</span>
             </div>
             <div class="nav-menu">
                 <div class="nav-buttons">
-                    <span id="welcomeMessage" class="nav-link">Welcome, Student</span>
+                    <!-- welcomeMessage removed per design request -->
                     <button class="btn btn-outline" id="logoutBtn">Logout</button>
                 </div>
             </div>
@@ -108,11 +113,15 @@
             </div>
             <div class="card-body">
                 <div class="d-flex gap-2">
-                    <button id="showSubmitBtn" class="btn btn-primary bg-green-700 hover:bg-green-800 text-white transition duration-150 ease-out transform hover:scale-105">
+                    <button id="showSubmitBtn" class="btn btn-primary">
                         <i class="fas fa-plus"></i> Submit New Request
                     </button>
-                    <button id="refreshBtn" class="btn btn-secondary bg-yellow-500 hover:bg-yellow-600 text-black transition duration-150 ease-out transform hover:scale-105">
+                    <button id="refreshBtn" class="btn btn-accent">
                         <i class="fas fa-sync"></i> Refresh
+                    </button>
+                    <!-- Example of a subtle secondary action -->
+                    <button id="howItWorksBtn" class="btn btn-secondary">
+                        <i class="fas fa-info-circle"></i> How It Works
                     </button>
                 </div>
             </div>

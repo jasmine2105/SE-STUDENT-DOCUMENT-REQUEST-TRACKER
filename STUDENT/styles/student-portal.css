@@ -6,27 +6,42 @@
 }
 
 body {
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    font-family: 'Poppins', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     line-height: 1.6;
     color: #1A1A1A;
-    background-color: #F9F6EE;
     font-size: 16px;
-    background-image: url('../assets/school-bg.jpg');
-    background-size: cover;
-    background-position: center center;
-    background-attachment: fixed;
-    background-color: rgba(255,255,255,0.6);
+    /* Remove attached background photo to keep the UI clean */
+    background: linear-gradient(180deg, #FFFFFF 0%, rgba(247,251,252,0.6) 100%);
 }
 
 /* USJR Theme Colors */
 :root {
-    --usjr-green: #2f855a;
-    --usjr-green-light: #14532d;
-    --usjr-yellow: #e8a90c;
-    --usjr-yellow-light: #e8a90c;
-    --usjr-yellow-dark: #c58f08;
-    --usjr-gray: #E5E7EB;
-    --usjr-text: #14532d;
+    /* Primary color system - lighter green */
+    --usjr-deep: #48bb78; /* Lighter green (primary) */
+    --usjr-deep-dark: #38a169; /* hover/darker green */
+    /* keep old alias names but point them to the deep color to ensure consistency */
+    --usjr-green: var(--usjr-deep);
+    --usjr-green-light: var(--usjr-deep-dark);
+
+    /* Accent / gold */
+    --usjr-gold: #FFD700; /* accent button */
+    --usjr-gold-dark: #E6C200; /* darker on hover */
+
+    /* Backwards-compatibility aliases used across other stylesheets */
+    --usjr-yellow: var(--usjr-gold);
+    --usjr-yellow-dark: var(--usjr-gold-dark);
+
+    /* Disabled / neutrals */
+    --usjr-gray: #E5E7EB; /* background for disabled */
+    --usjr-gray-text: #9CA3AF; /* disabled text color */
+
+    --usjr-text: #1E293B; /* darker text for contrast (matches request) */
+
+    /* Button sizing / shapes */
+    --btn-radius: 12px;
+    --btn-padding-vertical: 10px;
+    --btn-padding-horizontal: 20px;
+    --btn-font-weight: 600;
 }
 
 /* Navigation - USJR Theme */
@@ -117,45 +132,82 @@ body {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    padding: 10px 20px;
+    padding: var(--btn-padding-vertical) var(--btn-padding-horizontal);
     text-decoration: none;
-    border-radius: 6px;
-    font-weight: 600;
-    transition: all 0.18s ease;
+    border-radius: var(--btn-radius);
+    font-weight: var(--btn-font-weight);
+    transition: all 0.2s ease-in-out;
     border: 2px solid transparent;
     cursor: pointer;
     text-align: center;
+    font-family: 'Poppins', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+    box-shadow: none;
+    will-change: transform, box-shadow;
 }
 
+/* Primary (deep green) */
 .btn-primary {
-    background: linear-gradient(135deg, var(--usjr-green-light) 0%, var(--usjr-green) 100%);
-    color: white;
+    background-color: var(--usjr-deep);
+    color: #FFFFFF;
+    border: none;
+    box-shadow: 0 4px 8px rgba(0, 100, 0, 0.15);
+}
+.btn-primary:hover {
+    background-color: var(--usjr-deep-dark);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 18px rgba(0, 80, 0, 0.18);
 }
 
-.btn-primary:hover { transform: translateY(-2px) scale(1.02); box-shadow: 0 5px 15px rgba(0, 66, 37, 0.35); }
-
+/* Secondary - white outline */
 .btn-secondary {
-    background: var(--usjr-yellow);
-    color: #333;
-    font-weight: 600;
+    background-color: #FFFFFF;
+    color: var(--usjr-deep);
+    border: 2px solid var(--usjr-deep);
+}
+.btn-secondary:hover {
+    background-color: #E6F4EA; /* light green background on hover */
+    transform: translateY(-2px);
 }
 
-.btn-secondary:hover { background: var(--usjr-yellow-dark); transform: translateY(-2px) scale(1.02); color: white; }
+/* Accent - Gold */
+.btn-accent {
+    background-color: var(--usjr-gold);
+    color: var(--usjr-text);
+    border: none;
+}
+.btn-accent:hover {
+    background-color: var(--usjr-gold-dark);
+    transform: translateY(-2px);
+}
 
+/* Outline / neutral */
 .btn-outline {
-    border: 2px solid var(--usjr-green);
-    color: var(--usjr-green);
     background: transparent;
+    color: var(--usjr-deep);
+    border: 2px solid var(--usjr-deep);
 }
-
 .btn-outline:hover {
-    background: var(--usjr-green);
-    color: white;
+    background-color: var(--usjr-deep);
+    color: #fff;
 }
 
-.btn i {
-    margin-right: 8px;
+/* Disabled */
+.btn-disabled,
+.btn[disabled],
+button[disabled] {
+    background-color: var(--usjr-gray);
+    color: var(--usjr-gray-text);
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+    border: none;
 }
+
+.btn i { margin-right: 8px; display: inline-block; }
+
+/* small helper for loading icon inside button */
+.btn .spinner { margin-left: 8px; width: 16px; height: 16px; border:2px solid rgba(255,255,255,0.6); border-top-color: rgba(255,255,255,0.95); border-radius:50%; animation:spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
 
 /* Portal Container */
 .portal-container {
