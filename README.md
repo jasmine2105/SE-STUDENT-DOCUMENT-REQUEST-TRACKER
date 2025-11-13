@@ -231,6 +231,7 @@ ode commits.
 -Resolved merge conflicts and removed outdated scripts.
 -Fixed routes for faculty, admin, and student modules.
 -Merged branches and improved project structure.
+-Made the Architectural Design
 ---
 
 **Note**: This is a frontend-only implementation with sample data. In a production environment, this would be connected to a backend server with a proper database and authentication system.
