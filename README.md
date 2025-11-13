@@ -203,17 +203,34 @@ ode commits.
 -Integrated frontend and backend components, particularly linking the student request forms to the Node.js Express server.
 -Contributed to performance optimization by reducing redundant scripts and improving request-response handling.
 
+(28-30)
+-Update the student request button
+-Add Notifier to student portal
+-Update the functionalities of student portal
+-Update the homepage
+-Update the Student Portal
+-Made the DATA DESIGN
+
 # Martina Monica N. Calledo
 -Modified the Faculty, Student, and Admin Dashboards for better accessibility and user flow.
 -Assisted in frontend testing and validation, providing visual and layout feedback during the testing phase.
 -Focused on creating a user-friendly experience, ensuring each portal was easy to navigate and accessible.
 -Enhanced and redesigned the Faculty, Student, and Admin dashboards to improve clarity, usability, and navigation flow.
 
+(28-30)
+-Updated the homepage
+-Made the Procedural Design & Interface Design
+
 # Patrick Duron
 -Modified the structuring for better convience and easier debugging experience
 -structured the roles like ADMIN to have their own auth, scripts, styles and views
 -Helped in repository setup and version control management via GitHub (branching, merging, and committing).
 
+(28-30)
+-Finalized authentication and database updates.
+-Resolved merge conflicts and removed outdated scripts.
+-Fixed routes for faculty, admin, and student modules.
+-Merged branches and improved project structure.
 ---
 
 **Note**: This is a frontend-only implementation with sample data. In a production environment, this would be connected to a backend server with a proper database and authentication system.
