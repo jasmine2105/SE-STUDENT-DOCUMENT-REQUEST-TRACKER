@@ -3,256 +3,116 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Student Document Request Tracker</title>
-    
-    <!-- Main Shared Styles - Load first -->
+    <title>Recoletos Document Request Tracker | USJ-R</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="shared/styles-home.css">
-    
-    <!-- Tailwind CDN with error handling -->
-    <script src="https://cdn.tailwindcss.com" onerror="console.error('Tailwind CDN failed to load')"></script>
-    <script>
-        // Wait for Tailwind to load before configuring
-        if (typeof tailwind !== 'undefined') {
-            window.tailwind = window.tailwind || {};
-            tailwind.config = {
-                theme: {
-                    extend: {
-                        colors: {
-                            // Legacy aliases kept working but mapped to the new palette
-                            usjrg: '#48bb78',
-                            usjrgold: '#e8a90c',
-                            usjrbg: '#fff7e6',
-                            usjrdark: '#38a169',
-                            usjrgray: '#E5E7EB',
-                            // Blade palette names
-                            'usjr-green': '#48bb78',
-                            'usjr-deep': '#38a169',
-                            'usjr-gold': '#e8a90c',
-                            'usjr-gold-dark': '#c58f08',
-                            'usjr-cream': '#fff7e6'
-                        }
-                    }
-                }
-            };
-        }
-    </script>
-
-    <!-- FontAwesome Icons -->
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <!-- Poppins font for modern headings and buttons -->
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700&display=swap" rel="stylesheet">
 </head>
-<body style="margin: 0; padding: 0; min-height: 100vh; background: #f7f7f7;">
-    <!-- Ensure content is visible -->
-    <noscript>
-        <div style="padding: 20px; background: #fff; color: #000;">
-            <h1>JavaScript Required</h1>
-            <p>Please enable JavaScript to use this application.</p>
-        </div>
-    </noscript>
-    
-    <nav class="navbar bg-usjrg text-white border-b-4" style="border-color:#E4B429;">
-        <div class="nav-container">
-            <div class="nav-logo">
-                <span style="position: relative; display: inline-block; margin-right: 10px;">
-                    <i class="fas fa-file-alt" style="font-size: 1.8rem;"></i>
-                    <i class="fas fa-route" style="position: absolute; font-size: 0.7rem; bottom: -2px; right: -2px; color: #e8a90c; background: white; border-radius: 50%; padding: 2px;"></i>
-                </span>
-                <span>DocTracker</span>
+<body>
+    <div class="homepage-container">
+        <!-- Header -->
+        <header class="homepage-header">
+            <div class="logo-container">
+                <div class="logo-placeholder">USJR</div>
+                <div class="logo-text">Recoletos Document Tracker</div>
             </div>
-            <div class="nav-menu">
-                <a href="#home" class="nav-link">Home</a>
-                <a href="#features" class="nav-link">Features</a>
-                <a href="#about" class="nav-link">About</a>
-                <div class="nav-buttons">
-                    <!-- keep appearance simple: make the login text white only as requested -->
-                    <a href="STUDENT/auth/student-login.html" class="btn btn-outline text-white border-white">Log In</a>
-                </div>
-            </div>
-        </div>
-    </nav>
+            <div class="auth-buttons" style="display: flex; gap: 1rem;">
+    <button class="btn-primary" id="openLoginBtn" style="width: auto; padding: 0.75rem 1.5rem;">
+        Sign In
+    </button>
+    <button class="btn-primary" id="openSignupBtn" style="width: auto; padding: 0.75rem 1.5rem; background-color: #E4B429; color: #004225;">
+        Sign Up
+    </button>
+</div>
+</header>
 
-    <main>
-        <section id="home" class="hero">
-            <div class="container">
-                <div class="hero-card">
-                    <div class="hero-left">
-                        <!-- USJ-R themed badge removed -->
-                        <h1 class="text-usjrdark">Request School Documents Online</h1>
-                        <p class="hero-subtitle">Fast, tracked, and paperless document requests</p>
-                        <p>Streamline your academic document requests with our comprehensive tracking system. Submit, track, and manage your TOR, Good Moral, COE, and other academic documents efficiently.</p>
+        <!-- Hero Section -->
+        <main class="homepage-hero">
+            <div class="hero-content">
+                <h1 class="hero-title">Student Document Request Tracker</h1>
+                <p class="hero-subtitle">
+                    Efficiently manage your academic document requests. 
+                    Submit, track, and receive your documents with ease.
+                </p>
 
-                        <div class="hero-buttons">
-                            <a href="STUDENT/auth/student-login.html" class="btn btn-primary btn-large">
-                                <i class="fas fa-sign-in-alt"></i>
-                                Login / Sign Up
-                            </a>
-                            <a href="#how-it-works" class="btn btn-outline btn-large">
-                                <i class="fas fa-info-circle"></i>
-                                How It Works
-                            </a>
-                        </div>
+                <!-- Role Cards -->
+                <div class="role-cards">
+                    <div class="role-card" data-role="student">
+                        <div class="role-icon">🎓</div>
+                        <h3>For Students</h3>
+                        <p>Submit document requests, track their progress, and receive updates in real-time.</p>
+                        <ul style="text-align: left; margin-top: 1rem; list-style: none; padding: 0;">
+                            <li style="margin-bottom: 0.5rem;">✓ Request transcripts, certificates, and clearances</li>
+                            <li style="margin-bottom: 0.5rem;">✓ Track request status with live updates</li>
+                            <li style="margin-bottom: 0.5rem;">✓ View complete request history</li>
+                        </ul>
                     </div>
-                    <div class="hero-right">
-                        <div class="illustration">
-                            <span style="position: relative; display: inline-block;">
-                                <i class="fas fa-file-contract" style="font-size: 4.5rem;"></i>
-                                <i class="fas fa-route" style="position: absolute; font-size: 1.2rem; bottom: 10px; right: 10px; color: #e8a90c; background: rgba(255,255,255,0.9); border-radius: 50%; padding: 4px;"></i>
-                            </span>
-                        </div>
+
+                    <div class="role-card" data-role="faculty">
+                        <div class="role-icon">👨‍🏫</div>
+                        <h3>For Faculty</h3>
+                        <p>Review and approve academic document requests that require your verification.</p>
+                        <ul style="text-align: left; margin-top: 1rem; list-style: none; padding: 0;">
+                            <li style="margin-bottom: 0.5rem;">✓ Receive approval requests in real-time</li>
+                            <li style="margin-bottom: 0.5rem;">✓ Approve or decline with comments</li>
+                            <li style="margin-bottom: 0.5rem;">✓ Track approval history</li>
+                        </ul>
+                    </div>
+
+                    <div class="role-card" data-role="admin">
+                        <div class="role-icon">👔</div>
+                        <h3>For Administrators</h3>
+                        <p>Manage all document requests, coordinate with faculty, and process requests efficiently.</p>
+                        <ul style="text-align: left; margin-top: 1rem; list-style: none; padding: 0;">
+                            <li style="margin-bottom: 0.5rem;">✓ View and process all requests</li>
+                            <li style="margin-bottom: 0.5rem;">✓ Filter and search requests</li>
+                            <li style="margin-bottom: 0.5rem;">✓ Add internal notes and track progress</li>
+                        </ul>
                     </div>
                 </div>
             </div>
-        </section>
+        </main>
+    </div>
 
-        <section id="features" class="features">
-            <div class="container">
-                <h2 class="inline-flex items-center gap-2"><span class="w-2 h-6 bg-usjrgold inline-block rounded"></span> Common Document Types</h2>
-                <div class="features-grid">
-                    <div class="feature-card">
-                        <div class="feature-icon">
-                            <i class="fas fa-graduation-cap"></i>
-                        </div>
-                        <h3>Transcript of Records (TOR)</h3>
-                        <p>Official academic transcript showing all completed courses and grades.</p>
-                    </div>
-                    <div class="feature-card">
-                        <div class="feature-icon">
-                            <i class="fas fa-certificate"></i>
-                        </div>
-                        <h3>Certificate of Enrollment</h3>
-                        <p>Proof of current enrollment status for scholarships, internships, and other purposes.</p>
-                    </div>
-                    <div class="feature-card">
-                        <div class="feature-icon">
-                            <i class="fas fa-award"></i>
-                        </div>
-                        <h3>Good Moral Certificate</h3>
-                        <p>Character reference and conduct certificate for employment and further studies.</p>
-                    </div>
-                    <div class="feature-card">
-                        <div class="feature-icon">
-                            <i class="fas fa-medal"></i>
-                        </div>
-                        <h3>Certificate of Graduation</h3>
-                        <p>Official certificate confirming completion of degree requirements.</p>
-                    </div>
-                    <div class="feature-card">
-                        <div class="feature-icon">
-                            <i class="fas fa-file-alt"></i>
-                        </div>
-                        <h3>Recommendation Letter</h3>
-                        <p>Academic or character recommendation letters from faculty members.</p>
-                    </div>
-                    <div class="feature-card">
-                        <div class="feature-icon">
-                            <i class="fas fa-check-circle"></i>
-                        </div>
-                        <h3>Clearance</h3>
-                        <p>Academic and administrative clearance for graduation and other purposes.</p>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <section id="how-it-works" class="how-it-works">
-            <div class="container">
-                <h2 class="inline-flex items-center gap-2"><span class="w-2 h-6 bg-usjrgold inline-block rounded"></span> How It Works</h2>
-                <div class="steps-grid">
-                    <div class="step-card">
-                        <div class="step-number">1</div>
-                        <h3>Sign Up & Login</h3>
-                        <p>Create your student account and login with your credentials.</p>
-                    </div>
-                    <div class="step-card">
-                        <div class="step-number">2</div>
-                        <h3>Select Document Type</h3>
-                        <p>Choose the document you need and fill out the required information.</p>
-                    </div>
-                    <div class="step-card">
-                        <div class="step-number">3</div>
-                        <h3>Submit Request</h3>
-                        <p>Review your request and submit it for processing.</p>
-                    </div>
-                    <div class="step-card">
-                        <div class="step-number">4</div>
-                        <h3>Track Progress</h3>
-                        <p>Monitor your request status and receive notifications on updates.</p>
-                    </div>
-                    <div class="step-card">
-                        <div class="step-number">5</div>
-                        <h3>Receive Document</h3>
-                        <p>Pick up your document or receive it via your preferred delivery method.</p>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <section id="about" class="about">
-            <div class="container">
-                <h2 class="inline-flex items-center gap-2"><span class="w-2 h-6 bg-usjrgold inline-block rounded"></span> About DocTracker</h2>
-                <p>DocTracker is a comprehensive document request management system designed to streamline the process of requesting and tracking academic documents. Our system ensures transparency, efficiency, and timely delivery of important academic documents.</p>
-                <div class="stats">
-                    <div class="stat">
-                        <h3>1000+</h3>
-                        <p>Requests Processed</p>
-                    </div>
-                    <div class="stat">
-                        <h3>24/7</h3>
-                        <p>System Availability</p>
-                    </div>
-                    <div class="stat">
-                        <h3>99%</h3>
-                        <p>Success Rate</p>
-                    </div>
-                </div>
-            </div>
-        </section>
-    </main>
-
-    <footer class="footer">
-        <div class="container">
-            <div class="footer-content">
-                <div class="footer-section">
-                    <h3>DocTracker</h3>
-                    <p>Streamlining academic document requests for students and administrators.</p>
-                </div>
-                <div class="footer-section">
-                    <h4>Quick Links</h4>
-                    <ul>
-                        <li><a href="STUDENT/auth/student-login.html">Log In</a></li>
-                        <!-- Footer Portal link removed -->
-                        <li><a href="#features">Features</a></li>
-                    </ul>
-                </div>
-                <div class="footer-section">
-                    <h4>Support</h4>
-                    <ul>
-                        <li><a href="#contact">Contact Us</a></li>
-                        <li><a href="#help">Help Center</a></li>
-                        <li><a href="#faq">FAQ</a></li>
-                    </ul>
-                </div>
-            </div>
-            <div class="footer-bottom">
-                <p>&copy; 2025 DocTracker. All rights reserved.</p>
-            </div>
-        </div>
-    </footer>
-
-    <!-- Shared Scripts -->
-    <script src="shared/utils.js" onerror="console.error('Failed to load utils.js')"></script>
-    <!-- Debug: Check if page loaded -->
+    <!-- Scripts -->
+    <script src="shared/utils.js"></script>
+    <script src="shared/components/login-modal.js"></script>
     <script>
-        console.log('Page loaded successfully');
-        document.addEventListener('DOMContentLoaded', function() {
-            console.log('DOM Content Loaded');
-            // Verify main content exists
-            const main = document.querySelector('main');
-            const nav = document.querySelector('nav');
-            if (!main) console.error('Main element not found!');
-            if (!nav) console.error('Nav element not found!');
-        });
-    </script>
+  // Initialize login modal
+  const loginModal = new LoginModal();
+
+  // Open login modal when clicking Sign In button (header)
+  document.getElementById('openLoginBtn').addEventListener('click', () => {
+      loginModal.toggleView('login');
+      loginModal.show();
+  });
+
+  // Open signup modal directly when clicking Sign Up button (header)
+  document.getElementById('openSignupBtn').addEventListener('click', () => {
+      loginModal.toggleView('signup');
+      loginModal.show();
+  });
+
+  // Open login modal when clicking role cards
+  document.querySelectorAll('.role-card').forEach(card => {
+      card.addEventListener('click', () => {
+          const role = card.dataset.role;
+          loginModal.currentRole = role;
+          
+          // Update role buttons
+          document.querySelectorAll('.role-btn').forEach(btn => {
+              btn.classList.remove('active');
+              if (btn.dataset.role === role) {
+                  btn.classList.add('active');
+              }
+          });
+          
+          loginModal.toggleView('login');
+          loginModal.show();
+      });
+  });
+</script>
 </body>
 </html>
+

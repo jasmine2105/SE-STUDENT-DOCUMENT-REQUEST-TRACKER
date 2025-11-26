@@ -3,294 +3,335 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Student Portal - Document Request Tracker</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        window.tailwind = window.tailwind || {};
-    tailwind.config = { theme: { extend: { colors: { usjrg: '#48bb78', usjrgold: '#e8a90c', usjrbg: '#fff7e6', usjrdark: '#38a169', usjrgray: '#E5E7EB', 'usjr-green': '#48bb78', 'usjr-deep': '#38a169', 'usjr-gold': '#e8a90c', 'usjr-gold-dark': '#c58f08', 'usjr-cream': '#fff7e6' } } } };
-    </script>
-    <!-- Poppins font for buttons/headings -->
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700&display=swap" rel="stylesheet">
+    <title>Student Portal | Recoletos Document Tracker</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="../../shared/styles-home.css">
     <link rel="stylesheet" href="../styles/student-portal.css">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
-        /* small form layout helpers (local overrides) */
-        .form-row{display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap}
-        .form-group{margin-bottom:8px}
-    /* make flex columns distribute evenly when used together */
-    .col-flex{flex:1 1 0;min-width:160px}
-        .col-auto{flex:0 0 auto}
-    .input-short{max-width:160px}
-    .input-tiny{max-width:140px}
-    .input-long{flex:1 1 100%;min-width:220px}
-    textarea.form-control{min-height:96px}
-    /* single-line inputs used for first/last/contact/email to match size */
-    .input-box{width:100%;min-height:44px;padding:10px;border-radius:6px;border:1px solid #e5e7eb;box-sizing:border-box}
-    /* make term/reference/copies visually identical — force exact height for consistency */
-    .input-equal{width:100%;height:60px;min-height:60px;padding:10px;border-radius:6px;box-sizing:border-box}
-    textarea.input-equal{height:60px;min-height:60px;resize:vertical}
-    input.input-equal, input[type=number].input-equal{height:60px;min-height:60px;padding:10px}
-    /* equal visual inputs used on the Term/Reference/Copies row (for multi-line/number fields) */
-    
-        label{display:block;margin-bottom:6px}
-        @media(max-width:720px){.form-row{flex-direction:column;align-items:stretch}}
-        /* center table headers/cells in My Requests */
-        .center-table th, .center-table td { text-align:center; vertical-align:middle; padding:10px }
+        /* Add these temporary debug styles to check if button is clickable */
+        .btn-new-request {
+            background-color: #004225 !important;
+            position: relative !important;
+            z-index: 100 !important;
+        }
+        
+        /* Ensure modal is properly styled */
+        .modal.active {
+            display: flex !important;
+        }
+        
+        .modal.hidden {
+            display: none !important;
+        }
     </style>
 </head>
 <body>
-    <nav class="navbar bg-usjrg text-white">
-        <div class="nav-container">
-            <div class="nav-logo">
-                <span style="position: relative; display: inline-block;">
-                    <i class="fas fa-file-alt" style="font-size: 2rem;"></i>
-                    <i class="fas fa-route" style="position: absolute; font-size: 0.8rem; bottom: -2px; right: -2px; color: #e8a90c; background: white; border-radius: 50%; padding: 2px;"></i>
-                </span>
-                <span>DocTracker</span>
-            </div>
-            <div class="nav-menu">
-                <div class="nav-buttons">
-                    <!-- welcomeMessage removed per design request -->
-                    <button class="btn btn-outline" id="logoutBtn">Logout</button>
-                </div>
-            </div>
-        </div>
-    </nav>
-
-    <main class="portal-container">
-        <div class="portal-header dashboard-overview">
-            <h1><i class="fas fa-tachometer-alt"></i> Dashboard Overview</h1>
-            <p id="dashboardSubtitle">Welcome back — here’s an overview of your document requests.</p>
-
-            <div class="dashboard-summary" id="dashboardSummary">
-                <!-- Quick Status Summary (populated by JS) -->
-                <div class="status-chips">
-                    <div class="status-chip"><div class="status-number" id="dsPending">0</div><div class="status-label">Pending</div></div>
-                    <div class="status-chip"><div class="status-number" id="dsProcessing">0</div><div class="status-label">Processing</div></div>
-                    <div class="status-chip"><div class="status-number" id="dsCompleted">0</div><div class="status-label">Completed</div></div>
-                </div>
-                <div class="status-progress">
-                    <div class="progress-label">Requests Completed</div>
-                    <div class="progress-bar"><div id="dsProgressBar" class="progress-fill" style="width:0%"></div></div>
-                </div>
-            </div>
-
-            <div class="dashboard-actions" id="dashboardActions">
-                <button id="quickNew" class="btn btn-primary"><i class="fas fa-plus"></i> New Request</button>
-                <button id="quickTrack" class="btn btn-outline"><i class="fas fa-search"></i> Track Request</button>
-                <button id="quickDownload" class="btn btn-secondary"><i class="fas fa-download"></i> Download Completed</button>
-            </div>
-
-        </div>
-
+    <script>
+        console.log('🔍 === STUDENT PORTAL DEBUG ===');
+        console.log('🔍 Current user:', localStorage.getItem('currentUser'));
+        console.log('🔍 Auth token:', localStorage.getItem('authToken'));
+        console.log('🔍 Has currentUser:', localStorage.getItem('currentUser') !== null);
+        console.log('🔍 Has authToken:', !!localStorage.getItem('authToken'));
+        console.log('🔍 isAuthenticated:', localStorage.getItem('currentUser') !== null && !!localStorage.getItem('authToken'));
         
-
-
-        <!-- Dashboard Stats -->
-        <div class="dashboard-grid">
-            <div class="stat-card">
-                <h3 id="totalRequests">0</h3>
-                <p>Total Requests</p>
-            </div>
-            <div class="stat-card">
-                <h3 id="pendingRequests">0</h3>
-                <p>Pending</p>
-            </div>
-            <div class="stat-card">
-                <h3 id="processingRequests">0</h3>
-                <p>Processing</p>
-            </div>
-            <div class="stat-card">
-                <h3 id="completedRequests">0</h3>
-                <p>Completed</p>
-            </div>
-        </div>
-
-        <!-- Quick Actions -->
-        <div class="card">
-            <div class="card-header">
-                <h3><i class="fas fa-bolt"></i> Quick Actions</h3>
-            </div>
-            <div class="card-body">
-                <div class="d-flex gap-2">
-                    <button id="showSubmitBtn" class="btn btn-primary">
-                        <i class="fas fa-plus"></i> Submit New Request
-                    </button>
-                    <button id="refreshBtn" class="btn btn-accent">
-                        <i class="fas fa-sync"></i> Refresh
-                    </button>
-                    <!-- Example of a subtle secondary action -->
-                    <button id="howItWorksBtn" class="btn btn-secondary">
-                        <i class="fas fa-info-circle"></i> How It Works
-                    </button>
+        // Parse and show user object if exists
+        try {
+            const user = localStorage.getItem('currentUser');
+            if (user) {
+                const parsed = JSON.parse(user);
+                console.log('🔍 Parsed user object:', parsed);
+                console.log('🔍 User role:', parsed.role);
+            }
+        } catch (e) {
+            console.error('🔍 Error parsing user:', e);
+        }
+    </script>
+    
+    <div class="portal-layout">
+        <!-- Sidebar -->
+        <aside class="portal-sidebar" id="portalSidebar">
+            <div class="sidebar-header">
+                <div class="sidebar-logo">USJ-R</div>
+                <div>
+                    <p class="sidebar-title">Student Portal</p>
+                    <span class="sidebar-subtitle" id="sidebarUserInfo">Loading...</span>
                 </div>
             </div>
-        </div>
+            <nav class="sidebar-nav">
+                <button class="sidebar-link active" data-view="dashboard">Dashboard</button>
+                <button class="sidebar-link" data-view="history">Request History</button>
+                <button class="sidebar-link" data-view="notifications">Notifications</button>
+            </nav>
+            <div class="sidebar-footer">
+                <button class="btn-logout" id="logoutBtn">Logout</button>
+            </div>
+        </aside>
 
-        <!-- Submit Request Form -->
-        <div id="submitForm" class="form-container d-none">
-            <h3><i class="fas fa-file-plus"></i> Submit Document Request</h3>
-            <form id="requestForm">
-                <!-- top row: recipient first + last name (equal boxes) and contact -->
-                <div class="form-row">
-                    <!-- Two equal columns: left = First Name + Contact, right = Last Name + Student Email -->
-                    <div class="col-flex">
-                        <div class="form-group">
-                            <label for="recipientFirstName">First Name</label>
-                            <input type="text" id="recipientFirstName" name="recipientFirstName" class="form-control input-box" placeholder="First name">
-                        </div>
-                        <div class="form-group">
-                            <label for="contactNumber">Contact Number</label>
-                            <input type="tel" id="contactNumber" name="contactNumber" class="form-control input-box" placeholder="e.g., +63 912 345 6789">
+        <!-- Content -->
+        <div class="portal-main">
+            <!-- Header -->
+            <header class="portal-header">
+                <div class="header-left">
+                    <h1>Document Tracker</h1>
+                    <p id="userInfo">Loading...</p>
+                </div>
+                <div class="header-right">
+                    <div class="notification-bell" id="notificationBell">
+                        <span class="bell-icon">🔔</span>
+                        <span class="notification-count hidden" id="notificationCount">0</span>
+                        <div class="notification-dropdown hidden" id="notificationDropdown">
+                            <div class="notification-header">
+                                <h3>Notifications</h3>
+                                <button id="markAllRead">Mark all as read</button>
+                            </div>
+                            <div class="notification-list" id="notificationList"></div>
                         </div>
                     </div>
-                    <div class="col-flex">
-                        <div class="form-group">
-                            <label for="recipientLastName">Last Name</label>
-                            <input type="text" id="recipientLastName" name="recipientLastName" class="form-control input-box" placeholder="Last name">
+                    <div class="user-pill">
+                        <span class="user-name" id="userName">Loading...</span>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Dashboard View -->
+            <main class="main-container" id="dashboardView">
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-value" id="statTotal">0</div>
+                        <div class="stat-label">Total Requests</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="statPending">0</div>
+                        <div class="stat-label">In Progress</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="statCompleted">0</div>
+                        <div class="stat-label">Completed</div>
+                    </div>
+                </div>
+
+                <div class="content-section">
+                    <div class="section-header">
+                        <h2>My Documents</h2>
+                        <div style="display:flex; gap:0.5rem; align-items:center;">
+                            <select id="myDocsFilter" class="filter-select" style="min-width:160px;">
+                                <option value="all">All Status</option>
+                                <option value="pending">Pending</option>
+                                <option value="pending_faculty">Pending Faculty</option>
+                                <option value="in_progress">In Progress</option>
+                                <option value="approved">Approved</option>
+                                <option value="completed">Completed</option>
+                                <option value="declined">Declined</option>
+                            </select>
+                            <input id="myDocsSearch" class="form-input" placeholder="Search documents..." style="min-width:200px;" />
+                            <button class="btn-secondary" id="manageDocsBtn">Manage Documents</button>
                         </div>
-                        <div class="form-group">
-                            <label for="studentEmail">Student Email (Gmail)</label>
-                            <input type="email" id="studentEmail" name="studentEmail" class="form-control input-box" readonly placeholder="student@school.edu">
+                    </div>
+                    <div id="myDocuments">
+                        <div class="empty-state">
+                            <div class="empty-state-icon">📁</div>
+                            <h3>No document requests yet</h3>
+                            <p>Your requested documents and their status will appear here.</p>
                         </div>
                     </div>
                 </div>
 
-                <div class="form-group">
-                    <label for="documentType">Document Type *</label>
-                    <select id="documentType" name="documentType" class="form-control" required>
-                        <option value="">Select document type</option>
-                        <option value="TOR">Transcript of Records (TOR)</option>
-                        <option value="GoodMoral">Good Moral Certificate</option>
-                        <option value="COE">Certificate of Enrollment</option>
-                        <option value="COG">Certificate of Graduation</option>
-                        <option value="HonorableDismissal">Honorable Dismissal</option>
-                        <option value="Diploma">Diploma</option>
-                        <option value="Other">Other</option>
-                    </select>
-                    <input type="text" id="otherDocumentType" name="otherDocumentType" class="form-control d-none mt-2 input-short" placeholder="Please specify the document type">
+                <div class="content-section" style="margin-top:1.25rem;">
+                    <div class="section-header">
+                        <h2>Recent Requests</h2>
+                        <button class="btn-new-request" id="newRequestBtn">+ New Request</button>
+                    </div>
+                    <div id="recentRequests">
+                        <div class="empty-state">
+                            <div class="empty-state-icon">📄</div>
+                            <h3>No recent requests</h3>
+                            <p>Submit a request to see it here.</p>
+                        </div>
+                    </div>
                 </div>
+            </main>
 
-                <!-- Purpose + optional details to fill extra horizontal space -->
-                <div class="form-row">
-                    <div class="col-flex">
+            <!-- History View -->
+            <section class="main-container hidden" id="historyView">
+                <div class="content-section">
+                    <div class="section-header">
+                        <h2>Request History</h2>
+                        <div class="history-filters">
+                            <select id="filterDepartment" class="filter-select"></select>
+                            <select id="filterStatusHistory" class="filter-select">
+                                <option value="all">All Status</option>
+                                <option value="pending">Pending</option>
+                                <option value="pending_faculty">Pending Faculty</option>
+                                <option value="in_progress">In Progress</option>
+                                <option value="approved">Approved</option>
+                                <option value="completed">Completed</option>
+                                <option value="declined">Declined</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div id="historyRequests">
+                        <div class="empty-state">
+                            <div class="empty-state-icon">📄</div>
+                            <h3>No requests found</h3>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Notifications View -->
+            <section class="main-container hidden" id="notificationsView">
+                <div class="content-section">
+                    <div class="section-header">
+                        <h2>Notifications</h2>
+                        <button class="btn-secondary" id="markAllReadSecondary">Mark all as read</button>
+                    </div>
+                    <div id="notificationsFullList">
+                        <div class="empty-state">
+                            <div class="empty-state-icon">🔔</div>
+                            <h3>No notifications yet</h3>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <!-- Document Request Modal -->
+    <div id="requestModal" class="modal-overlay hidden">
+        <div class="request-modal">
+            <div class="modal-header">
+                <h2>New Document Request</h2>
+                <button class="close-modal" id="closeModal">&times;</button>
+            </div>
+            
+            <div class="modal-body">
+                <form id="documentRequestForm" class="request-form">
+                    <!-- Personal Information Section -->
+                    <div class="form-section">
+                        <h3>Personal Information</h3>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="fullName">Full Name *</label>
+                                <input type="text" id="fullName" name="fullName" required class="form-input">
+                            </div>
+                            <div class="form-group">
+                                <label for="idNumber">ID Number *</label>
+                                <input type="text" id="idNumber" name="idNumber" required class="form-input">
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="course">Course *</label>
+                                <input type="text" id="course" name="course" required class="form-input">
+                            </div>
+                            <div class="form-group">
+                                <label for="yearLevel">Year Level *</label>
+                                <input type="text" id="yearLevel" name="yearLevel" required class="form-input">
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label for="studentEmail">Email *</label>
+                                <input type="email" id="studentEmail" name="studentEmail" required class="form-input">
+                            </div>
+                            <div class="form-group">
+                                <label for="contactNumber">Contact Number</label>
+                                <input type="tel" id="contactNumber" name="contactNumber" class="form-input" placeholder="Enter your contact number">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Document Information Section -->
+                    <div class="form-section">
+                        <h3>Document Information</h3>
+                        
+                        <!-- Department Selection -->
+                        <div class="form-group">
+                            <label for="department">Request Department *</label>
+                            <select id="department" name="department" required class="form-select">
+                                <option value="">Select Department</option>
+                                <option value="SCS">School of Computer Studies (SCS)</option>
+                                <option value="SBM">School of Business Management (SBM)</option>
+                                <option value="SAS">School of Arts and Sciences (SAS)</option>
+                                <option value="SOE">School of Engineering (SOE)</option>
+                                <option value="SAMS">School of Allied Medical Sciences (SAMS)</option>
+                                <option value="SOL">School of Law (SOL)</option>
+                                <option value="ETEEAP">ETEEAP</option>
+                                <option value="SOEd">School of Education (SOEd)</option>
+                            </select>
+                        </div>
+
+                        <!-- Dynamic Document Type Selection -->
+                        <div class="form-group">
+                            <label for="documentType">Document Type *</label>
+                            <select id="documentType" name="documentType" required class="form-select" disabled>
+                                <option value="">Select Department First</option>
+                            </select>
+                            <div class="form-loading hidden" id="documentTypeLoading">
+                                Loading document types...
+                            </div>
+                        </div>
+
+                        <div class="form-group hidden" id="otherDocumentGroup">
+                            <label for="otherDocument">If Other, specify</label>
+                            <input type="text" id="otherDocument" name="otherDocument" class="form-input" placeholder="Please specify document type">
+                        </div>
+
+                        <!-- Purpose -->
                         <div class="form-group">
                             <label for="purpose">Purpose *</label>
-                            <textarea id="purpose" name="purpose" class="form-control input-long" required placeholder="e.g., Employment, Further Studies, etc."></textarea>
+                            <textarea id="purpose" name="purpose" placeholder="Enter the purpose of this request (e.g., Employment, Further Studies, Scholarship, etc.)..." required class="form-textarea" rows="3"></textarea>
                         </div>
-                    </div>
-                    <div class="col-flex">
+
+                        <!-- Number of Copies -->
                         <div class="form-group">
-                            <label for="purposeDetails">Details (optional)</label>
-                            <textarea id="purposeDetails" name="purposeDetails" class="form-control input-long" placeholder="Extra details, address line, or additional instructions"></textarea>
+                            <label for="quantity">Number of Copies *</label>
+                            <input type="number" id="quantity" name="quantity" min="1" max="10" value="1" required class="form-input">
+                            <small class="form-help">Maximum of 10 copies per request</small>
                         </div>
-                    </div>
-                </div>
 
-                <div class="form-row">
-                    <div class="col-flex">
+                        <!-- Additional Notes -->
                         <div class="form-group">
-                            <label for="termCoverage">Term/Coverage</label>
-                            <textarea id="termCoverage" name="termCoverage" class="form-control input-equal" rows="2" placeholder="e.g., 1st Semester AY 2023-2024"></textarea>
+                            <label for="additionalNotes">Additional Notes</label>
+                            <textarea id="additionalNotes" name="additionalNotes" placeholder="Any additional information or special instructions..." class="form-textarea" rows="3"></textarea>
                         </div>
                     </div>
-                    <div class="col-flex">
+
+                    <!-- Attachments Section -->
+                    <div class="form-section">
+                        <h3>Supporting Documents</h3>
                         <div class="form-group">
-                            <label for="termExtra">Reference (optional)</label>
-                            <input type="text" id="termExtra" name="termExtra" class="form-control input-equal" placeholder="Reference, PO#, or extra info">
+                            <label>Upload Supporting Documents (JPG/PNG/PDF, up to 3 files, max 5MB each)</label>
+                            <button type="button" id="addAttachmentBtn" class="btn-secondary" style="margin-bottom: 1rem;">Add Supporting Documents</button>
+                            <input type="file" id="attachments" name="attachments" multiple accept="image/jpeg,image/png,.pdf" class="file-input" style="display:none;">
+                            <div id="file-preview" class="file-preview-container"></div>
+                            <div id="uploadError" class="error-message hidden" style="color: red; margin-top: 0.5rem;"></div>
                         </div>
                     </div>
-                    <div class="col-flex">
-                        <div class="form-group">
-                            <label for="copies">Number of Copies *</label>
-                            <input type="number" id="copies" name="copies" class="form-control input-equal" min="1" max="10" value="1" required>
-                        </div>
+
+                    <!-- Form Actions -->
+                    <div class="form-actions">
+                        <button type="button" class="btn-secondary" id="cancelRequest">Cancel</button>
+                        <button type="submit" class="btn-primary" id="submitRequestBtn">
+                            <span class="btn-text">Submit Request</span>
+                            <div class="btn-loading hidden">
+                                <div class="spinner"></div>
+                                Submitting...
+                            </div>
+                        </button>
                     </div>
-                </div>
-
-                <!-- Delivery method removed per UX request -->
-
-                <!-- duplicate Recipient removed (kept the top, short field) -->
-
-                <div class="form-group">
-                    <label for="notes">Additional Notes</label>
-                    <textarea id="notes" name="notes" class="form-control" rows="4" placeholder="Any additional information or special instructions"></textarea>
-                </div>
-
-                <div class="form-group">
-                    <label for="attachments">Attachments</label>
-                    <input type="file" id="attachments" name="attachments" class="form-control" multiple accept=".pdf,.jpg,.jpeg,.png,.doc,.docx">
-                    <small class="form-text text-muted">Upload supporting documents (PDF, JPG, PNG, DOC, DOCX)</small>
-                </div>
-
-                <div class="d-flex gap-2">
-                    <button type="submit" id="submitRequestBtn" class="btn btn-primary">
-                        <i class="fas fa-paper-plane"></i> Submit Request
-                    </button>
-                    <button type="button" id="cancelRequestBtn" class="btn btn-outline">
-                        Cancel
-                    </button>
-                </div>
-            </form>
-        </div>
-
-        <!-- My Requests -->
-        <div class="card">
-            <div class="card-header">
-                <h3><i class="fas fa-list"></i> My Requests</h3>
-            </div>
-            <div class="card-body">
-                <div id="requestsList">
-                    <table class="table w-full center-table" style="width:100%;border-collapse:collapse">
-                        <thead>
-                            <tr style="border-bottom:1px solid #e5e7eb">
-                                <th>Request ID</th>
-                                <th>Type</th>
-                                <th>Status</th>
-                                <th>Time</th>
-                                <th>Purpose</th>
-                                <th>Delete</th>
-                            </tr>
-                        </thead>
-                        <tbody id="requestsTableBody">
-                            <tr><td colspan="6" class="text-muted" style="padding:12px;text-align:center">Loading your requests...</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-    </main>
-
-    <!-- Request Details Modal -->
-    <div id="requestModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3>Request Details</h3>
-                <span class="close" id="modalCloseBtn">&times;</span>
-            </div>
-            <div id="requestDetails">
-                <!-- Request details will be loaded here -->
+                </form>
             </div>
         </div>
     </div>
 
-    <!-- Notification Center Modal (large) -->
-    <div id="notifCenterModal" class="notif-center-modal" aria-hidden="true">
-        <div class="notif-center-content">
-            <div class="notif-center-header">
-                <h3>Notifications</h3>
-                <div>
-                    <button id="closeNotifCenter" class="btn btn-outline">Close</button>
-                </div>
-            </div>
-            <div id="notifCenterList" class="notif-center-list">
-                <!-- Populated by JS -->
-            </div>
-        </div>
-    </div>
-
-    <!-- ADD AUTH SCRIPT FIRST -->
-    <script src="../auth/student-auth.js"></script>
+    <script src="../../shared/config.js"></script>
+    <script src="../../shared/utils.js"></script>
     <script src="../scripts/student-portal.js"></script>
 </body>
 </html>

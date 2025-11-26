@@ -1,811 +1,520 @@
+document.addEventListener('DOMContentLoaded', async () => {
+  if (!Utils.requireAuth()) return;
+
+  const user = Utils.getCurrentUser();
+  const userNameEl = document.getElementById('userName');
+  const userInfoEl = document.getElementById('userInfo');
+  const sidebarUserInfo = document.getElementById('sidebarUserInfo');
+
+  if (userNameEl) userNameEl.textContent = user?.fullName || user?.name || 'Admin';
+  if (userInfoEl) userInfoEl.textContent = `${user?.role || ''}`;
+  if (sidebarUserInfo) sidebarUserInfo.textContent = user?.fullName || '';
+
+  try {
+    await Notifications.init({
+      userId: user?.id,
+      bellId: 'notificationBell',
+      countId: 'notificationCount',
+      dropdownId: 'notificationDropdown',
+      listId: 'notificationList',
+      markAllBtnId: 'markAllRead'
+    });
+  } catch (err) {
+    console.warn('Notifications init failed', err.message || err);
+  }
+
+  // Sidebar view switching
+  const links = document.querySelectorAll('.sidebar-link');
+  links.forEach(btn => btn.addEventListener('click', () => {
+    links.forEach(l => l.classList.remove('active'));
+    btn.classList.add('active');
+    const view = btn.dataset.view;
+    document.getElementById('dashboardView').classList.toggle('hidden', view !== 'dashboard');
+    document.getElementById('requestsView').classList.toggle('hidden', view !== 'requests');
+  }));
+
+  const logoutBtn = document.getElementById('logoutBtn');
+  if (logoutBtn) logoutBtn.addEventListener('click', () => Utils.clearCurrentUser());
+
+  async function loadRecent() {
+    try {
+      const requests = await Utils.apiRequest('/requests', { method: 'GET' });
+      const recentEl = document.getElementById('recentRequests');
+      const statTotal = document.getElementById('statTotal');
+      const statPending = document.getElementById('statPending');
+      const statCompleted = document.getElementById('statCompleted');
+
+      if (!Array.isArray(requests) || requests.length === 0) {
+        recentEl.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📄</div><h3>No recent requests</h3><p>Requests across the system will appear here.</p></div>';
+        if (statTotal) statTotal.textContent = '0';
+        if (statPending) statPending.textContent = '0';
+        if (statCompleted) statCompleted.textContent = '0';
+        return;
+      }
+
+      recentEl.innerHTML = '';
+      requests.slice(0, 8).forEach(r => {
+        const card = document.createElement('div');
+        card.className = 'request-card';
+        card.innerHTML = `
+          <div class="request-header">
+            <strong>${r.requestCode || ''}</strong>
+            <span class="request-status ${Utils.getStatusBadgeClass(r.status)}">${Utils.getStatusText(r.status)}</span>
+          </div>
+          <div class="request-body">
+            <div>${r.studentName || r.student_name || ''}</div>
+            <div class="muted">${r.documentType || r.document_label || r.documentValue || ''}</div>
+            <div class="muted small">${Utils.formatRelativeTime(r.submittedAt || r.submitted_at)}</div>
+          </div>
+        `;
+        recentEl.appendChild(card);
+      });
+
+      if (statTotal) statTotal.textContent = String(requests.length || 0);
+      if (statPending) statPending.textContent = String(requests.filter(x => x.status && x.status.includes('pending')).length || 0);
+      if (statCompleted) statCompleted.textContent = String(requests.filter(x => x.status === 'completed' || x.status === 'approved').length || 0);
+
+    } catch (error) {
+      console.error('Failed to load recent requests', error);
+    }
+  }
+
+  await loadRecent();
+});
 // Admin Portal JavaScript
+class AdminPortal {
+  constructor() {
+    this.currentUser = Utils.getCurrentUser();
+    this.requests = [];
+    this.filteredRequests = [];
+    this.allFaculties = [];
+    this.filterStatus = 'all';
+    this.filterType = 'all';
+    this.searchQuery = '';
+    this.init();
+  }
 
-let adminRequests = [];
-let adminNotifications = [];
-
-// Initialize admin portal
-document.addEventListener('DOMContentLoaded', function() {
-    // Ensure only admin can view this page
-    if (window.Auth && window.Auth.isAuthenticated) {
-        const user = window.Auth.getCurrentUser();
-        const roleVerified = sessionStorage.getItem('roleVerified');
-        // Allow access if either the logged-in user is an admin OR the role password was
-        // verified in this session. This lets admins skip signup/login after entering the password.
-        if (!((user && user.role === 'admin') || roleVerified === 'admin')) {
-            window.location.href = '../auth.html';
-            return;
-        }
-    } else {
-        // No persistent login; allow access only if role password was verified in this session
-        const roleVerified = sessionStorage.getItem('roleVerified');
-        if (roleVerified !== 'admin') {
-            window.location.href = '../auth.html';
-            return;
-        }
+  async init() {
+    if (!Utils.requireAuth()) return;
+    if (this.currentUser.role !== 'admin') {
+      Utils.showToast('Access denied. Admin portal only.', 'error');
+      Utils.clearCurrentUser();
+      return;
     }
 
-    loadAdminData();
-    updateDashboard();
-    loadRequests();
-    loadNotifications();
+    this.loadUserInfo();
+    await this.loadFaculties();
+    await this.loadRequests();
+    this.setupEventListeners();
+    this.updateStats();
+    this.renderRequests();
+  }
+
+  loadUserInfo() {
+    const userNameEl = document.getElementById('userName');
+    const userInfoEl = document.getElementById('userInfo');
     
-    // Set up event listeners
-    setupEventListeners();
-    // Allow clicking the overlay of the process modal to close it for convenience
-    (function attachProcessModalOverlayClose() {
-        const modal = document.getElementById('processModal');
-        if (!modal) return;
-        modal.addEventListener('click', function(e) {
-            // If the click target is the modal itself (i.e., the overlay), close it
-            if (e.target === modal) {
-                try { DocTracker.closeModal('processModal'); } catch (err) { /* ignore */ }
-            }
-        });
-    })();
+    if (userNameEl) {
+      userNameEl.textContent = this.currentUser.fullName || this.currentUser.name || 'Administrator';
+    }
     
-    // Try to sync with backend if available
-    fetchAdminRequests();
-    // Poll the server periodically for new requests (every 10s)
-    setInterval(fetchAdminRequests, 10000);
+    if (userInfoEl) {
+      const department = this.currentUser.department || this.currentUser.departmentName || 'Registrar\'s Office';
+      const position = this.currentUser.position || 'Administrator';
+      userInfoEl.textContent = `${department} • ${position}`;
+    }
+  }
+
+  async loadFaculties() {
+    try {
+      this.allFaculties = await Utils.apiRequest('/users/faculty');
+    } catch (error) {
+      console.error('Failed to load faculties', error);
+    }
+  }
+
+  async loadRequests() {
+    try {
+      this.requests = await Utils.apiRequest('/requests');
+      this.filterRequests();
+    } catch (error) {
+      Utils.showToast('Failed to load requests', 'error');
+    }
+  }
+
+  filterRequests() {
+    this.filteredRequests = this.requests.filter(request => {
+      // Status filter
+      if (this.filterStatus !== 'all' && request.status !== this.filterStatus) {
+        return false;
+      }
+
+      // Document type filter
+      if (this.filterType !== 'all' && request.documentType !== this.filterType) {
+        return false;
+      }
+
+      // Search query
+      if (this.searchQuery) {
+        const query = this.searchQuery.toLowerCase();
+        const matchesName = request.studentName.toLowerCase().includes(query);
+        const matchesId = request.studentIdNumber.toLowerCase().includes(query);
+        const matchesDoc = request.documentType.toLowerCase().includes(query);
+        if (!matchesName && !matchesId && !matchesDoc) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+
+    this.renderRequests();
+  }
+
+  renderRequests() {
+    const container = document.getElementById('requestsList');
+    if (!container) return;
+
+    if (this.filteredRequests.length === 0) {
+      container.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-state-icon">📋</div>
+          <h3>No requests found</h3>
+          <p>Try adjusting your filters or search query.</p>
+        </div>
+      `;
+      return;
+    }
+
+    container.innerHTML = this.filteredRequests
+      .sort((a, b) => {
+        // Sort by priority first (urgent first), then by date (newest first)
+        if (a.priority === 'urgent' && b.priority !== 'urgent') return -1;
+        if (b.priority === 'urgent' && a.priority !== 'urgent') return 1;
+        return new Date(b.submittedAt) - new Date(a.submittedAt);
+      })
+      .map(request => this.createRequestCard(request))
+      .join('');
+  }
+
+  createRequestCard(request) {
+    const statusClass = Utils.getStatusBadgeClass(request.status);
+    const statusText = Utils.getStatusText(request.status);
+    const submittedDate = Utils.formatDate(request.submittedAt);
+    const priorityClass = request.priority === 'urgent' ? 'urgent' : 'normal';
+
+    return `
+      <div class="request-item">
+        <div class="request-header">
+          <div class="request-info">
+            <h3>${request.documentType} 
+              <span class="priority-badge ${priorityClass}" style="margin-left: 0.5rem;">${request.priority.toUpperCase()}</span>
+            </h3>
+            <div class="request-meta">
+              <span><strong>Student:</strong> ${request.studentName} (${request.studentIdNumber})</span>
+              <span><strong>Status:</strong> <span class="status-badge ${statusClass}">${statusText}</span></span>
+              <span><strong>Submitted:</strong> ${submittedDate}</span>
+              ${request.purpose ? `<span><strong>Purpose:</strong> ${request.purpose}</span>` : ''}
+              ${request.quantity ? `<span><strong>Quantity:</strong> ${request.quantity}</span>` : ''}
+              ${request.attachments && request.attachments.length ? `<span>📎 ${request.attachments.length} attachment(s)</span>` : ''}
+            </div>
+            ${request.adminNotes && request.adminNotes.length > 0 ? `
+              <div style="margin-top: 0.5rem; font-size: 0.85rem; opacity: 0.7;">
+                <strong>Notes:</strong> ${request.adminNotes.length} note(s)
+              </div>
+            ` : ''}
+          </div>
+          <div class="request-actions">
+            <button class="btn-update" onclick="adminPortal.showUpdateModal(${request.id})">
+              Update Status
+            </button>
+            <button class="btn-secondary" onclick="adminPortal.viewRequest(${request.id})">
+              View Details
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  updateStats() {
+    const totalEl = document.getElementById('statTotal');
+    const pendingEl = document.getElementById('statPending');
+    const inProgressEl = document.getElementById('statInProgress');
+    const completedEl = document.getElementById('statCompleted');
+
+    const total = this.requests.length;
+    const pending = this.requests.filter(r => r.status === 'pending').length;
+    const inProgress = this.requests.filter(r => ['pending_faculty', 'in_progress'].includes(r.status)).length;
+    const completed = this.requests.filter(r => r.status === 'completed').length;
+
+    if (totalEl) totalEl.textContent = total;
+    if (pendingEl) pendingEl.textContent = pending;
+    if (inProgressEl) inProgressEl.textContent = inProgress;
+    if (completedEl) completedEl.textContent = completed;
+  }
+
+  setupEventListeners() {
+    // Search input
+    const searchInput = document.getElementById('searchInput');
+    if (searchInput) {
+      searchInput.addEventListener('input', (e) => {
+        this.searchQuery = e.target.value;
+        this.filterRequests();
+      });
+    }
+
+    // Status filter
+    const statusFilter = document.getElementById('filterStatus');
+    if (statusFilter) {
+      statusFilter.addEventListener('change', (e) => {
+        this.filterStatus = e.target.value;
+        this.filterRequests();
+      });
+    }
+
+    // Document type filter
+    const typeFilter = document.getElementById('filterType');
+    if (typeFilter) {
+      typeFilter.addEventListener('change', (e) => {
+        this.filterType = e.target.value;
+        this.filterRequests();
+      });
+    }
+
+    // Logout button
+    const logoutBtn = document.getElementById('logoutBtn');
+    if (logoutBtn) {
+      logoutBtn.addEventListener('click', () => {
+        if (confirm('Are you sure you want to logout?')) {
+          Utils.clearCurrentUser();
+        }
+      });
+    }
+  }
+
+  showUpdateModal(requestId) {
+    const request = this.requests.find(r => r.id === requestId);
+    if (!request) return;
+
+    const facultyOptions = this.allFaculties.map(f => 
+      `<option value="${f.id}" ${request.facultyId === f.id ? 'selected' : ''}>${f.fullName || f.name}</option>`
+    ).join('');
+
+    const modalHTML = `
+      <div class="modal-overlay active" id="updateModal">
+        <div class="action-modal">
+          <div class="modal-header">
+            <h2>Update Request Status</h2>
+            <button class="close-modal" onclick="document.getElementById('updateModal').remove()">&times;</button>
+          </div>
+          <form id="updateForm">
+            <div class="form-group">
+              <label for="status">Status *</label>
+              <select id="status" name="status" required>
+                <option value="pending" ${request.status === 'pending' ? 'selected' : ''}>Pending</option>
+                <option value="pending_faculty" ${request.status === 'pending_faculty' ? 'selected' : ''}>Pending Faculty Approval</option>
+                <option value="in_progress" ${request.status === 'in_progress' ? 'selected' : ''}>In Progress</option>
+                <option value="approved" ${request.status === 'approved' ? 'selected' : ''}>Approved</option>
+                <option value="completed" ${request.status === 'completed' ? 'selected' : ''}>Completed</option>
+                <option value="declined" ${request.status === 'declined' ? 'selected' : ''}>Declined</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="facultyId">Assign to Faculty</label>
+              <select id="facultyId" name="facultyId">
+                <option value="">None</option>
+                ${facultyOptions}
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="priority">Priority</label>
+              <select id="priority" name="priority">
+                <option value="normal" ${request.priority === 'normal' ? 'selected' : ''}>Normal</option>
+                <option value="urgent" ${request.priority === 'urgent' ? 'selected' : ''}>Urgent</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="note">Add Note (Optional)</label>
+              <textarea id="note" name="note" placeholder="Add an internal note about this request..."></textarea>
+            </div>
+
+            <div class="modal-actions">
+              <button type="button" class="btn-secondary" onclick="document.getElementById('updateModal').remove()" style="flex: 0.5;">
+                Cancel
+              </button>
+              <button type="submit" class="btn-primary">
+                Update Request
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    `;
+
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+
+    // Close on overlay click
+    const modal = document.getElementById('updateModal');
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) {
+        modal.remove();
+      }
+    });
+
+    // Form submission
+    document.getElementById('updateForm').addEventListener('submit', (e) => {
+      e.preventDefault();
+      this.updateRequest(requestId);
+    });
+  }
+
+  async updateRequest(requestId) {
+    const form = document.getElementById('updateForm');
+    const formData = new FormData(form);
+
+    const status = formData.get('status');
+    const facultyId = formData.get('facultyId');
+    const priority = formData.get('priority');
+    const note = formData.get('note').trim();
+
+    try {
+      const payload = {
+        status,
+        priority,
+      };
+
+      if (facultyId) {
+        payload.facultyId = status === 'pending_faculty' ? parseInt(facultyId, 10) : null;
+      }
+
+      if (note) {
+        payload.adminNote = note;
+      }
+
+      await Utils.apiRequest(`/requests/${requestId}`, {
+        method: 'PATCH',
+        body: payload
+      });
+
+      Utils.showToast('Request updated successfully!', 'success');
+      document.getElementById('updateModal').remove();
+      await this.loadRequests();
+      this.updateStats();
+    } catch (error) {
+      Utils.showToast('Failed to update request', 'error');
+    }
+  }
+
+  viewRequest(requestId) {
+    const request = this.requests.find(r => r.id === requestId);
+    if (!request) return;
+
+    const statusClass = Utils.getStatusBadgeClass(request.status);
+    const statusText = Utils.getStatusText(request.status);
+
+    const notesHTML = request.adminNotes && request.adminNotes.length > 0
+      ? request.adminNotes.map(note => `
+          <div class="note-item">
+            <div class="note-header">
+              <span class="note-author">${note.adminName}</span>
+              <span class="note-time">${Utils.formatDate(note.timestamp)}</span>
+            </div>
+            <div class="note-content">${note.note}</div>
+          </div>
+        `).join('')
+      : '<p style="opacity: 0.6; padding: 1rem;">No notes yet</p>';
+
+    const approvalHTML = request.facultyApproval
+      ? `
+          <div style="padding: 0.75rem; background: ${request.facultyApproval.status === 'approved' ? '#D1FAE5' : '#FEE2E2'}; border-radius: 6px;">
+            <div style="font-weight: 600; margin-bottom: 0.25rem;">
+              ${request.facultyApproval.facultyName} - ${request.facultyApproval.status.toUpperCase()}
+            </div>
+            ${request.facultyApproval.comment ? `<div style="margin-top: 0.5rem;">${request.facultyApproval.comment}</div>` : ''}
+            <div style="font-size: 0.8rem; opacity: 0.6; margin-top: 0.25rem;">${Utils.formatDate(request.facultyApproval.timestamp)}</div>
+          </div>
+        `
+      : '<p style="opacity: 0.6;">No faculty approval yet</p>';
+
+    const assignedFaculty = request.facultyId 
+      ? this.allFaculties.find(f => f.id === request.facultyId)
+      : null;
+
+    const attachmentsHTML = request.attachments && request.attachments.length ? `
+      <div style="margin-bottom: 1.5rem;">
+        <h4 style=\"color: var(--recoletos-green); margin-bottom: 0.5rem;\">Attachments</h4>
+        <div style=\"display:grid; grid-template-columns: repeat(auto-fill, minmax(120px,1fr)); gap:0.75rem;\">
+          ${request.attachments.map(att => `
+            <a href="${att.url}" target="_blank" rel="noopener noreferrer" style="display:block;">
+              <img src="${att.url}" alt="${att.name}" style="width:100%; height:110px; object-fit:cover; border-radius:8px; border:1px solid var(--border-gray);" />
+            </a>
+          `).join('')}
+        </div>
+      </div>
+    ` : '';
+
+    const modalHTML = `
+      <div class="modal-overlay active" id="viewRequestModal">
+        <div class="action-modal">
+          <div class="modal-header">
+            <h2>Request Details</h2>
+            <button class="close-modal" onclick="document.getElementById('viewRequestModal').remove()">&times;</button>
+          </div>
+          <div>
+            <div style="margin-bottom: 1.5rem;">
+              <h3 style="color: var(--recoletos-green); margin-bottom: 0.5rem;">${request.documentType}</h3>
+              <div class="status-badge ${statusClass}" style="margin-bottom: 1rem;">${statusText}</div>
+            </div>
+            
+            <div style="margin-bottom: 1.5rem;">
+              <strong>Student:</strong> ${request.studentName} (${request.studentIdNumber})<br>
+              <strong>Submitted:</strong> ${Utils.formatDate(request.submittedAt)}<br>
+              <strong>Last Updated:</strong> ${Utils.formatDate(request.updatedAt)}<br>
+              <strong>Quantity:</strong> ${request.quantity}<br>
+              <strong>Purpose:</strong> ${request.purpose}<br>
+              <strong>Priority:</strong> <span class="priority-badge ${request.priority}">${request.priority.toUpperCase()}</span><br>
+            ${assignedFaculty ? `<strong>Assigned Faculty:</strong> ${assignedFaculty.fullName || assignedFaculty.name}<br>` : ''}
+              ${request.completedAt ? `<strong>Completed:</strong> ${Utils.formatDate(request.completedAt)}<br>` : ''}
+            </div>
+
+            <div style="margin-bottom: 1.5rem;">
+              <h4 style="color: var(--recoletos-green); margin-bottom: 0.5rem;">Admin Notes</h4>
+              <div class="notes-list">
+                ${notesHTML}
+              </div>
+            </div>
+
+            ${attachmentsHTML}
+
+            ${request.facultyApproval !== null || request.status === 'pending_faculty' ? `
+              <div style="margin-bottom: 1.5rem;">
+                <h4 style="color: var(--recoletos-green); margin-bottom: 0.5rem;">Faculty Approval</h4>
+                ${approvalHTML}
+              </div>
+            ` : ''}
+          </div>
+        </div>
+      </div>
+    `;
+
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+
+    const modal = document.getElementById('viewRequestModal');
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) {
+        modal.remove();
+      }
+    });
+  }
+}
+
+// Initialize portal when DOM is loaded
+let adminPortal;
+document.addEventListener('DOMContentLoaded', () => {
+  adminPortal = new AdminPortal();
 });
 
-// Load admin-specific data
-function loadAdminData() {
-    // Sample admin requests
-    adminRequests = [
-        {
-            id: 'REQ001',
-            studentId: '2023-001',
-            studentName: 'John Doe',
-            studentEmail: 'john.doe@student.edu',
-            documentType: 'TOR',
-            purpose: 'Employment Application',
-            status: 'Submitted',
-            dateSubmitted: '2024-01-15',
-            copies: 2,
-            deliveryMethod: 'Pickup',
-            notes: 'Urgent request for job application',
-            adminNotes: '',
-            attachments: [],
-            requiresClearance: false,
-            timeline: [
-                { status: 'Submitted', date: '2024-01-15', note: 'Request submitted by student', user: 'Student' },
-                { status: 'Processing', date: '2024-01-16', note: 'Request is being processed', user: 'Admin' }
-            ]
-        },
-        {
-            id: 'REQ002',
-            studentId: '2023-002',
-            studentName: 'Jane Smith',
-            studentEmail: 'jane.smith@student.edu',
-            documentType: 'GoodMoral',
-            purpose: 'Scholarship Application',
-            status: 'Processing',
-            dateSubmitted: '2024-01-14',
-            copies: 1,
-            deliveryMethod: 'Delivery',
-            notes: 'For scholarship application',
-            adminNotes: 'Documents prepared, awaiting final review',
-            attachments: [],
-            requiresClearance: false,
-            timeline: [
-                { status: 'Submitted', date: '2024-01-14', note: 'Request submitted by student', user: 'Student' },
-                { status: 'Processing', date: '2024-01-15', note: 'Request is being processed', user: 'Admin' },
-                { status: 'Processing', date: '2024-01-16', note: 'Documents are being prepared', user: 'Admin' }
-            ]
-        },
-        {
-            id: 'REQ003',
-            studentId: '2023-003',
-            studentName: 'Mike Johnson',
-            studentEmail: 'mike.johnson@student.edu',
-            documentType: 'COE',
-            purpose: 'Internship',
-            status: 'Completed',
-            dateSubmitted: '2024-01-10',
-            copies: 1,
-            deliveryMethod: 'Pickup',
-            notes: '',
-            adminNotes: 'Document completed and picked up',
-            attachments: [],
-            requiresClearance: false,
-            timeline: [
-                { status: 'Submitted', date: '2024-01-10', note: 'Request submitted by student', user: 'Student' },
-                { status: 'Processing', date: '2024-01-11', note: 'Request is being processed', user: 'Admin' },
-                { status: 'Ready for Release', date: '2024-01-12', note: 'Document is ready for pickup', user: 'Admin' },
-                { status: 'Completed', date: '2024-01-13', note: 'Document has been picked up', user: 'Student' }
-            ]
-        },
-        {
-            id: 'REQ004',
-            studentId: '2023-004',
-            studentName: 'Sarah Wilson',
-            studentEmail: 'sarah.wilson@student.edu',
-            documentType: 'TOR',
-            purpose: 'Graduate School Application',
-            status: 'Action Required',
-            dateSubmitted: '2024-01-17',
-            copies: 3,
-            deliveryMethod: 'Delivery',
-            notes: 'Need official transcripts for graduate school',
-            adminNotes: 'Additional verification required from academic department',
-            attachments: [],
-            requiresClearance: true,
-            timeline: [
-                { status: 'Submitted', date: '2024-01-17', note: 'Request submitted by student', user: 'Student' },
-                { status: 'Action Required', date: '2024-01-18', note: 'Additional verification required', user: 'Admin' }
-            ]
-        }
-    ];
-
-    adminNotifications = [
-        {
-            id: 1,
-            type: 'info',
-            title: 'New Request Submitted',
-            message: 'Sarah Wilson submitted a TOR request',
-            timestamp: '2024-01-17 14:30:00',
-            read: false,
-            requestId: 'REQ004'
-        },
-        {
-            id: 2,
-            type: 'warning',
-            title: 'Action Required',
-            message: 'Mike Johnson\'s COE request needs additional information',
-            timestamp: '2024-01-17 10:15:00',
-            read: false,
-            requestId: 'REQ003'
-        },
-        {
-            id: 3,
-            type: 'success',
-            title: 'Request Completed',
-            message: 'John Doe\'s TOR request has been completed',
-            timestamp: '2024-01-16 16:45:00',
-            read: true,
-            requestId: 'REQ001'
-        }
-    ];
-}
-
-// Try to fetch requests from backend API (if server running) and replace adminRequests
-async function fetchAdminRequests() {
-    try {
-        const res = await fetch('/api/requests');
-        if (res.ok) {
-            const body = await res.json();
-            // server returns { success: true, requests: [...] }
-            const data = Array.isArray(body) ? body : (body.requests || []);
-            // Map any missing fields to adminRequests format
-            adminRequests = data.map(r => Object.assign({
-                adminNotes: r.adminNotes || '',
-                attachments: r.attachments || [],
-                requiresClearance: !!r.requiresClearance,
-                timeline: r.timeline || [{ status: r.status, date: r.dateSubmitted, note: 'Submitted', user: 'Student' }]
-            }, r));
-            updateDashboard();
-            loadRequests();
-        }
-    } catch (e) {
-        console.warn('Could not fetch admin requests from server:', e.message);
-    }
-}
-
-// Helper to persist request updates to server
-async function persistRequestUpdate(requestId, payload) {
-    try {
-        const res = await fetch(`/api/requests/${requestId}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-        if (res.ok) {
-            const body = await res.json();
-            if (body && body.success && body.request) {
-                // Refresh local adminRequests from server
-                await fetchAdminRequests();
-                return true;
-            }
-        }
-    } catch (err) {
-        console.error('Failed to persist request update:', err);
-    }
-    return false;
-}
-
-// Setup event listeners
-function setupEventListeners() {
-    // Filter changes
-    const statusFilter = document.getElementById('statusFilter');
-    const typeFilter = document.getElementById('typeFilter');
-    const dateFilter = document.getElementById('dateFilter');
-    const searchFilter = document.getElementById('searchFilter');
-    
-    if (statusFilter) {
-        statusFilter.addEventListener('change', applyFilters);
-    }
-    if (typeFilter) {
-        typeFilter.addEventListener('change', applyFilters);
-    }
-    if (dateFilter) {
-        dateFilter.addEventListener('change', applyFilters);
-    }
-    if (searchFilter) {
-        searchFilter.addEventListener('input', applyFilters);
-    }
-}
-
-// Update dashboard statistics
-function updateDashboard() {
-    const totalRequests = adminRequests.length;
-    const pendingRequests = adminRequests.filter(r => r.status === 'Submitted').length;
-    const processingRequests = adminRequests.filter(r => r.status === 'Processing').length;
-    const completedToday = adminRequests.filter(r => 
-        r.status === 'Completed' && 
-        new Date(r.timeline.find(t => t.status === 'Completed')?.date).toDateString() === new Date().toDateString()
-    ).length;
-
-    document.getElementById('totalRequests').textContent = totalRequests;
-    document.getElementById('pendingRequests').textContent = pendingRequests;
-    document.getElementById('processingRequests').textContent = processingRequests;
-    document.getElementById('completedToday').textContent = completedToday;
-}
-
-// Load and display requests
-function loadRequests() {
-    const tableBody = document.getElementById('requestsTableBody');
-    if (!tableBody) return;
-
-    tableBody.innerHTML = adminRequests.map(request => `
-        <tr>
-            <td>${request.id}</td>
-            <td>
-                <div>
-                    <strong>${request.studentName}</strong><br>
-                    <small class="text-muted">${request.studentId}</small>
-                </div>
-            </td>
-            <td>${request.documentType}</td>
-            <td>
-                <span class="status-badge ${DocTracker.getStatusBadgeClass(request.status)}">
-                    ${request.status}
-                </span>
-            </td>
-            <td>${DocTracker.formatDate(request.dateSubmitted)}</td>
-            <td>
-                <div class="d-flex gap-1">
-                    <button class="btn btn-primary btn-sm" onclick="viewRequestDetails('${request.id}')">
-                        <i class="fas fa-eye"></i>
-                    </button>
-                    <button class="btn btn-success btn-sm" onclick="processRequest('${request.id}')">
-                        <i class="fas fa-cogs"></i>
-                    </button>
-                    <button class="btn btn-info btn-sm" onclick="addNotes('${request.id}')">
-                        <i class="fas fa-sticky-note"></i>
-                    </button>
-                </div>
-            </td>
-        </tr>
-    `).join('');
-}
-
-// Apply filters
-function applyFilters() {
-    const statusFilter = document.getElementById('statusFilter').value;
-    const typeFilter = document.getElementById('typeFilter').value;
-    const dateFilter = document.getElementById('dateFilter').value;
-    const searchFilter = (document.getElementById('searchFilter').value || '').toLowerCase();
-    
-    let filteredRequests = adminRequests;
-    
-    if (statusFilter) {
-        filteredRequests = filteredRequests.filter(r => r.status === statusFilter);
-    }
-    
-    if (typeFilter) {
-        filteredRequests = filteredRequests.filter(r => r.documentType === typeFilter);
-    }
-    
-    if (dateFilter) {
-        const now = new Date();
-        const filterDate = new Date();
-        
-        switch (dateFilter) {
-            case 'today':
-                filteredRequests = filteredRequests.filter(r => 
-                    new Date(r.dateSubmitted).toDateString() === now.toDateString()
-                );
-                break;
-            case 'week':
-                filterDate.setDate(now.getDate() - 7);
-                filteredRequests = filteredRequests.filter(r => 
-                    new Date(r.dateSubmitted) >= filterDate
-                );
-                break;
-            case 'month':
-                filterDate.setMonth(now.getMonth() - 1);
-                filteredRequests = filteredRequests.filter(r => 
-                    new Date(r.dateSubmitted) >= filterDate
-                );
-                break;
-        }
-    }
-    
-    if (searchFilter) {
-        filteredRequests = filteredRequests.filter(r => 
-            ((r.studentName || '').toLowerCase().includes(searchFilter)) ||
-            ((r.studentId || '').toLowerCase().includes(searchFilter))
-        );
-    }
-    
-    displayFilteredRequests(filteredRequests);
-}
-
-// Display filtered requests
-function displayFilteredRequests(requests) {
-    const tableBody = document.getElementById('requestsTableBody');
-    if (!tableBody) return;
-
-    tableBody.innerHTML = requests.map(request => `
-        <tr>
-            <td>${request.id}</td>
-            <td>
-                <div>
-                    <strong>${request.studentName}</strong><br>
-                    <small class="text-muted">${request.studentId}</small>
-                </div>
-            </td>
-            <td>${request.documentType}</td>
-            <td>
-                <span class="status-badge ${DocTracker.getStatusBadgeClass(request.status)}">
-                    ${request.status}
-                </span>
-            </td>
-            <td>${DocTracker.formatDate(request.dateSubmitted)}</td>
-            <td>
-                <div class="d-flex gap-1">
-                    <button class="btn btn-primary btn-sm" onclick="viewRequestDetails('${request.id}')">
-                        <i class="fas fa-eye"></i>
-                    </button>
-                    <button class="btn btn-success btn-sm" onclick="processRequest('${request.id}')">
-                        <i class="fas fa-cogs"></i>
-                    </button>
-                    <button class="btn btn-info btn-sm" onclick="addNotes('${request.id}')">
-                        <i class="fas fa-sticky-note"></i>
-                    </button>
-                </div>
-            </td>
-        </tr>
-    `).join('');
-}
-
-// Show all requests
-function showAllRequests() {
-    document.getElementById('statusFilter').value = '';
-    document.getElementById('typeFilter').value = '';
-    document.getElementById('dateFilter').value = '';
-    document.getElementById('searchFilter').value = '';
-    loadRequests();
-}
-
-// Show pending requests
-function showPendingRequests() {
-    document.getElementById('statusFilter').value = 'Submitted';
-    document.getElementById('typeFilter').value = '';
-    document.getElementById('dateFilter').value = '';
-    document.getElementById('searchFilter').value = '';
-    applyFilters();
-}
-
-// View request details
-function viewRequestDetails(requestId) {
-    console.log('[admin] viewRequestDetails', requestId);
-    const request = adminRequests.find(r => r.id === requestId);
-    if (!request) return;
-
-    const modal = document.getElementById('processModal');
-    const details = document.getElementById('processDetails');
-    
-    // Helper: convert server path to client URL
-    function getAttachmentUrl(p) {
-        if (!p) return '';
-        const s = String(p);
-        if (s.startsWith('blob:') || s.startsWith('data:') || s.startsWith('http') || s.startsWith('/')) return s;
-        // Normalize Windows backslashes to forward slashes
-        let norm = s.split('\\').join('/');
-        // If the server returned an absolute filesystem path, extract the uploads portion
-        const idx = norm.indexOf('/uploads');
-        if (idx !== -1) return norm.slice(idx);
-        const idx2 = norm.indexOf('uploads/');
-        if (idx2 !== -1) return '/' + norm.slice(idx2);
-        // Fallback: return /uploads/<basename>
-        return '/uploads/' + norm.split('/').pop();
-    }
-
-    function renderAttachmentsHTML(attachments) {
-        if (!attachments || !attachments.length) return '<p class="text-muted">No attachments</p>';
-        return attachments.map(a => {
-            const url = getAttachmentUrl(a.path || a);
-            const name = a.originalName || (typeof a === 'string' ? a.split('/').pop() : 'attachment');
-            const ext = (name.split('.').pop() || '').toLowerCase();
-            const imageExts = ['jpg','jpeg','png','gif','webp'];
-            if (imageExts.includes(ext)) {
-                return `<div style="margin-bottom:8px"><a href="${url}" target="_blank"><img src="${url}" alt="${name}" style="max-width:240px;max-height:240px;border:1px solid #e5e7eb;padding:4px;border-radius:4px;display:block"></a><div><a href="${url}" target="_blank">${name}</a></div></div>`;
-            }
-            return `<div style="margin-bottom:6px"><a href="${url}" target="_blank">${name}</a></div>`;
-        }).join('');
-    }
-    
-    details.innerHTML = `
-        <div class="row">
-            <div class="col-md-6">
-                <h5>Student Information</h5>
-                <p><strong>Name:</strong> ${request.studentName}</p>
-                <p><strong>Student ID:</strong> ${request.studentId}</p>
-                <p><strong>Email:</strong> ${request.studentEmail}</p>
-                
-                <h5 class="mt-3">Request Details</h5>
-                <p><strong>Request ID:</strong> ${request.id}</p>
-                <p><strong>Document Type:</strong> ${request.documentType}</p>
-                <p><strong>Purpose:</strong> ${request.purpose}</p>
-                <p><strong>Copies:</strong> ${request.copies}</p>
-                <p><strong>Delivery Method:</strong> ${request.deliveryMethod}</p>
-                ${request.notes ? `<p><strong>Student Notes:</strong> ${request.notes}</p>` : ''}
-                ${request.adminNotes ? `<p><strong>Admin Notes:</strong> ${request.adminNotes}</p>` : ''}
-                <h5 class="mt-3">Attachments</h5>
-                ${renderAttachmentsHTML(request.attachments || [])}
-            </div>
-            <div class="col-md-6">
-                <h5>Status Information</h5>
-                <p><strong>Current Status:</strong> 
-                    <span class="status-badge ${DocTracker.getStatusBadgeClass(request.status)}">${request.status}</span>
-                </p>
-                <p><strong>Date Submitted:</strong> ${DocTracker.formatDateTime(request.dateSubmitted)}</p>
-                
-                <h5 class="mt-3">Timeline</h5>
-                <div class="timeline">
-                    ${request.timeline.map(step => `
-                        <div class="timeline-item">
-                            <div class="timeline-marker"></div>
-                            <div class="timeline-content">
-                                <h6>${step.status}</h6>
-                                <p class="text-muted">${DocTracker.formatDateTime(step.date)} by ${step.user}</p>
-                                <p>${step.note}</p>
-                            </div>
-                        </div>
-                    `).join('')}
-                </div>
-            </div>
-        </div>
-        
-        <div class="mt-3">
-            <h5>Actions</h5>
-            <div class="d-flex gap-2">
-                ${!request.requiresClearance ? `
-                    <button class="btn btn-outline" onclick="sendForFacultyClearance('${request.id}')">
-                        <i class="fas fa-university"></i> FOR FACULTY VALIDATION
-                    </button>
-                ` : ''}
-                ${request.status === 'Submitted' ? `
-                    <button class="btn btn-success" onclick="updateRequestStatus('${request.id}', 'Processing')">
-                        <i class="fas fa-play"></i> Start Processing
-                    </button>
-                ` : ''}
-                ${request.status === 'Processing' ? `
-                    <button class="btn btn-info" onclick="updateRequestStatus('${request.id}', 'Ready for Release')">
-                        <i class="fas fa-check"></i> Ready for Release
-                    </button>
-                ` : ''}
-                ${request.status === 'Ready for Release' ? `
-                    <button class="btn btn-success" onclick="updateRequestStatus('${request.id}', 'Completed')">
-                        <i class="fas fa-check-circle"></i> Mark as Completed
-                    </button>
-                ` : ''}
-                ${request.status !== 'Completed' && request.status !== 'Declined' ? `
-                    <button class="btn btn-warning" onclick="updateRequestStatus('${request.id}', 'Action Required')">
-                        <i class="fas fa-exclamation-triangle"></i> Action Required
-                    </button>
-                    <button class="btn btn-danger" onclick="declineRequest('${request.id}')">
-                        <i class="fas fa-times"></i> Decline
-                    </button>
-                ` : ''}
-            </div>
-            <div class="mt-3">
-                <h6>Send Feedback / Message to Student</h6>
-                <textarea id="adminFeedbackText" class="form-control" rows="3" placeholder="Write feedback or instructions to the student..."></textarea>
-                <div style="margin-top:8px">
-                    <button class="btn btn-primary" onclick="sendFeedback('${request.id}')"><i class="fas fa-paper-plane"></i> Send Feedback</button>
-                </div>
-            </div>
-        </div>
-    `;
-    
-    DocTracker.openModal('processModal');
-}
-
-// Process request
-function processRequest(requestId) {
-    console.log('[admin] processRequest', requestId);
-    viewRequestDetails(requestId);
-}
-
-// Add notes
-function addNotes(requestId) {
-    console.log('[admin] addNotes', requestId);
-    const request = adminRequests.find(r => r.id === requestId);
-    if (!request) return;
-
-    DocTracker.openModal('notesModal');
-    
-    document.getElementById('notesForm').onsubmit = function(e) {
-        e.preventDefault();
-        const noteText = document.getElementById('noteText').value;
-            if (noteText.trim()) {
-                request.adminNotes = noteText;
-                request.timeline.push({
-                    status: request.status,
-                    date: new Date().toISOString(),
-                    note: `Admin note: ${noteText}`,
-                    user: 'Admin'
-                });
-                
-                // Persist to server
-                persistRequestUpdate(requestId, { adminNotes: noteText, timelineEntry: { status: request.status, date: new Date().toISOString(), note: `Admin note: ${noteText}`, user: 'Admin' } })
-                    .then(success => {
-                        if (success) {
-                            DocTracker.showNotification('success', 'Note added successfully!');
-                        } else {
-                            DocTracker.showNotification('warning', 'Note saved locally but failed to sync with server.');
-                        }
-                        DocTracker.closeModal();
-                        document.getElementById('noteText').value = '';
-                        loadRequests();
-                    });
-            }
-    };
-}
-
-// Update request status
-function updateRequestStatus(requestId, newStatus) {
-    console.log('[admin] updateRequestStatus', requestId, newStatus);
-    const request = adminRequests.find(r => r.id === requestId);
-    if (!request) return;
-
-    const oldStatus = request.status;
-    const timelineEntry = {
-        status: newStatus,
-        date: new Date().toISOString(),
-        note: `Status changed from ${oldStatus} to ${newStatus}`,
-        user: 'Admin'
-    };
-
-    // Optimistically update locally
-    request.status = newStatus;
-    request.timeline.push(timelineEntry);
-
-    // Persist update to server
-    persistRequestUpdate(requestId, { status: newStatus, timelineEntry })
-        .then(success => {
-            if (success) {
-                DocTracker.showNotification('success', `Request status updated to ${newStatus}!`);
-            } else {
-                DocTracker.showNotification('warning', `Status updated locally to ${newStatus} (server sync failed).`);
-            }
-            updateDashboard();
-            loadRequests();
-            loadNotifications();
-            DocTracker.closeModal();
-        });
-}
-
-// Decline request
-function declineRequest(requestId) {
-    console.log('[admin] declineRequest', requestId);
-    const reason = prompt('Please provide a reason for declining this request:');
-    if (reason && reason.trim()) {
-        const request = adminRequests.find(r => r.id === requestId);
-        if (request) {
-            const timelineEntry = { status: 'Declined', date: new Date().toISOString(), note: `Request declined: ${reason}`, user: 'Admin' };
-            // Optimistic update
-            request.status = 'Declined';
-            request.adminNotes = `Request declined: ${reason}`;
-            request.timeline.push(timelineEntry);
-            // Persist
-            persistRequestUpdate(requestId, { status: 'Declined', adminNotes: `Request declined: ${reason}`, timelineEntry })
-                .then(success => {
-                    if (success) {
-                        DocTracker.showNotification('success', 'Request has been declined!');
-                    } else {
-                        DocTracker.showNotification('warning', 'Request declined locally (server sync failed).');
-                    }
-                    updateDashboard();
-                    loadRequests();
-                    DocTracker.closeModal();
-                });
-        }
-    }
-}
-
-// Send feedback to student (adds timeline entry + adminNotes and persists)
-function sendFeedback(requestId) {
-    const request = adminRequests.find(r => r.id === requestId);
-    if (!request) return;
-    const textarea = document.getElementById('adminFeedbackText');
-    if (!textarea) return;
-    const text = (textarea.value || '').trim();
-    if (!text) { alert('Please enter feedback before sending.'); return; }
-
-    const timelineEntry = { status: request.status, date: new Date().toISOString(), note: `Feedback: ${text}`, user: 'Admin' };
-
-    // Optimistic local update
-    request.adminNotes = (request.adminNotes ? request.adminNotes + '\n' : '') + text;
-    request.timeline.push(timelineEntry);
-
-    persistRequestUpdate(requestId, { adminNotes: request.adminNotes, timelineEntry })
-        .then(success => {
-            if (success) {
-                DocTracker.showNotification('success', 'Feedback sent to student.');
-            } else {
-                DocTracker.showNotification('warning', 'Feedback saved locally but failed to sync with server.');
-            }
-            // Add an admin-side notification for reference
-            adminNotifications.unshift({ id: adminNotifications.length + 1, type: 'info', title: 'Feedback sent', message: `Feedback sent for ${request.studentName}`, timestamp: new Date().toISOString(), read: false, requestId });
-            loadNotifications();
-            document.getElementById('adminFeedbackText').value = '';
-            loadRequests();
-            DocTracker.closeModal();
-        });
-}
-
-// Send request to faculty for clearance
-function sendForFacultyClearance(requestId) {
-    console.log('[admin] sendForFacultyClearance', requestId);
-    const request = adminRequests.find(r => r.id === requestId);
-    if (!request) return;
-
-    const timelineEntry = { status: 'Action Required', date: new Date().toISOString(), note: 'Sent to faculty for clearance', user: 'Admin' };
-    // Optimistic update
-    request.status = 'Action Required';
-    request.requiresClearance = true;
-    request.timeline.push(timelineEntry);
-
-    persistRequestUpdate(requestId, { status: 'Action Required', requiresClearance: true, timelineEntry })
-        .then(success => {
-            if (success) {
-                adminNotifications.unshift({
-                    id: adminNotifications.length + 1,
-                    type: 'warning',
-                    title: 'Faculty Clearance Requested',
-                    message: `${request.studentName}'s ${request.documentType} needs faculty clearance`,
-                    timestamp: new Date().toISOString(),
-                    read: false,
-                    requestId: requestId
-                });
-                DocTracker.showNotification('success', 'Request sent to faculty for clearance');
-            } else {
-                DocTracker.showNotification('warning', 'Request marked for faculty clearance locally (server sync failed).');
-            }
-            updateDashboard();
-            loadRequests();
-            loadNotifications();
-            DocTracker.closeModal();
-        });
-}
-
-// Load notifications
-function loadNotifications() {
-    const notificationsList = document.getElementById('notificationsList');
-    if (!notificationsList) return;
-
-    notificationsList.innerHTML = adminNotifications.slice(0, 5).map(notification => `
-        <div class="notification notification-${notification.type}">
-            <div class="d-flex justify-content-between align-items-start">
-                <div>
-                    <h6>${notification.title}</h6>
-                    <p class="mb-1">${notification.message}</p>
-                    <small class="text-muted">${DocTracker.formatDateTime(notification.timestamp)}</small>
-                </div>
-                <button class="btn btn-sm btn-outline" onclick="markNotificationRead(${notification.id})">
-                    <i class="fas fa-check"></i>
-                </button>
-            </div>
-        </div>
-    `).join('');
-}
-
-// Mark notification as read
-function markNotificationRead(notificationId) {
-    const notification = adminNotifications.find(n => n.id === notificationId);
-    if (notification) {
-        notification.read = true;
-        loadNotifications();
-    }
-}
-
-// Refresh data
-function refreshData() {
-    DocTracker.showNotification('info', 'Refreshing data...');
-    setTimeout(() => {
-        loadRequests();
-        loadNotifications();
-        updateDashboard();
-        DocTracker.showNotification('success', 'Data refreshed successfully!');
-    }, 1000);
-}
-
-// Logout function
-function logout() {
-    localStorage.removeItem('currentUser');
-    sessionStorage.removeItem('currentUser');
-    sessionStorage.removeItem('roleVerified'); // Clear admin role verification
-    window.location.href = '/'; // Go to root home page
-}
-
-// Add timeline styles (same as student portal)
-const timelineStyles = `
-<style>
-.timeline {
-    position: relative;
-    padding-left: 30px;
-}
-
-.timeline-item {
-    position: relative;
-    margin-bottom: 20px;
-}
-
-.timeline-marker {
-    position: absolute;
-    left: -25px;
-    top: 5px;
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    background: var(--usjr-green);
-    border: 2px solid white;
-    box-shadow: 0 0 0 2px var(--usjr-green);
-}
-
-.timeline-item:not(:last-child) .timeline-marker::after {
-    content: '';
-    position: absolute;
-    top: 15px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 2px;
-    height: 30px;
-    background: #dee2e6;
-}
-
-.timeline-content h6 {
-    margin-bottom: 5px;
-    color: #333;
-}
-
-.timeline-content p {
-    margin-bottom: 5px;
-}
-</style>
-`;
-
-// Add timeline styles to head
-document.head.insertAdjacentHTML('beforeend', timelineStyles);
-
-// Make functions globally available
-window.logout = logout;
-window.viewRequestDetails = viewRequestDetails;
-window.processRequest = processRequest;
-window.addNotes = addNotes;
-window.updateRequestStatus = updateRequestStatus;
-window.declineRequest = declineRequest;
-window.sendForFacultyClearance = sendForFacultyClearance;
-window.markNotificationRead = markNotificationRead;
-window.refreshData = refreshData;
-window.showAllRequests = showAllRequests;
-window.showPendingRequests = showPendingRequests;
-window.applyFilters = applyFilters;
-window.loadRequests = loadRequests;
-window.loadNotifications = loadNotifications;
-window.fetchAdminRequests = fetchAdminRequests;
-window.persistRequestUpdate = persistRequestUpdate;
