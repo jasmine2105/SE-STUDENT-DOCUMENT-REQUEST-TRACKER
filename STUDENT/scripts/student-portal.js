@@ -1,1087 +1,955 @@
+console.log('🎯 student-portal.js file loaded successfully!');
+
 // Student Portal JavaScript
-
-let studentRequests = [];
-let currentStudent = null;
-
-// Button loading helper: adds/removes spinner and disables button
-function setButtonLoading(btn, isLoading, text) {
-    if (!btn) return;
-    if (isLoading) {
-        btn.dataset.origHtml = btn.innerHTML;
-        btn.disabled = true;
-        // show spinner (spinner styled in student CSS)
-        btn.innerHTML = `${text || 'Processing...'} <span class="spinner" aria-hidden="true"></span>`;
-        btn.classList.add('btn-disabled');
-    } else {
-        btn.disabled = false;
-        if (btn.dataset.origHtml) {
-            btn.innerHTML = btn.dataset.origHtml;
-            delete btn.dataset.origHtml;
-        }
-        btn.classList.remove('btn-disabled');
-    }
-}
-
-// Initialize student portal
-document.addEventListener('DOMContentLoaded', function() {
-    // Check authentication first
-    if (typeof Auth !== 'undefined' && Auth.isAuthenticated && !Auth.isAuthenticated()) {
-        window.location.href = '../auth/student-login.html';
-        return;
-    }
+class StudentPortal {
+  constructor() {
+    this.currentUser = Utils.getCurrentUser();
+    this.requests = [];
+    this.selectedFiles = [];
+    this.notifications = [];
+    this.currentView = 'dashboard';
+    this.departments = [];
+    this.defaultDepartment = 'School of Computer Studies (SCS)';
+    this.documentTypes = {};
     
-    // Get current user from Auth system or create mock for testing
-    if (typeof Auth !== 'undefined' && Auth.getCurrentUser) {
-        currentStudent = Auth.getCurrentUser();
-    } else {
-        // Fallback for testing
-        console.log('Auth system not fully loaded, using mock student data');
-        currentStudent = {
-            studentId: 'TEST123',
-            firstName: 'Test',
-            lastName: 'Student', 
-            email: 'test@student.edu'
-        };
+    window.studentPortal = this;
+    this.init();
+  }
+
+  get studentDepartmentName() {
+    return this.currentUser.department || this.currentUser.departmentName || this.defaultDepartment;
+  }
+
+  get studentDepartmentId() {
+    if (this.currentUser.departmentId) {
+      return Number(this.currentUser.departmentId);
     }
-    
-    // Update welcome message
-    updateWelcomeMessage();
-    // Prefill the student email in the form (read-only) so it appears below Last Name
-    const emailInput = document.getElementById('studentEmail');
-    if (emailInput && currentStudent && currentStudent.email) {
-        emailInput.value = currentStudent.email;
-    }
-    loadStudentData();
-    updateDashboard();
-    loadRequests();
-    
-    // Attempt to refresh from server
-    fetchServerRequests().then(updated => {
-        if (updated) {
-            updateDashboard();
-            loadRequests();
-        }
+    const match = this.departments.find((dept) => {
+      if (!dept) return false;
+      if (dept.id === this.currentUser.departmentId) return true;
+      return dept.name === this.studentDepartmentName || dept.code === this.studentDepartmentName;
     });
+    return match ? match.id : (this.departments[0]?.id || null);
+  }
+
+  async init() {
+    console.log('🚀 StudentPortal init started');
     
-    // Set up event listeners
-    setupEventListeners();
-    // Init notification UI
-    initNotificationUI();
-});
+    if (!Utils.requireAuth()) return;
+    
+    if (this.currentUser.role !== 'student') {
+      Utils.showToast('Access denied. Student portal only.', 'error');
+      Utils.clearCurrentUser();
+      return;
+    }
 
-// --- Notifications (in-app) ---
-function notificationsStorageKey() {
-    return `notifications_${currentStudent ? currentStudent.studentId : 'guest'}`;
-}
-
-function loadNotifications() {
     try {
-        const raw = localStorage.getItem(notificationsStorageKey());
-        return raw ? JSON.parse(raw) : [];
-    } catch (e) { return []; }
-}
+      await this.loadDepartmentsFromApi();
+      this.loadUserInfo();
+      this.setupEventListeners();
+      
+      try {
+        console.log('📥 Loading requests...');
+        await this.loadRequests();
+        console.log('✅ Requests loaded successfully');
+      } catch (error) {
+        console.error('❌ Failed to load requests:', error);
+        Utils.showToast('Failed to load requests, but you can still submit new ones', 'warning');
+      }
+      
+      console.log('⏭️ Skipping notifications for now (will be fixed)');
+      this.notifications = [];
+      
+      this.updateStats();
+      this.renderDashboard();
+      this.renderHistory();
+      this.renderNotifications();
+      
+      console.log('✅ StudentPortal initialized successfully');
+    } catch (error) {
+      console.error('❌ Failed to initialize StudentPortal:', error);
+      Utils.showToast('Failed to initialize portal. Some features may not work.', 'error');
+    }
+  }
 
-function saveNotifications(list) {
-    localStorage.setItem(notificationsStorageKey(), JSON.stringify(list || []));
-}
+  async loadDepartmentsFromApi() {
+    if (this.departments.length > 0) return;
+    try {
+      const data = await Utils.apiRequest('/departments');
+      if (Array.isArray(data) && data.length) {
+        this.departments = data;
+      }
+    } catch (error) {
+      console.warn('Failed to load departments from API', error);
+      this.departments = (window.RecoletosConfig && window.RecoletosConfig.departments) || [];
+    }
+  }
 
-function initNotificationUI() {
-    // Build notification bell and dropdown and insert after the logout button (so it's to the right of 'Logout')
-    const navButtons = document.querySelector('.nav-buttons');
-    if (!navButtons) return;
-    if (document.getElementById('notifBtn')) return;
-
-    const wrapper = document.createElement('div');
-    wrapper.className = 'notif-wrapper';
-    wrapper.style.marginLeft = '6px';
-
-    const btn = document.createElement('button');
-    btn.id = 'notifBtn';
-    btn.className = 'notif-bell';
-    btn.setAttribute('aria-haspopup', 'true');
-    btn.setAttribute('aria-expanded', 'false');
-    btn.innerHTML = `<i class="fas fa-bell"></i><span id="notifCount" class="notif-badge" style="margin-left:6px"></span>`;
-    wrapper.appendChild(btn);
-
-    const dropdown = document.createElement('div');
-    dropdown.className = 'notif-dropdown';
-    dropdown.id = 'notifDropdown';
-    dropdown.innerHTML = `<div class="notif-list" id="notifList" style="padding:6px"></div><div style="padding:8px;border-top:1px solid #f1f1f1;text-align:right"><button id="markAllRead" class="btn btn-outline">Mark all read</button></div>`;
-    wrapper.appendChild(dropdown);
-
-    // Place wrapper after logout button so it's to the right
-    const logoutBtn = document.getElementById('logoutBtn');
-    if (logoutBtn && logoutBtn.parentNode) {
-        logoutBtn.parentNode.insertBefore(wrapper, logoutBtn.nextSibling);
-    } else {
-        navButtons.appendChild(wrapper);
+  async loadDocumentTypes(departmentCode) {
+    if (this.documentTypes[departmentCode]) {
+      return this.documentTypes[departmentCode];
     }
 
-    // Open on hover/focus, do not persist on click
-    let hoverTimeout = null;
-    wrapper.addEventListener('mouseenter', () => { clearTimeout(hoverTimeout); dropdown.style.display = 'block'; btn.setAttribute('aria-expanded', 'true'); renderNotificationList(); });
-    wrapper.addEventListener('mouseleave', () => { hoverTimeout = setTimeout(() => { dropdown.style.display = 'none'; btn.setAttribute('aria-expanded', 'false'); }, 180); });
-    btn.addEventListener('focus', () => { clearTimeout(hoverTimeout); dropdown.style.display = 'block'; btn.setAttribute('aria-expanded', 'true'); renderNotificationList(); });
-    btn.addEventListener('blur', () => { hoverTimeout = setTimeout(() => { dropdown.style.display = 'none'; btn.setAttribute('aria-expanded', 'false'); }, 180); });
-
-    // Mark all read button
-    const markAll = dropdown.querySelector('#markAllRead');
-    if (markAll) markAll.addEventListener('click', (ev) => { ev.stopPropagation(); const lst = loadNotifications().map(n => ({ ...n, read: true })); saveNotifications(lst); renderNotificationBadge(); renderNotificationList(); });
-
-    renderNotificationBadge();
-}
-
-function renderNotificationBadge() {
-    const list = loadNotifications();
-    const unread = list.filter(n => !n.read).length;
-    const badge = document.getElementById('notifCount');
-    if (badge) {
-        badge.textContent = unread ? unread : '';
-        if (unread) badge.classList.add('unread'); else badge.classList.remove('unread');
+    try {
+      const data = await Utils.apiRequest(`/requests/document-types/${departmentCode}`);
+      this.documentTypes[departmentCode] = data;
+      return data;
+    } catch (error) {
+      console.error('Failed to load document types:', error);
+      Utils.showToast('Failed to load document types', 'error');
+      return [];
     }
-}
+  }
 
-function renderNotificationList() {
-    const container = document.getElementById('notifList');
+  getDepartmentCode(departmentId) {
+    const department = this.departments.find(dept => dept.id == departmentId);
+    return department ? department.code : null;
+  }
+
+  loadUserInfo() {
+    const userNameEl = document.getElementById('userName');
+    const userInfoEl = document.getElementById('userInfo');
+    const sidebarInfo = document.getElementById('sidebarUserInfo');
+
+    const displayName = this.currentUser.fullName || this.currentUser.name || 'Student';
+    if (userNameEl) userNameEl.textContent = displayName;
+    const infoText = `${this.currentUser.course || ''} • ${this.currentUser.yearLevel || ''}`.trim();
+    if (userInfoEl) userInfoEl.textContent = infoText;
+    if (sidebarInfo) sidebarInfo.textContent = this.studentDepartmentName;
+
+    const departmentFilter = document.getElementById('filterDepartment');
+    if (departmentFilter) {
+      departmentFilter.innerHTML = ['<option value="all">All Departments</option>'].concat(
+        this.departments.map((dept) => `<option value="${dept.id}">${dept.name}</option>`)
+      ).join('');
+    }
+  }
+
+  async loadRequests() {
+    try {
+      const allRequests = await Utils.apiRequest('/requests');
+      this.requests = allRequests.filter((r) => r.studentId === this.currentUser.id);
+      this.updateStats();
+      this.renderDashboard();
+      this.renderHistory();
+    } catch (error) {
+      console.error('Failed to load requests:', error);
+      Utils.showToast('Failed to load requests', 'error');
+      throw error;
+    }
+  }
+
+  updateStats() {
+    const totalEl = document.getElementById('statTotal');
+    const pendingEl = document.getElementById('statPending');
+    const completedEl = document.getElementById('statCompleted');
+
+    const total = this.requests.length;
+    const pending = this.requests.filter((r) => ['pending', 'pending_faculty', 'in_progress'].includes(r.status)).length;
+    const completed = this.requests.filter((r) => r.status === 'completed').length;
+
+    if (totalEl) totalEl.textContent = total;
+    if (pendingEl) pendingEl.textContent = pending;
+    if (completedEl) completedEl.textContent = completed;
+  }
+
+  renderDashboard() {
+    // Render My Documents first for better UX
+    this.renderMyDocuments();
+
+    const container = document.getElementById('recentRequests');
     if (!container) return;
-    const list = loadNotifications();
-    if (!list.length) { container.innerHTML = '<div style="padding:12px;color:#666">No notifications</div>'; return; }
 
-    container.innerHTML = list.map(n => `
-        <div class="notif-card ${n.read ? 'read' : 'unread'}" data-id="${n.id}" data-request-id="${n.requestId}">
-            <div class="meta">
-                <h6>${escapeHtml(n.title || 'Update')}</h6>
-                <p>${escapeHtml((n.message || '').slice(0, 160))}${(n.message||'').length>160? '...':''}</p>
-                <small>${new Date(n.date).toLocaleString()}</small>
-            </div>
-            <div class="actions">
-                <button class="btn btn-primary btn-sm view-notif" data-id="${n.id}" data-request-id="${n.requestId}">View</button>
-            </div>
+    // Recent requests (show empty state if none)
+    if (!this.requests.length) {
+      container.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-state-icon">📄</div>
+          <h3>No recent requests</h3>
+          <p>Submit a request to see it here.</p>
         </div>
-    `).join('');
-
-    // click handlers for each View button
-    container.querySelectorAll('.view-notif').forEach(btn => {
-        btn.addEventListener('click', (ev) => {
-            ev.stopPropagation();
-            const id = btn.dataset.id; const reqId = btn.dataset.requestId;
-            // mark notification read
-            const updated = loadNotifications().map(n => n.id === id ? { ...n, read: true } : n);
-            saveNotifications(updated);
-            renderNotificationBadge();
-            renderNotificationList();
-            // Open the full Notification Center and focus the notification
-            openNotificationCenter(id);
-            const dd = document.getElementById('notifDropdown'); if (dd) dd.style.display = 'none';
-        });
-    });
-}
-
-// Open a large notification center modal; if highlightId provided, scroll to it
-function openNotificationCenter(highlightId) {
-    const modal = document.getElementById('notifCenterModal');
-    const listEl = document.getElementById('notifCenterList');
-    if (!modal || !listEl) return;
-    const items = loadNotifications();
-    if (!items.length) {
-        listEl.innerHTML = '<div class="text-muted">No notifications</div>';
+      `;
     } else {
-        listEl.innerHTML = items.map(n => `
-            <div class="notif-center-item" id="nc_${n.id}">
-                <div class="title">${escapeHtml(n.title || 'Update')}</div>
-                <div class="message">${escapeHtml(n.message || '')}</div>
-                <div class="meta">${new Date(n.date).toLocaleString()} ${n.requestId? ' — Request: ' + n.requestId : ''}</div>
-                <div style="margin-top:8px;text-align:right"><button class="btn btn-primary btn-sm open-request" data-request-id="${n.requestId}">Open Request</button></div>
-            </div>
-        `).join('');
+      const recent = [...this.requests]
+        .sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt))
+        .slice(0, 5)
+        .map((request) => this.buildRequestRow(request, true))
+        .join('');
+      container.innerHTML = `<div class="request-list">${recent}</div>`;
+    }
+  }
 
-        // wire open-request buttons
-        listEl.querySelectorAll('.open-request').forEach(b => {
-            b.addEventListener('click', (ev) => {
-                const rid = b.dataset.requestId;
-                if (rid) {
-                    viewRequestDetails(rid);
-                    closeNotificationCenter();
-                }
-            });
-        });
+  renderMyDocuments() {
+    const container = document.getElementById('myDocuments');
+    if (!container) return;
+    const filterEl = document.getElementById('myDocsFilter');
+    const searchEl = document.getElementById('myDocsSearch');
+    const selectedStatus = filterEl ? filterEl.value : 'all';
+    const searchTerm = searchEl ? (searchEl.value || '').toLowerCase().trim() : '';
+
+    let filtered = [...this.requests];
+    if (selectedStatus && selectedStatus !== 'all') {
+      filtered = filtered.filter((r) => r.status === selectedStatus);
+    }
+    if (searchTerm) {
+      filtered = filtered.filter((r) => {
+        const doc = (r.documentType || r.document_value || '') + ' ' + (r.department || '');
+        return doc.toLowerCase().includes(searchTerm);
+      });
     }
 
-    modal.style.display = 'block';
-    modal.setAttribute('aria-hidden','false');
-    // scroll to highlight
-    if (highlightId) {
-        const el = document.getElementById('nc_' + highlightId);
-        if (el) { el.scrollIntoView({behavior:'smooth', block:'center'}); el.style.boxShadow = '0 0 0 4px rgba(47,133,90,0.08)'; setTimeout(() => { el.style.boxShadow = ''; }, 2500); }
-    }
-}
-
-function closeNotificationCenter() {
-    const modal = document.getElementById('notifCenterModal');
-    if (!modal) return;
-    modal.style.display = 'none';
-    modal.setAttribute('aria-hidden','true');
-}
-
-// Small HTML escape utility for safe insertion
-function escapeHtml(str) {
-    if (!str) return '';
-    return String(str).replace(/[&<>"']/g, function (s) { return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"})[s]; });
-}
-
-function generateNotifId() {
-    return `N${Date.now().toString(36)}${Math.random().toString(36).slice(2,6)}`;
-}
-
-function createNotification(requestId, title, message, date) {
-    const list = loadNotifications();
-    const n = { id: generateNotifId(), requestId: requestId, title: title || 'Update', message: message || '', date: date || new Date().toISOString(), read: false };
-    list.unshift(n);
-    // keep max 200 notifications
-    saveNotifications(list.slice(0, 200));
-    renderNotificationBadge();
-}
-
-// Update welcome message
-function updateWelcomeMessage() {
-    const welcomeElement = document.getElementById('welcomeMessage');
-    if (welcomeElement && currentStudent) {
-        // Per request: show only the student's name (no 'Welcome')
-        welcomeElement.textContent = `${currentStudent.firstName} ${currentStudent.lastName}`;
-    }
-}
-
-// Load student-specific data
-function loadStudentData() {
-    // Load requests from localStorage for the current user
-    const savedRequests = localStorage.getItem(`requests_${currentStudent.studentId}`);
-    if (savedRequests) {
-        studentRequests = JSON.parse(savedRequests);
-    } else {
-        // Sample requests for new users
-        studentRequests = [];
-    }
-}
-
-// Setup event listeners
-function setupEventListeners() {
-    // Delivery method removed from UI — no handler required
-
-    // Document type change - show/hide extra fields
-    const documentType = document.getElementById('documentType');
-    if (documentType) {
-        documentType.addEventListener('change', function() {
-            const otherField = document.getElementById('otherDocumentType');
-            const termField = document.getElementById('termCoverage');
-            const selected = this.value;
-            // Show 'other' input when Other selected
-            if (selected === 'Other') {
-                otherField.classList.remove('d-none');
-                otherField.required = true;
-            } else {
-                otherField.classList.add('d-none');
-                otherField.required = false;
-            }
-
-            // For TOR and COE, show termCoverage input
-            if (selected === 'TOR' || selected === 'COE') {
-                termField.parentElement.classList.remove('d-none');
-            } else {
-                // Keep term coverage visible but optional for others
-                termField.parentElement.classList.remove('d-none');
-            }
-        });
+    if (!filtered.length) {
+      container.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-state-icon">📁</div>
+          <h3>No documents match your criteria</h3>
+          <p>Try changing the filter or search term.</p>
+        </div>
+      `;
+      return;
     }
 
-    // Filter changes
-    // Status/type filters removed from UI per UX request
-    
-    // Request form submission
-    const requestForm = document.getElementById('requestForm');
-    if (requestForm) {
-        requestForm.addEventListener('submit', handleRequestSubmission);
-    }
+    const rows = filtered
+      .sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt))
+      .map((req) => {
+        const statusClass = Utils.getStatusBadgeClass(req.status);
+        const statusText = Utils.getStatusText(req.status);
+        const submitted = Utils.formatDate(req.submittedAt);
+        const atts = Array.isArray(req.attachments) ? req.attachments : [];
+        const attCount = atts.length;
+        const firstAttUrl = atts[0] && atts[0].url ? atts[0].url : null;
 
-    // Attach non-inline button handlers (remove reliance on onclick attributes)
-    const logoutBtn = document.getElementById('logoutBtn');
-    if (logoutBtn) logoutBtn.addEventListener('click', logout);
-
-    const showSubmitBtn = document.getElementById('showSubmitBtn');
-    if (showSubmitBtn) showSubmitBtn.addEventListener('click', showSubmitForm);
-
-    const refreshBtn = document.getElementById('refreshBtn');
-    if (refreshBtn) refreshBtn.addEventListener('click', refreshRequests);
-    
-    // How It Works button functionality
-    const howItWorksBtn = document.getElementById('howItWorksBtn');
-    if (howItWorksBtn) {
-        howItWorksBtn.addEventListener('click', function() {
-            // Scroll to the "How It Works" section on the home page, or show a modal
-            // Since we're in the portal, show a modal with the steps
-            showHowItWorksModal();
-        });
-    }
-
-    const cancelBtn = document.getElementById('cancelRequestBtn');
-    if (cancelBtn) cancelBtn.addEventListener('click', hideSubmitForm);
-
-    const modalCloseBtn = document.getElementById('modalCloseBtn');
-    if (modalCloseBtn) modalCloseBtn.addEventListener('click', closeModal);
-
-    // Quick dashboard action buttons
-    const quickNew = document.getElementById('quickNew'); if (quickNew) quickNew.addEventListener('click', showSubmitForm);
-    const quickTrack = document.getElementById('quickTrack'); if (quickTrack) quickTrack.addEventListener('click', function() {
-        // Show tracking view - scroll to requests table and highlight it
-        const requestsCard = document.querySelector('.card:has(#requestsList)') || document.querySelector('#requestsList')?.closest('.card');
-        if (requestsCard) {
-            requestsCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            // Add a highlight effect
-            requestsCard.style.boxShadow = '0 0 0 4px rgba(72,187,120,0.3)';
-            setTimeout(() => {
-                requestsCard.style.boxShadow = '';
-            }, 2000);
-            DocTracker.showNotification('info', 'Showing your request tracking. Click "View" on any request to see detailed tracking information.');
-        } else {
-            // If no requests, show message
-            if (studentRequests.length === 0) {
-                DocTracker.showNotification('info', 'You have no requests to track yet. Submit a new request to get started!');
-                showSubmitForm();
-            } else {
-                refreshRequests();
-            }
-        }
-    });
-    const quickDownload = document.getElementById('quickDownload'); if (quickDownload) quickDownload.addEventListener('click', function() {
-        // Simple behavior: show completed requests with download links if available
-        const completed = studentRequests.filter(r => r.status === 'Completed');
-        if (!completed.length) { DocTracker.showNotification('info', 'No completed documents available for download.'); return; }
-        // For now, present the notif center and show a message
-        openNotificationCenter();
-        DocTracker.showNotification('info', `There are ${completed.length} completed requests. Use the Request view to download attachments.`);
-    });
-
-    // Notification center close
-    const closeNotifCenter = document.getElementById('closeNotifCenter'); if (closeNotifCenter) closeNotifCenter.addEventListener('click', closeNotificationCenter);
-
-    // Table delegation for delete/view actions
-    const requestsTableBody = document.getElementById('requestsTableBody');
-    if (requestsTableBody) {
-        requestsTableBody.addEventListener('click', function (e) {
-            const btn = e.target.closest('button');
-            if (!btn) return;
-            const action = btn.dataset.action;
-            const rid = btn.dataset.requestId;
-            if (!action || !rid) return;
-            if (action === 'delete') {
-                deleteRequest(rid);
-            } else if (action === 'view') {
-                viewRequestDetails(rid);
-            }
-        });
-    }
-}
-
-// Update dashboard statistics
-function updateDashboard() {
-    const totalRequests = studentRequests.length;
-    const pendingRequests = studentRequests.filter(r => r.status === 'Submitted').length;
-    const processingRequests = studentRequests.filter(r => r.status === 'Processing').length;
-    const completedRequests = studentRequests.filter(r => r.status === 'Completed').length;
-
-    document.getElementById('totalRequests').textContent = totalRequests;
-    document.getElementById('pendingRequests').textContent = pendingRequests;
-    document.getElementById('processingRequests').textContent = processingRequests;
-    document.getElementById('completedRequests').textContent = completedRequests;
-    // Also render dashboard overview summary (center rectangle)
-    try { renderDashboardOverview(); } catch (e) { /* ignore */ }
-}
-
-// Render the dashboard summary (progress and recent requests)
-function renderDashboardOverview() {
-    const pending = studentRequests.filter(r => r.status === 'Submitted' || r.status === 'Pending').length || 0;
-    const processing = studentRequests.filter(r => r.status === 'Processing' || r.status === 'Ready for Release').length || 0;
-    const completed = studentRequests.filter(r => r.status === 'Completed').length || 0;
-    const total = pending + processing + completed || Math.max(1, (studentRequests.length || 0));
-
-    const pct = Math.round((completed / (total || 1)) * 100);
-    const elPending = document.getElementById('dsPending'); if (elPending) elPending.textContent = pending;
-    const elProcessing = document.getElementById('dsProcessing'); if (elProcessing) elProcessing.textContent = processing;
-    const elCompleted = document.getElementById('dsCompleted'); if (elCompleted) elCompleted.textContent = completed;
-    const fill = document.getElementById('dsProgressBar'); if (fill) fill.style.width = `${pct}%`;
-
-    // Update subtitle with student's name
-    const subtitle = document.getElementById('dashboardSubtitle');
-    if (subtitle && currentStudent) subtitle.textContent = `Welcome back, ${currentStudent.firstName}! Here's an overview of your document requests.`;
-    
-}
-
-// Show submit form
-function showSubmitForm() {
-    const form = document.getElementById('submitForm');
-    form.classList.remove('d-none');
-    form.scrollIntoView({ behavior: 'smooth' });
-}
-
-// Hide submit form
-function hideSubmitForm() {
-    const form = document.getElementById('submitForm');
-    form.classList.add('d-none');
-    document.getElementById('requestForm').reset();
-}
-
-// Load and display requests
-function loadRequests() {
-    const tableBody = document.getElementById('requestsTableBody');
-    if (!tableBody) return;
-
-    if (studentRequests.length === 0) {
-        tableBody.innerHTML = `<tr><td colspan="6" class="text-center py-4 text-muted">You haven't submitted any document requests yet.</td></tr>`;
-        return;
-    }
-
-    tableBody.innerHTML = studentRequests.map(request => `
-        <tr>
-            <td style="border-bottom:1px solid #f3f4f6">${request.id}</td>
-            <td style="border-bottom:1px solid #f3f4f6">${request.documentType}</td>
-            <td style="border-bottom:1px solid #f3f4f6"><span class="status-badge ${DocTracker.getStatusBadgeClass(request.status)}">${request.status}</span></td>
-            <td style="border-bottom:1px solid #f3f4f6">${DocTracker.formatDateTime(request.dateSubmitted)}</td>
-            <td style="border-bottom:1px solid #f3f4f6">${request.purpose || ''}</td>
-            <td style="border-bottom:1px solid #f3f4f6">
-                <div style="display:flex;gap:6px;justify-content:center;align-items:center">
-                    <button class="btn btn-primary btn-sm" data-action="view" data-request-id="${request.id}">View</button>
-                    <button class="btn btn-danger btn-sm" data-action="delete" data-request-id="${request.id}">Delete</button>
-                </div>
-            </td>
-        </tr>
-    `).join('');
-}
-
-// Note: status/type filters removed; requests displayed in table via loadRequests()
-
-// View request details
-// Delete a request (student-facing) — removes locally and attempts server update
-function deleteRequest(requestId) {
-    if (!confirm('Are you sure you want to delete this request? This action cannot be undone.')) return;
-    const idx = studentRequests.findIndex(r => r.id === requestId);
-    if (idx === -1) return;
-
-    // Remove locally
-    studentRequests.splice(idx, 1);
-    localStorage.setItem(`requests_${currentStudent.studentId}`, JSON.stringify(studentRequests));
-    updateDashboard();
-    loadRequests();
-    DocTracker.showNotification('success', 'Request deleted locally. Attempting to remove from server...');
-
-    // Try to mark deleted on server (best-effort). If server not available, leave local deletion as source of truth until sync.
-    (async () => {
-        try {
-            const res = await fetch(`/api/requests/${requestId}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ status: 'Deleted', timelineEntry: { status: 'Deleted', date: new Date().toISOString(), note: 'Deleted by student' } })
-            });
-            if (res.ok) {
-                const body = await res.json();
-                if (body && body.success) {
-                    DocTracker.showNotification('success', 'Request removed from server.');
-                }
-            }
-        } catch (e) {
-            console.warn('Could not update server to delete request:', e.message || e);
-            DocTracker.showNotification('warning', 'Could not update server. Deletion is local only until server is available.');
-        }
-    })();
-}
-
-function viewRequestDetails(requestId) {
-    const request = studentRequests.find(r => r.id === requestId);
-    if (!request) {
-        DocTracker.showNotification('error', 'Request not found.');
-        return;
-    }
-
-    const modal = document.getElementById('requestModal');
-    const details = document.getElementById('requestDetails');
-    
-    // Helper: convert a server-side stored path to a web-accessible URL
-    function getAttachmentUrl(p) {
-        if (!p) return '';
-        const s = String(p);
-        // If it's already a blob/data/http/absolute path, return as-is
-        if (s.startsWith('blob:') || s.startsWith('data:') || s.startsWith('http') || s.startsWith('/')) return s;
-        // normalize backslashes (handle Windows paths sent by server)
-        let norm = s.replace(/\\/g, '/');
-        // also handle single backslashes (defensive)
-        norm = norm.replace(/\\/g, '/');
-        // find the first occurrence of /uploads and return from there
-        const idx = norm.indexOf('/uploads');
-        if (idx !== -1) return norm.slice(idx);
-        const idx2 = norm.indexOf('uploads/');
-        if (idx2 !== -1) return '/' + norm.slice(idx2);
-        // fallback: return /uploads/<filename>
-        return '/uploads/' + norm.split('/').pop();
-    }
-
-    function renderAttachmentsHTML(attachments) {
-        if (!attachments || !attachments.length) return '<p class="text-muted">No attachments</p>';
-        return attachments.map(a => {
-            const url = getAttachmentUrl(a.path || a);
-            const name = a.originalName || (typeof a === 'string' ? a.split('/').pop() : 'attachment');
-            const ext = (name.split('.').pop() || '').toLowerCase();
-            const imageExts = ['jpg','jpeg','png','gif','webp'];
-            if (imageExts.includes(ext)) {
-                // Return a clickable thumbnail which opens an inline preview in the modal
-                return `<div style="margin-bottom:8px"><a href="#" class="attachment-link" data-url="${url}" data-name="${name}"><img src="${url}" alt="${name}" style="max-width:240px;max-height:240px;border:1px solid #e5e7eb;padding:4px;border-radius:4px;display:block"></a><div><a href="#" class="attachment-link" data-url="${url}" data-name="${name}">${name}</a></div></div>`;
-            }
-            // For non-images show a clickable link that opens inline preview (PDF/doc will open in iframe)
-            return `<div style="margin-bottom:6px"><a href="#" class="attachment-link" data-url="${url}" data-name="${name}">${name}</a></div>`;
-        }).join('');
-    }
-
-    // Render timeline for tracking
-    function renderTimelineHTML(timeline) {
-        if (!timeline || !timeline.length) {
-            return '<p class="text-muted">No tracking information available yet.</p>';
-        }
         return `
-            <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #e5e7eb;">
-                <h5 style="margin-bottom: 1rem;"><i class="fas fa-route"></i> Request Timeline</h5>
-                <div style="position: relative; padding-left: 2rem;">
-                    ${timeline.map((entry, index) => {
-                        const date = entry.date ? new Date(entry.date).toLocaleString() : 'N/A';
-                        const isLast = index === timeline.length - 1;
-                        return `
-                            <div style="position: relative; margin-bottom: ${isLast ? '0' : '1.5rem'};">
-                                <div style="position: absolute; left: -1.75rem; top: 0.25rem; width: 12px; height: 12px; background: ${isLast ? 'var(--usjr-green, #48bb78)' : '#cbd5e0'}; border-radius: 50%; border: 2px solid white; box-shadow: 0 0 0 2px ${isLast ? 'var(--usjr-green, #48bb78)' : '#cbd5e0'};"></div>
-                                ${!isLast ? '<div style="position: absolute; left: -1.69rem; top: 0.75rem; width: 2px; height: calc(100% + 0.5rem); background: #e5e7eb;"></div>' : ''}
-                                <div>
-                                    <strong style="color: #333;">${escapeHtml(entry.status || 'Update')}</strong>
-                                    <p style="color: #666; margin: 0.25rem 0;">${escapeHtml(entry.note || '')}</p>
-                                    <small style="color: #999;">${date}</small>
-                                </div>
-                            </div>
-                        `;
-                    }).join('')}
-                </div>
-            </div>
+          <tr>
+            <td>${req.documentType || req.documentValue || 'Document'}</td>
+            <td>${req.department || this.studentDepartmentName}</td>
+            <td>${submitted}</td>
+            <td><span class="status-badge ${statusClass}">${statusText}</span></td>
+            <td>
+              <button class="btn-secondary" onclick="studentPortal.viewRequest(${req.id})">View</button>
+            </td>
+          </tr>
         `;
-    }
+      }).join('');
 
-    // Full tracking view with timeline and details
-    details.innerHTML = `
-        <div>
-            <div style="margin-bottom: 1.5rem;">
-                <h4 style="margin-bottom: 0.5rem;">Request ID: <span style="color: var(--usjr-green, #48bb78);">${request.id}</span></h4>
-                <p style="color: #666; margin-bottom: 0.5rem;"><strong>Document Type:</strong> ${request.documentType}</p>
-                <p style="color: #666; margin-bottom: 0.5rem;"><strong>Status:</strong> <span class="status-badge ${DocTracker.getStatusBadgeClass(request.status)}">${request.status}</span></p>
-                <p style="color: #666;"><strong>Submitted:</strong> ${DocTracker.formatDateTime(request.dateSubmitted)}</p>
-            </div>
-            
-            ${renderTimelineHTML(request.timeline || [])}
-            
-            <div style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid #e5e7eb;">
-                <h5 style="margin-bottom: 1rem;"><i class="fas fa-paperclip"></i> Attachments</h5>
-                <div id="attachmentPreview" class="attachment-preview text-center text-muted" style="min-height: 200px; display: flex; align-items: center; justify-content: center; border: 1px dashed #e5e7eb; border-radius: 8px; margin-bottom: 1rem;">Click an attachment below to preview it here.</div>
-                <div id="attachmentList" class="attachment-list">${renderAttachmentsHTML(request.attachments || [])}</div>
-            </div>
-        </div>
+    container.innerHTML = `
+      <div class="table-wrapper">
+        <table class="requests-table">
+          <thead>
+            <tr>
+              <th>Document Name</th>
+              <th>Department</th>
+              <th>Date Submitted</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
     `;
+  }
 
-    DocTracker.openModal('requestModal');
+  renderHistory() {
+    const container = document.getElementById('historyRequests');
+    if (!container) return;
 
-    // Attach click handlers for inline attachment preview and auto-show first file
-    try {
-        const previewContainer = document.getElementById('attachmentPreview');
-        const attachmentLinks = details.querySelectorAll('.attachment-link');
-        if (attachmentLinks && attachmentLinks.length) {
-            attachmentLinks.forEach(link => {
-                link.addEventListener('click', function (ev) {
-                    ev.preventDefault();
-                    const url = this.dataset.url;
-                    const name = this.dataset.name || '';
-                    if (!url) return;
-                    const ext = (name.split('.').pop() || '').toLowerCase();
-                    const imageExts = ['jpg','jpeg','png','gif','webp'];
-                    if (imageExts.includes(ext) || url.startsWith('data:') || url.startsWith('blob:')) {
-                        previewContainer.innerHTML = `<div style="display:flex;justify-content:center"><img src="${url}" alt="${name}" style="max-width:100%;max-height:520px;border-radius:8px;border:1px solid #e9ecef"/></div>`;
-                    } else if (ext === 'pdf' || url.toLowerCase().endsWith('.pdf')) {
-                        previewContainer.innerHTML = `<iframe src="${url}" style="width:100%;height:520px;border:0;border-radius:6px"></iframe>`;
-                    } else {
-                        previewContainer.innerHTML = `<div style="padding:12px"><p>${name}</p><a href="${url}" target="_blank" class="btn btn-outline">Open in new tab</a></div>`;
-                    }
-                });
-            });
+    const departmentFilter = document.getElementById('filterDepartment');
+    const statusFilter = document.getElementById('filterStatusHistory');
+    const selectedDept = departmentFilter ? departmentFilter.value : 'all';
+    const selectedStatus = statusFilter ? statusFilter.value : 'all';
 
-            // auto-open first attachment
-            setTimeout(() => attachmentLinks[0].click(), 50);
+    let filtered = [...this.requests];
+    if (selectedDept !== 'all') {
+      const deptIdFilter = parseInt(selectedDept, 10);
+      filtered = filtered.filter((req) => {
+        if (!Number.isNaN(deptIdFilter) && req.departmentId) {
+          return Number(req.departmentId) === deptIdFilter;
         }
-    } catch (e) {
-        console.warn('Could not attach attachment preview handlers', e);
+        return req.department === this.getDepartmentName(selectedDept);
+      });
     }
-}
-
-// Confirm pickup
-function confirmPickup(requestId) {
-    if (confirm('Are you sure you want to confirm pickup of this document?')) {
-        const request = studentRequests.find(r => r.id === requestId);
-        if (request) {
-            request.status = 'Completed';
-            request.timeline.push({
-                status: 'Completed',
-                date: new Date().toISOString(),
-                note: 'Document has been picked up'
-            });
-            
-            // Save updated requests
-            localStorage.setItem(`requests_${currentStudent.studentId}`, JSON.stringify(studentRequests));
-            
-            DocTracker.showNotification('success', 'Pickup confirmed successfully!');
-            updateDashboard();
-            loadRequests();
-        }
+    if (selectedStatus !== 'all') {
+      filtered = filtered.filter((req) => req.status === selectedStatus);
     }
-}
 
-// Refresh requests
-function refreshRequests() {
-    DocTracker.showNotification('info', 'Refreshing requests...');
-    // Try fetching latest requests from server and merge statuses into local requests
-    fetchServerRequests().then(updated => {
-        loadRequests();
-        updateDashboard();
-        if (updated) {
-            DocTracker.showNotification('success', 'Requests refreshed from server.');
-        } else {
-            DocTracker.showNotification('warning', 'No server available or no updates. Showing local requests.');
-        }
-    }).catch(err => {
-        console.error('Error refreshing from server:', err);
-        // Fallback to local-only refresh
-        loadRequests();
-        updateDashboard();
-        DocTracker.showNotification('warning', 'Could not contact server. Showing local requests.');
+    if (!filtered.length) {
+      container.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-state-icon">📄</div>
+          <h3>No requests found</h3>
+        </div>
+      `;
+      return;
+    }
+
+    // Render history as admin-style request cards for consistent spacing/alignment
+    const cards = filtered
+      .sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt))
+      .map((request) => this.buildRequestRow(request, false))
+      .join('');
+
+    // Insert cards directly into the container to match Admin's layout
+    container.innerHTML = cards;
+  }
+
+  buildRequestRow(request, compact = false) {
+    const statusClass = Utils.getStatusBadgeClass(request.status);
+    const statusText = Utils.getStatusText(request.status);
+    const submittedDate = Utils.formatDate(request.submittedAt);
+    return `
+      <div class="request-item${compact ? ' compact' : ''}">
+        <div class="request-header">
+          <div class="request-info">
+            <h3>${request.documentType}</h3>
+            <div class="request-meta">
+              <span><strong>Department:</strong> ${request.department || this.studentDepartmentName}</span>
+              <span><strong>Submitted:</strong> ${submittedDate}</span>
+            </div>
+          </div>
+          <div class="request-actions">
+            <span class="status-badge ${statusClass}">${statusText}</span>
+            <button class="btn-secondary" onclick="studentPortal.viewRequest(${request.id})">View</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  buildHistoryRow(request) {
+    const statusClass = Utils.getStatusBadgeClass(request.status);
+    const statusText = Utils.getStatusText(request.status);
+    return `
+      <tr>
+        <td>${request.documentType}</td>
+        <td>${request.department || this.studentDepartmentName}</td>
+        <td><span class="status-badge ${statusClass}">${statusText}</span></td>
+        <td>${Utils.formatDate(request.submittedAt)}</td>
+        <td>${Utils.formatDate(request.updatedAt)}</td>
+        <td><button class="btn-secondary" onclick="studentPortal.viewRequest(${request.id})">Details</button></td>
+      </tr>
+    `;
+  }
+
+  setupEventListeners() {
+    const newRequestBtn = document.getElementById('newRequestBtn');
+    if (newRequestBtn) {
+      newRequestBtn.addEventListener('click', () => this.showNewRequestModal());
+    }
+
+    const manageDocsBtn = document.getElementById('manageDocsBtn');
+    if (manageDocsBtn) manageDocsBtn.addEventListener('click', () => {
+      const el = document.getElementById('myDocuments');
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
-}
 
-// Fetch requests from backend and merge status/timeline/notes into local studentRequests
-async function fetchServerRequests() {
-    if (!currentStudent) return false;
-    try {
-        const res = await fetch('/api/requests');
-        if (!res.ok) return false;
-        const body = await res.json();
-        const serverRequests = Array.isArray(body) ? body : (body.requests || []);
+    const myDocsFilter = document.getElementById('myDocsFilter');
+    if (myDocsFilter) myDocsFilter.addEventListener('change', () => this.renderMyDocuments());
+    const myDocsSearch = document.getElementById('myDocsSearch');
+    if (myDocsSearch) myDocsSearch.addEventListener('input', () => this.renderMyDocuments());
 
-        // Find requests that belong to this student (match by studentId or studentEmail)
-        let foundAny = false;
-        serverRequests.forEach(sr => {
-            if (!sr) return;
-            const matchesStudent = sr.studentId === currentStudent.studentId || (sr.studentEmail && sr.studentEmail.toLowerCase() === (currentStudent.email || '').toLowerCase());
-            if (!matchesStudent) return;
+    this.setupModalEventListeners();
 
-            // Try to find local entry by id
-            const idx = studentRequests.findIndex(r => r.id === sr.id);
-                if (idx !== -1) {
-                // Update status, timeline, notes and attachments if changed
-                const local = studentRequests[idx];
-                let changed = false;
-                    if (local.status !== sr.status) { local.status = sr.status; changed = true; }
+    const logoutBtn = document.getElementById('logoutBtn');
+    if (logoutBtn) {
+      logoutBtn.addEventListener('click', () => {
+        if (confirm('Are you sure you want to logout?')) Utils.clearCurrentUser();
+      });
+    }
 
-                    // Compare timelines and create notifications for newly added timeline entries
-                    const localTimeline = local.timeline || [];
-                    const serverTimeline = sr.timeline || [];
-                    if (JSON.stringify(localTimeline) !== JSON.stringify(serverTimeline)) {
-                        // If server has more entries than local, create notification(s)
-                        if (serverTimeline.length > localTimeline.length) {
-                            for (let i = localTimeline.length; i < serverTimeline.length; i++) {
-                                const te = serverTimeline[i];
-                                const title = `${sr.documentType || 'Request'} (${sr.id || ''})`;
-                                const message = te && (te.note || (`Status: ${te.status || ''}`)) || 'Update on your request';
-                                const date = te && te.date ? te.date : new Date().toISOString();
-                                createNotification(sr.id, title, message, date);
-                            }
-                        }
-                        local.timeline = serverTimeline;
-                        changed = true;
-                    }
+    document.querySelectorAll('.sidebar-link').forEach((btn) => {
+      btn.addEventListener('click', () => this.switchView(btn.dataset.view));
+    });
 
-                    if (local.notes !== sr.adminNotes && sr.adminNotes) { local.notes = sr.adminNotes; changed = true; }
+    const departmentFilter = document.getElementById('filterDepartment');
+    const statusFilter = document.getElementById('filterStatusHistory');
+    if (departmentFilter) departmentFilter.addEventListener('change', () => this.renderHistory());
+    if (statusFilter) statusFilter.addEventListener('change', () => this.renderHistory());
 
-                    // Update attachments if server has them and they're different
-                    if (JSON.stringify(local.attachments || []) !== JSON.stringify(sr.attachments || [])) {
-                        local.attachments = sr.attachments || [];
-                        changed = true;
-                    }
-                if (changed) foundAny = true;
-                studentRequests[idx] = local;
-            } else {
-                // Local does not have it yet — insert server copy so student sees it
-                const copy = Object.assign({}, sr);
-                // Ensure necessary fields exist
-                copy.timeline = copy.timeline || [];
-                studentRequests.unshift(copy);
-                foundAny = true;
+    const bell = document.getElementById('notificationBell');
+    if (bell) {
+      bell.addEventListener('click', () => {
+        const dropdown = document.getElementById('notificationDropdown');
+        if (dropdown) dropdown.classList.toggle('hidden');
+      });
+    }
+
+    const markAllRead = document.getElementById('markAllRead');
+    const markAllReadSecondary = document.getElementById('markAllReadSecondary');
+    if (markAllRead) markAllRead.addEventListener('click', () => this.markAllNotificationsRead());
+    if (markAllReadSecondary) markAllReadSecondary.addEventListener('click', () => this.markAllNotificationsRead());
+
+    document.addEventListener('click', (event) => {
+      const dropdown = document.getElementById('notificationDropdown');
+      const bellWrapper = document.getElementById('notificationBell');
+      if (!dropdown || !bellWrapper) return;
+      if (!bellWrapper.contains(event.target)) {
+        dropdown.classList.add('hidden');
+      }
+    });
+  }
+
+  setupModalEventListeners() {
+    const modal = document.getElementById('requestModal');
+    const closeModalBtn = document.getElementById('closeModal');
+    const cancelRequestBtn = document.getElementById('cancelRequest');
+    const documentRequestForm = document.getElementById('documentRequestForm');
+    
+    if (closeModalBtn) {
+        closeModalBtn.addEventListener('click', () => this.closeRequestModal());
+    }
+    
+    if (cancelRequestBtn) {
+        cancelRequestBtn.addEventListener('click', () => this.closeRequestModal());
+    }
+    
+    if (documentRequestForm) {
+        documentRequestForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            this.submitNewRequest();
+        });
+    }
+
+    const departmentSelect = document.getElementById('department');
+    if (departmentSelect) {
+        departmentSelect.addEventListener('change', (e) => {
+            this.updateDocumentTypes(e.target.value);
+        });
+    }
+
+    const documentTypeSelect = document.getElementById('documentType');
+    if (documentTypeSelect) {
+      documentTypeSelect.addEventListener('change', () => this.evaluateAttachmentRequirement());
+    }
+
+    const purposeInput = document.getElementById('purpose');
+    if (purposeInput) {
+      purposeInput.addEventListener('input', () => this.evaluateAttachmentRequirement());
+    }
+
+    if (modal) {
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                this.closeRequestModal();
             }
         });
-
-        if (foundAny) {
-            // Persist merged results locally
-            localStorage.setItem(`requests_${currentStudent.studentId}`, JSON.stringify(studentRequests));
-        }
-
-        return true;
-    } catch (e) {
-        console.warn('fetchServerRequests failed:', e.message || e);
-        return false;
     }
 
-}
+    this.setupFileUpload();
+  }
 
-// Handle form submission
-async function handleRequestSubmission(e) {
-    e.preventDefault();
-    const formElement = e.target;
-    const submitBtn = document.getElementById('submitRequestBtn');
-    // Show loading state immediately
-    setButtonLoading(submitBtn, true, 'Processing...');
-    const formData = new FormData(formElement);
+  showNewRequestModal() {
+    const modal = document.getElementById('requestModal');
+    if (modal) {
+        modal.classList.remove('hidden');
+        modal.classList.add('active');
+        document.body.style.overflow = 'hidden';
+        this.resetRequestForm();
+        this.autoFillUserInfo();
+        
+        const departmentSelect = document.getElementById('department');
+        if (departmentSelect && departmentSelect.value) {
+            this.updateDocumentTypes(departmentSelect.value);
+        }
+        // ensure attachment visibility/requirement is evaluated on open
+        setTimeout(() => this.evaluateAttachmentRequirement(), 100);
+    }
+  }
 
-    // Collect attachments for immediate preview and to send to server
-    const attachmentsInput = document.getElementById('attachments');
-    const files = (attachmentsInput && attachmentsInput.files) ? Array.from(attachmentsInput.files) : [];
+  closeRequestModal() {
+    const modal = document.getElementById('requestModal');
+    if (modal) {
+        modal.classList.remove('active');
+        modal.classList.add('hidden');
+        document.body.style.overflow = '';
+    }
+  }
 
-    const fileToDataURL = (file) => new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result);
-        reader.onerror = (err) => reject(err);
-        reader.readAsDataURL(file);
+  resetRequestForm() {
+    const form = document.getElementById('documentRequestForm');
+    if (form) {
+        form.reset();
+    }
+    
+    const documentTypeSelect = document.getElementById('documentType');
+    if (documentTypeSelect) {
+        documentTypeSelect.innerHTML = '<option value="">Select Department First</option>';
+        documentTypeSelect.disabled = true;
+    }
+    
+    const documentTypeLoading = document.getElementById('documentTypeLoading');
+    if (documentTypeLoading) {
+        documentTypeLoading.classList.add('hidden');
+    }
+    
+    this.selectedFiles = [];
+    this.renderPreviews();
+
+    // hide other-document input and attachments required indicator
+    const otherGroup = document.getElementById('otherDocumentGroup');
+    if (otherGroup) otherGroup.classList.add('hidden');
+    const uploadArea = document.getElementById('fileUploadArea');
+    if (uploadArea) uploadArea.removeAttribute('data-required');
+  }
+
+  autoFillUserInfo() {
+    // No longer auto-filling personal info fields; user must enter them manually.
+  }
+
+  async updateDocumentTypes(departmentCode) {
+    const documentTypeSelect = document.getElementById('documentType');
+    const loadingElement = document.getElementById('documentTypeLoading');
+
+    if (!documentTypeSelect) return;
+
+    documentTypeSelect.innerHTML = '<option value="">Select Document Type</option>';
+    documentTypeSelect.disabled = true;
+
+    if (!departmentCode) {
+        documentTypeSelect.innerHTML = '<option value="">Select Department First</option>';
+        return;
+    }
+
+    if (loadingElement) loadingElement.classList.remove('hidden');
+
+    try {
+        const documentTypes = await this.loadDocumentTypes(departmentCode);
+        
+        if (documentTypes.length > 0) {
+            documentTypeSelect.innerHTML = '<option value="">Select Document Type</option>' + 
+              documentTypes.map((doc) => `
+                <option value="${doc.value}" data-requires-faculty="${doc.requires_faculty}" data-requires-attachment="${doc.requires_attachment || false}">
+                  ${doc.name || doc.label}
+                </option>
+              `).join('') +
+              '<option value="others">Others</option>';
+            documentTypeSelect.disabled = false;
+        } else {
+            documentTypeSelect.innerHTML = '<option value="">No document types available</option>';
+        }
+    } catch (error) {
+        console.error('Error populating document options:', error);
+        documentTypeSelect.innerHTML = '<option value="">Error loading document types</option>';
+    } finally {
+        if (loadingElement) loadingElement.classList.add('hidden');
+    }
+  }
+
+  evaluateAttachmentRequirement() {
+    const documentTypeSelect = document.getElementById('documentType');
+    const otherGroup = document.getElementById('otherDocumentGroup');
+    const uploadArea = document.getElementById('fileUploadArea');
+    const purposeInput = document.getElementById('purpose');
+
+    let requiresAttachment = false;
+    let showOther = false;
+
+    if (documentTypeSelect) {
+      const selected = documentTypeSelect.options[documentTypeSelect.selectedIndex];
+      const text = selected ? (selected.text || '').toLowerCase() : '';
+      const dataRequires = selected ? selected.getAttribute('data-requires-attachment') : null;
+      if (dataRequires === 'true') requiresAttachment = true;
+      if (text.includes('id replacement') || text.includes('id replacement'.toLowerCase())) requiresAttachment = true;
+      if ((selected && selected.value === 'others') || text === 'others') showOther = true;
+    }
+
+    if (purposeInput) {
+      const p = (purposeInput.value || '').toLowerCase();
+      if (p.includes('others') || p.trim() === 'other' || p.trim() === 'others') {
+        requiresAttachment = true;
+      }
+    }
+
+    if (otherGroup) otherGroup.classList.toggle('hidden', !showOther);
+    if (uploadArea) {
+      if (requiresAttachment) {
+        uploadArea.setAttribute('data-required', 'true');
+      } else {
+        uploadArea.removeAttribute('data-required');
+      }
+    }
+  }
+
+  setupFileUpload() {
+    const fileInput = document.getElementById('attachments');
+    const addBtn = document.getElementById('addAttachmentBtn');
+    if (!fileInput || !addBtn) return;
+    addBtn.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', (e) => {
+      this.handleFileSelect(e.target.files);
+    });
+  }
+
+  switchView(view) {
+    this.currentView = view;
+    document.querySelectorAll('.sidebar-link').forEach((btn) => {
+      btn.classList.toggle('active', btn.dataset.view === view);
     });
 
-    const attachmentsPreview = [];
-    for (const f of files) {
-        try {
-            if (f.type && f.type.startsWith('image/')) {
-                const dataUrl = await fileToDataURL(f);
-                attachmentsPreview.push({ originalName: f.name, path: dataUrl, _data: true });
-            } else {
-                attachmentsPreview.push({ originalName: f.name, path: URL.createObjectURL(f), _local: true });
-            }
-        } catch (err) {
-            attachmentsPreview.push({ originalName: f.name, path: URL.createObjectURL(f), _local: true });
-        }
-    }
-
-    const recipientFirst = formData.get('recipientFirstName') || '';
-    const recipientLast = formData.get('recipientLastName') || '';
-    const combinedRecipient = `${recipientFirst} ${recipientLast}`.trim();
-
-    const newRequest = {
-        id: DocTracker.generateRequestId(),
-        studentId: currentStudent.studentId,
-        studentName: `${currentStudent.firstName} ${currentStudent.lastName}`,
-        studentEmail: currentStudent.email,
-        documentType: formData.get('documentType'),
-        purpose: formData.get('purpose'),
-        purposeDetails: formData.get('purposeDetails') || '',
-        termCoverage: formData.get('termCoverage'),
-        termExtra: formData.get('termExtra') || '',
-        copies: parseInt(formData.get('copies')) || 1,
-        recipientFirstName: recipientFirst,
-        recipientLastName: recipientLast,
-        recipientName: combinedRecipient,
-        contactNumber: formData.get('contactNumber'),
-        notes: formData.get('notes'),
-        status: 'Submitted',
-        dateSubmitted: new Date().toISOString(),
-        timeline: [{ status: 'Submitted', date: new Date().toISOString(), note: 'Request submitted successfully' }]
+    const views = {
+      dashboard: document.getElementById('dashboardView'),
+      history: document.getElementById('historyView'),
+      notifications: document.getElementById('notificationsView')
     };
 
-    newRequest.attachments = attachmentsPreview;
+    Object.entries(views).forEach(([key, el]) => {
+      if (!el) return;
+      if (key === view) {
+        el.classList.remove('hidden');
+      } else {
+        el.classList.add('hidden');
+      }
+    });
+  }
 
-    studentRequests.unshift(newRequest);
-    localStorage.setItem(`requests_${currentStudent.studentId}`, JSON.stringify(studentRequests));
-    updateDashboard();
-    loadRequests();
-    hideSubmitForm();
-    DocTracker.showNotification('success', 'Document request submitted locally. Sending request to server...');
+  handleFileSelect(files) {
+    const fileArray = Array.from(files || []);
+    const uploadError = document.getElementById('uploadError');
+    if (uploadError) uploadError.style.display = 'none';
 
-    // Send to backend
-    const sendData = new FormData();
-    sendData.append('studentId', newRequest.studentId);
-    sendData.append('studentName', newRequest.studentName);
-    sendData.append('studentEmail', newRequest.studentEmail);
-    sendData.append('documentType', newRequest.documentType);
-    sendData.append('purpose', newRequest.purpose);
-    sendData.append('purposeDetails', newRequest.purposeDetails || '');
-    sendData.append('termCoverage', newRequest.termCoverage || '');
-    sendData.append('termExtra', newRequest.termExtra || '');
-    sendData.append('copies', newRequest.copies);
-    sendData.append('recipientName', newRequest.recipientName || '');
-    sendData.append('recipientFirstName', newRequest.recipientFirstName || '');
-    sendData.append('recipientLastName', newRequest.recipientLastName || '');
-    sendData.append('contactNumber', newRequest.contactNumber || '');
-    sendData.append('notes', newRequest.notes || '');
+    const combined = [...this.selectedFiles, ...fileArray];
+    if (combined.length > 3) {
+      if (uploadError) {
+        uploadError.textContent = 'Maximum of 3 files allowed.';
+        uploadError.style.display = 'block';
+      }
+      return;
+    }
 
-    if (files && files.length) {
-        for (let i = 0; i < files.length; i++) sendData.append('attachments', files[i], files[i].name);
+    const validFiles = [];
+    for (const file of fileArray) {
+      if (!['image/jpeg', 'image/png', 'application/pdf'].includes(file.type)) {
+        if (uploadError) {
+          uploadError.textContent = 'Invalid file format. Only JPG, PNG, and PDF are allowed.';
+          uploadError.style.display = 'block';
+        }
+        continue;
+      }
+      if (file.size > 5 * 1024 * 1024) {
+        if (uploadError) {
+          uploadError.textContent = 'File too large. Max size is 5MB per file.';
+          uploadError.style.display = 'block';
+        }
+        continue;
+      }
+      validFiles.push(file);
+    }
+
+    const slotsLeft = Math.max(0, 3 - this.selectedFiles.length);
+    this.selectedFiles = this.selectedFiles.concat(validFiles.slice(0, slotsLeft));
+    this.renderPreviews();
+  }
+
+  renderPreviews() {
+    const previewContainer = document.getElementById('file-preview');
+    if (!previewContainer) return;
+
+    if (this.selectedFiles.length === 0) {
+      previewContainer.innerHTML = '';
+      return;
+    }
+
+    previewContainer.innerHTML = this.selectedFiles.map((file, idx) => {
+      const url = file.type.startsWith('image/') ? URL.createObjectURL(file) : '';
+      const isPDF = file.type === 'application/pdf';
+      
+      return `
+        <div class="file-preview-item">
+          <div class="file-preview-info">
+            ${isPDF ? 
+              '<div class="file-preview-icon">📄</div>' :
+              `<img src="${url}" alt="preview" class="file-preview-image" />`
+            }
+            <span class="file-preview-name">${file.name}</span>
+          </div>
+          <button type="button" class="file-preview-remove" onclick="studentPortal.removeSelectedFile(${idx})">
+            &times;
+          </button>
+        </div>
+      `;
+    }).join('');
+  }
+
+  removeSelectedFile(index) {
+    this.selectedFiles.splice(index, 1);
+    this.renderPreviews();
+  }
+
+  async uploadSelectedFiles() {
+    if (this.selectedFiles.length === 0) return [];
+    const formData = new FormData();
+    formData.append('studentId', this.currentUser.id);
+    this.selectedFiles.forEach((file) => formData.append('files', file));
+    
+    try {
+      const response = await fetch(`${window.location.origin}/api/uploads`, {
+        method: 'POST',
+        body: formData
+      });
+      if (!response.ok) throw new Error('Upload failed');
+      const data = await response.json();
+      return data.attachments || [];
+    } catch (error) {
+      console.error('File upload error:', error);
+      throw error;
+    }
+  }
+
+  getDepartmentName(id) {
+    const department = this.departments.find((dept) => dept.id === id);
+    return department ? department.name : id;
+  }
+
+  async submitNewRequest() {
+    const form = document.getElementById('documentRequestForm');
+    if (!form) return;
+    // Validate required personal info fields
+    const fullName = form.querySelector('[name="fullName"]').value.trim();
+    const idNumber = form.querySelector('[name="idNumber"]').value.trim();
+    const course = form.querySelector('[name="course"]').value.trim();
+    const yearLevel = form.querySelector('[name="yearLevel"]').value.trim();
+    const email = form.querySelector('[name="studentEmail"]').value.trim();
+    if (!fullName || !idNumber || !course || !yearLevel || !email) {
+      Utils.showToast('Please ensure your personal information is filled.', 'warning');
+      return;
+    }
+
+    const formData = new FormData(form);
+    const departmentCode = formData.get('department');
+    const documentValue = formData.get('documentType');
+    
+    if (!departmentCode || !documentValue) {
+      Utils.showToast('Please select both department and document type.', 'warning');
+      return;
+    }
+
+    const documentSelect = document.getElementById('documentType');
+    const selectedOption = documentSelect?.options[documentSelect.selectedIndex];
+    const requiresFaculty = selectedOption ? selectedOption.getAttribute('data-requires-faculty') === 'true' : true;
+
+    const department = this.departments.find(dept => dept.code === departmentCode);
+    if (!department) {
+      Utils.showToast('Invalid department selected.', 'error');
+      return;
+    }
+
+    const requestData = {
+      departmentId: department.id,
+      documentValue: documentValue,
+      documentType: selectedOption ? selectedOption.text : documentValue,
+      quantity: parseInt(formData.get('quantity'), 10),
+      purpose: formData.get('purpose'),
+      contactNumber: formData.get('contactNumber'),
+      additionalNotes: formData.get('additionalNotes'),
+      crossDepartment: department.id != this.studentDepartmentId,
+      requiresFaculty: requiresFaculty
+    };
+
+    // check attachment requirement
+    const uploadArea = document.getElementById('fileUploadArea');
+    const attachmentsRequired = uploadArea && uploadArea.getAttribute('data-required') === 'true';
+    if (attachmentsRequired && this.selectedFiles.length === 0) {
+      Utils.showToast('This document type requires supporting documents. Please attach files.', 'warning');
+      return;
     }
 
     try {
-        const res = await fetch('/api/requests', { method: 'POST', body: sendData });
-        const result = await res.json();
-        if (result && result.success) {
-            DocTracker.showNotification('success', 'Request sent to server. You will receive an email confirmation shortly.');
-            const serverRequest = result.request;
-            studentRequests = studentRequests.map(r => {
-                if (r.id === newRequest.id) {
-                    try { (r.attachments || []).forEach(a => { if (a && a.path && a._local) URL.revokeObjectURL(a.path); }); } catch (e) {}
-                    return Object.assign({}, r, serverRequest, { studentName: r.studentName, studentEmail: r.studentEmail });
-                }
-                return r;
-            });
-            localStorage.setItem(`requests_${currentStudent.studentId}`, JSON.stringify(studentRequests));
-            loadRequests();
-        } else {
-            DocTracker.showNotification('error', 'Server error: could not save request. It remains saved locally.');
-            console.error('Server response', result);
-        }
-    } catch (err) {
-        console.error('Error sending to server:', err);
-        DocTracker.showNotification('warning', 'Could not reach server. Your request is saved locally and will not trigger email until server is running.');
-    } finally {
-        // clear loading state on submit button regardless of outcome
-        setButtonLoading(submitBtn, false);
+      const submitBtn = document.getElementById('submitRequestBtn');
+      const btnText = submitBtn.querySelector('.btn-text');
+      const btnLoading = submitBtn.querySelector('.btn-loading');
+
+      submitBtn.disabled = true;
+      btnText.classList.add('hidden');
+      btnLoading.classList.remove('hidden');
+
+      const attachments = await this.uploadSelectedFiles();
+      requestData.attachments = attachments;
+
+      const newRequest = await Utils.apiRequest('/requests', {
+        method: 'POST',
+        body: requestData
+      });
+
+      Utils.showToast('Request submitted successfully!', 'success');
+      this.closeRequestModal();
+      this.selectedFiles = [];
+      
+      await this.loadRequests();
+      this.updateStats();
+      this.renderDashboard();
+      this.renderHistory();
+    } catch (error) {
+      console.error('Submit request error:', error);
+      Utils.showToast('Failed to submit request', 'error');
+      
+      const submitBtn = document.getElementById('submitRequestBtn');
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        const btnText = submitBtn.querySelector('.btn-text');
+        const btnLoading = submitBtn.querySelector('.btn-loading');
+        if (btnText) btnText.classList.remove('hidden');
+        if (btnLoading) btnLoading.classList.add('hidden');
+      }
     }
-}
+  }
 
-// Add timeline styles
-const timelineStyles = `
-<style>
-.timeline {
-    position: relative;
-    padding-left: 30px;
-}
+  async loadNotifications() {
+    console.log('⏭️ Notifications disabled temporarily');
+    this.notifications = [];
+    return [];
+  }
 
-.timeline-item {
-    position: relative;
-    margin-bottom: 20px;
-}
-
-.timeline-marker {
-    position: absolute;
-    left: -25px;
-    top: 5px;
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    background: #667eea;
-    border: 2px solid white;
-    box-shadow: 0 0 0 2px #667eea;
-}
-
-.timeline-item:not(:last-child) .timeline-marker::after {
-    content: '';
-    position: absolute;
-    top: 15px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 2px;
-    height: 30px;
-    background: #dee2e6;
-}
-
-.timeline-content h6 {
-    margin-bottom: 5px;
-    color: #333;
-}
-
-.timeline-content p {
-    margin-bottom: 5px;
-}
-</style>
-`;
-
-// Add timeline styles to head
-document.head.insertAdjacentHTML('beforeend', timelineStyles);
-
-// Logout function - CONSISTENT WITH FACULTY/ADMIN
-function logout() {
-    console.log('Logging out student...');
-    
-    // Clear user data - consistent with FACULTY/ADMIN
-    currentStudent = null;
-    localStorage.removeItem('currentUser');
-    sessionStorage.removeItem('currentUser');
-    
-    // Redirect to home page - consistent with FACULTY
-    window.location.href = '../../index.html';
-}
-
-// Helper functions
-function formatDate(dateString) {
-    if (!dateString) return 'N/A';
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', { 
-        year: 'numeric', 
-        month: 'short', 
-        day: 'numeric' 
-    });
-}
-
-function formatDateTime(dateString) {
-    if (!dateString) return 'N/A';
-    const date = new Date(dateString);
-    return date.toLocaleString('en-US', { 
-        year: 'numeric', 
-        month: 'short', 
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-    });
-}
-
-function getStatusBadgeClass(status) {
-    const statusClasses = {
-        'Submitted': 'status-submitted',
-        'Processing': 'status-processing',
-        'Ready for Release': 'status-ready',
-        'Completed': 'status-completed',
-        'Declined': 'status-declined'
-    };
-    return statusClasses[status] || 'status-submitted';
-}
-
-function openModal(modalId) {
-    const modal = document.getElementById(modalId);
-    if (modal) {
-        modal.style.display = 'block';
-        document.body.style.overflow = 'hidden';
+  async markAllNotificationsRead() {
+    const unread = this.notifications.filter((notif) => !notif.read);
+    for (const notification of unread) {
+      try {
+        await Utils.apiRequest(`/notifications/${notification.id}`, {
+          method: 'PATCH',
+          body: { read: true }
+        });
+        notification.read = true;
+      } catch (error) {
+        console.error(`Failed to mark notification ${notification.id} as read:`, error);
+      }
     }
-}
+    this.renderNotifications();
+  }
 
-function closeModal() {
-    const modals = document.querySelectorAll('.modal');
-    modals.forEach(modal => {
-        modal.style.display = 'none';
-    });
-    document.body.style.overflow = 'auto';
-}
+  async toggleNotificationRead(notificationId, read) {
+    try {
+      await Utils.apiRequest(`/notifications/${notificationId}`, {
+        method: 'PATCH',
+        body: { read }
+      });
+      const notification = this.notifications.find((n) => n.id === notificationId);
+      if (notification) notification.read = read;
+      this.renderNotifications();
+    } catch (error) {
+      console.error(`Failed to toggle notification ${notificationId}:`, error);
+    }
+  }
 
-function showNotification(type, message) {
-    // Simple notification - just use alert for now
-    alert(message);
-}
+  renderNotifications() {
+    const dropdownList = document.getElementById('notificationList');
+    const fullList = document.getElementById('notificationsFullList');
+    const countBadge = document.getElementById('notificationCount');
 
-// Compatibility: filters were removed from the UI; keep a noop function so references don't break
-function filterRequests() {
-    // no-op: filters removed
-    return;
-}
+    const unreadCount = this.notifications.filter((n) => !n.read).length;
+    if (countBadge) {
+      countBadge.textContent = unreadCount;
+      countBadge.classList.toggle('hidden', unreadCount === 0);
+    }
 
-function generateRequestId() {
-    const timestamp = Date.now().toString().slice(-6);
-    const random = Math.random().toString(36).substr(2, 3).toUpperCase();
-    return `REQ${timestamp}${random}`;
-}
-
-// Expose closeModal globally
-window.closeModal = closeModal;
-
-// Show How It Works modal
-function showHowItWorksModal() {
-    const modal = document.createElement('div');
-    modal.className = 'modal';
-    modal.id = 'howItWorksModal';
-    modal.style.display = 'block';
-    modal.innerHTML = `
-        <div class="modal-content" style="max-width: 700px;">
-            <div class="modal-header">
-                <h3><i class="fas fa-info-circle"></i> How It Works</h3>
-                <span class="close" onclick="this.closest('.modal').remove(); document.body.style.overflow='auto';">&times;</span>
-            </div>
-            <div class="modal-body" style="padding: 2rem;">
-                <div style="display: grid; gap: 1.5rem;">
-                    <div style="display: flex; gap: 1rem; align-items: start;">
-                        <div style="width: 40px; height: 40px; background: var(--usjr-green, #48bb78); color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; flex-shrink: 0;">1</div>
-                        <div>
-                            <h4 style="margin-bottom: 0.5rem;">Sign Up & Login</h4>
-                            <p style="color: #666;">Create your student account and login with your credentials.</p>
-                        </div>
-                    </div>
-                    <div style="display: flex; gap: 1rem; align-items: start;">
-                        <div style="width: 40px; height: 40px; background: var(--usjr-green, #48bb78); color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; flex-shrink: 0;">2</div>
-                        <div>
-                            <h4 style="margin-bottom: 0.5rem;">Select Document Type</h4>
-                            <p style="color: #666;">Choose the document you need (TOR, Good Moral, COE, etc.) and fill out the required information.</p>
-                        </div>
-                    </div>
-                    <div style="display: flex; gap: 1rem; align-items: start;">
-                        <div style="width: 40px; height: 40px; background: var(--usjr-green, #48bb78); color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; flex-shrink: 0;">3</div>
-                        <div>
-                            <h4 style="margin-bottom: 0.5rem;">Submit Request</h4>
-                            <p style="color: #666;">Review your request details and submit it for processing. You'll receive a confirmation email.</p>
-                        </div>
-                    </div>
-                    <div style="display: flex; gap: 1rem; align-items: start;">
-                        <div style="width: 40px; height: 40px; background: var(--usjr-green, #48bb78); color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; flex-shrink: 0;">4</div>
-                        <div>
-                            <h4 style="margin-bottom: 0.5rem;">Track Progress</h4>
-                            <p style="color: #666;">Monitor your request status in real-time. Click "Track Request" or "View" on any request to see the timeline and updates.</p>
-                        </div>
-                    </div>
-                    <div style="display: flex; gap: 1rem; align-items: start;">
-                        <div style="width: 40px; height: 40px; background: var(--usjr-green, #48bb78); color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; flex-shrink: 0;">5</div>
-                        <div>
-                            <h4 style="margin-bottom: 0.5rem;">Receive Document</h4>
-                            <p style="color: #666;">Once your document is ready, you'll be notified. Pick it up or receive it via your preferred delivery method.</p>
-                        </div>
-                    </div>
-                </div>
-                <div style="margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid #e5e7eb;">
-                    <button class="btn btn-primary" onclick="this.closest('.modal').remove(); document.body.style.overflow='auto'; showSubmitForm();">
-                        <i class="fas fa-plus"></i> Submit Your First Request
-                    </button>
-                    <button class="btn btn-outline" onclick="this.closest('.modal').remove(); document.body.style.overflow='auto';" style="margin-left: 0.5rem;">
-                        Close
-                    </button>
-                </div>
-            </div>
-        </div>
+    const buildNotificationItem = (notif) => `
+      <div class="notification-item ${notif.read ? '' : 'unread'}">
+        <h4>${notif.title}</h4>
+        <p>${notif.message}</p>
+        <time>${Utils.formatRelativeTime(notif.createdAt)}</time>
+      </div>
     `;
-    document.body.appendChild(modal);
-    document.body.style.overflow = 'hidden';
-    
-    // Close on outside click
-    modal.addEventListener('click', function(e) {
-        if (e.target === modal) {
-            modal.remove();
-            document.body.style.overflow = 'auto';
-        }
+
+    if (dropdownList) {
+      dropdownList.innerHTML = this.notifications.length
+        ? this.notifications.slice(0, 5).map(buildNotificationItem).join('')
+        : '<p style="text-align:center; opacity:0.6;">No notifications</p>';
+    }
+
+    if (fullList) {
+      fullList.innerHTML = this.notifications.length
+        ? `<div class="notification-center">${this.notifications.map(buildNotificationItem).join('')}</div>`
+        : '<div class="empty-state"><div class="empty-state-icon">🔔</div><h3>No notifications yet</h3></div>';
+    }
+  }
+
+  viewRequest(requestId) {
+    const request = this.requests.find((r) => r.id === requestId);
+    if (!request) return;
+
+    const statusClass = Utils.getStatusBadgeClass(request.status);
+    const statusText = Utils.getStatusText(request.status);
+
+    const notesHTML = request.adminNotes && request.adminNotes.length > 0
+      ? request.adminNotes.map((note) => `
+          <div style="padding: 0.75rem; background: var(--bg-cream); border-radius: 6px; margin-bottom: 0.5rem;">
+            <div style="font-weight: 600; margin-bottom: 0.25rem;">${note.adminName}</div>
+            <div style="font-size: 0.9rem; opacity: 0.8;">${note.note}</div>
+            <div style="font-size: 0.8rem; opacity: 0.6; margin-top: 0.25rem;">${Utils.formatDate(note.timestamp)}</div>
+          </div>
+        `).join('')
+      : '<p style="opacity: 0.6;">No notes yet</p>';
+
+    const approvalHTML = request.facultyApproval
+      ? `
+          <div style="padding: 0.75rem; background: ${request.facultyApproval.status === 'approved' ? '#D1FAE5' : '#FEE2E2'}; border-radius: 6px;">
+            <div style="font-weight: 600; margin-bottom: 0.25rem;">
+              ${request.facultyApproval.facultyName} - ${request.facultyApproval.status.toUpperCase()}
+            </div>
+            ${request.facultyApproval.comment ? `<div style="margin-top: 0.5rem;">${request.facultyApproval.comment}</div>` : ''}
+            <div style="font-size: 0.8rem; opacity: 0.6; margin-top: 0.25rem;">${Utils.formatDate(request.facultyApproval.timestamp)}</div>
+          </div>
+        `
+      : '<p style="opacity: 0.6;">Awaiting approval</p>';
+
+    const modalHTML = `
+      <div class="modal-overlay active" id="viewRequestModal">
+        <div class="request-modal">
+          <div class="modal-header">
+            <h2>Request Details</h2>
+            <button class="close-modal" onclick="document.getElementById('viewRequestModal').remove()">&times;</button>
+          </div>
+          <div>
+            <div style="margin-bottom: 1.5rem;">
+              <h3 style="color: var(--recoletos-green); margin-bottom: 0.5rem;">${request.documentType}</h3>
+              <div class="status-badge ${statusClass}" style="margin-bottom: 1rem;">${statusText}</div>
+            </div>
+
+            <div style="margin-bottom: 1.5rem;">
+              <strong>Department:</strong> ${request.department || this.studentDepartmentName}<br>
+              <strong>Submitted:</strong> ${Utils.formatDate(request.submittedAt)}<br>
+              <strong>Last Updated:</strong> ${Utils.formatDate(request.updatedAt)}<br>
+              <strong>Quantity:</strong> ${request.quantity}<br>
+              <strong>Purpose:</strong> ${request.purpose}<br>
+              ${request.crossDepartment ? `<strong>Cross Department Details:</strong> ${request.crossDepartmentDetails || 'N/A'}<br>` : ''}
+            </div>
+
+            ${request.attachments && request.attachments.length ? `
+            <div style="margin-bottom: 1.5rem;">
+              <h4 style="color: var(--recoletos-green); margin-bottom: 0.5rem;">Attachments</h4>
+              <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(120px,1fr)); gap:0.75rem;">
+                ${request.attachments.map((att) => `
+                  <a href="${att.url}" target="_blank" rel="noopener noreferrer" style="display:block;">
+                    <img src="${att.url}" alt="${att.name}" style="width:100%; height:110px; object-fit:cover; border-radius:8px; border:1px solid var(--border-gray);" />
+                  </a>
+                `).join('')}
+              </div>
+            </div>
+            ` : ''}
+
+            <div style="margin-bottom: 1.5rem;">
+              <h4 style="color: var(--recoletos-green); margin-bottom: 0.5rem;">Admin Notes</h4>
+              ${notesHTML}
+            </div>
+
+            ${request.facultyApproval !== null || request.status === 'pending_faculty' ? `
+              <div style="margin-bottom: 1.5rem;">
+                <h4 style="color: var(--recoletos-green); margin-bottom: 0.5rem;">Faculty Approval</h4>
+                ${approvalHTML}
+              </div>
+            ` : ''}
+          </div>
+        </div>
+      </div>
+    `;
+
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+    const modal = document.getElementById('viewRequestModal');
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) modal.remove();
     });
+  }
 }
 
-// Expose all functions globally for onclick handlers - CONSISTENT NAMING
-window.logout = logout;
-window.showSubmitForm = showSubmitForm;
-window.hideSubmitForm = hideSubmitForm;
-window.refreshRequests = refreshRequests;
-window.viewRequestDetails = viewRequestDetails;
-window.confirmPickup = confirmPickup;
-window.filterRequests = filterRequests;
-window.showHowItWorksModal = showHowItWorksModal;
-
-// Override Auth.logout if present
-if (window.Auth && typeof window.Auth === 'object') {
-    window.Auth.logout = logout;
-}
-
-// Add DocTracker helper object
-window.DocTracker = {
-    formatDate: formatDate,
-    formatDateTime: formatDateTime,
-    getStatusBadgeClass: getStatusBadgeClass,
-    openModal: openModal,
-    closeModal: closeModal,
-    showNotification: showNotification,
-    generateRequestId: generateRequestId
-};
+let studentPortal;
+document.addEventListener('DOMContentLoaded', () => {
+  studentPortal = new StudentPortal();
+});
