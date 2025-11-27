@@ -8,6 +8,13 @@ const fs = require('fs');
 
 const { initPool } = require('./server/config/db');
 
+// Initialize database pool (non-blocking - will fail gracefully if DB unavailable)
+initPool().catch(err => {
+  console.warn('⚠️  Database connection failed. App will run with limited functionality.');
+  console.warn('   Error:', err.message);
+  console.warn('   To fix: Create a .env file with DB credentials or start MySQL server.');
+});
+
 const authRoutes = require('./server/routes/auth');
 const departmentRoutes = require('./server/routes/departments');
 const requestRoutes = require('./server/routes/requests');

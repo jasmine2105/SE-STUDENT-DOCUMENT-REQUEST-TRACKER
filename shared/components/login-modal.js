@@ -45,8 +45,18 @@ class LoginModal {
   }
 
   createModal() {
+    // Store department mapping for later use
+    this.departmentMap = {};
+    (this.departments || []).forEach(dept => {
+      this.departmentMap[dept.id] = {
+        id: dept.id,
+        code: dept.code,
+        name: dept.name
+      };
+    });
+
     const departmentOptions = (this.departments || [])
-      .map((dept) => `<option value="${dept.id}">${dept.name}</option>`)
+      .map((dept) => `<option value="${dept.id}" data-code="${dept.code || ''}" data-name="${dept.name || ''}">${dept.name}</option>`)
       .join('');
 
     const departmentCourses = {
@@ -91,6 +101,51 @@ class LoginModal {
         "Bachelor of Laws (LLB)"
       ],
       "ETEEAP (Expanded Tertiary Education Equivalency and Accreditation Program)": [
+        "BS Business Administration",
+        "BS Information Technology"
+      ],
+      // Add variations and aliases for better matching
+      "SCS": [
+        "BS Computer Science",
+        "BS Information Technology",
+        "BS Entertainment and Multimedia Computing"
+      ],
+      "SBM": [
+        "BS Accountancy",
+        "BS Business Administration",
+        "BS Management Accounting",
+        "BS Marketing Management"
+      ],
+      "SOE": [
+        "BS Civil Engineering",
+        "BS Computer Engineering",
+        "BS Electrical Engineering",
+        "BS Electronics Engineering",
+        "BS Industrial Engineering",
+        "BS Mechanical Engineering"
+      ],
+      "SAS": [
+        "AB Communication",
+        "AB Psychology",
+        "BS Biology",
+        "BS Social Work"
+      ],
+      "SOEd": [
+        "BEED (Elementary Education)",
+        "BSED English",
+        "BSED Mathematics",
+        "BSED Science",
+        "BSED Social Studies"
+      ],
+      "SAMS": [
+        "BS Nursing",
+        "BS Medical Technology",
+        "BS Pharmacy"
+      ],
+      "SOL": [
+        "Bachelor of Laws (LLB)"
+      ],
+      "ETEEAP": [
         "BS Business Administration",
         "BS Information Technology"
       ]
@@ -315,7 +370,15 @@ class LoginModal {
       `;
 
       // Setup department -> course linking
-      this.setupDepartmentCourseLink();
+      // Use setTimeout to ensure DOM is ready
+      setTimeout(() => {
+        this.setupDepartmentCourseLink();
+        // Also trigger change if department is already selected (in case of form reset/reload)
+        const deptSelect = document.getElementById('departmentSelect');
+        if (deptSelect && deptSelect.selectedIndex > 0) {
+          deptSelect.dispatchEvent(new Event('change'));
+        }
+      }, 100);
 
     } else if (role === 'faculty') {
       dynamicFields.innerHTML = `
@@ -370,11 +433,101 @@ class LoginModal {
     const departmentSelect = document.getElementById('departmentSelect');
     const courseSelect = document.getElementById('courseSelect');
 
-    if (!departmentSelect || !courseSelect) return;
+    if (!departmentSelect || !courseSelect) {
+      console.warn('Department or course select not found');
+      return;
+    }
 
-    departmentSelect.addEventListener('change', () => {
-      const selectedDeptText = departmentSelect.options[departmentSelect.selectedIndex].text;
-      const courses = this.departmentCourses[selectedDeptText] || [];
+    // Remove any existing event listeners by cloning and replacing
+    const newDeptSelect = departmentSelect.cloneNode(true);
+    departmentSelect.parentNode.replaceChild(newDeptSelect, departmentSelect);
+
+    newDeptSelect.addEventListener('change', () => {
+      const selectedIndex = newDeptSelect.selectedIndex;
+      if (selectedIndex === 0) {
+        // "Select department" option selected
+        courseSelect.innerHTML = '<option value="">Select a department first</option>';
+        courseSelect.disabled = true;
+        courseSelect.removeAttribute('required');
+        return;
+      }
+
+      const selectedOption = newDeptSelect.options[selectedIndex];
+      const selectedDeptId = selectedOption.value;
+      const selectedDeptCode = selectedOption.getAttribute('data-code') || '';
+      const selectedDeptName = selectedOption.getAttribute('data-name') || selectedOption.text.trim();
+      
+      console.log('Selected department:', {
+        id: selectedDeptId,
+        code: selectedDeptCode,
+        name: selectedDeptName
+      });
+      
+      // Try multiple matching strategies
+      let courses = [];
+      
+      // Strategy 1: Match by full department name
+      courses = this.departmentCourses[selectedDeptName] || [];
+      
+      // Strategy 2: Match by department code (SCS, SBM, etc.)
+      if (courses.length === 0 && selectedDeptCode) {
+        courses = this.departmentCourses[selectedDeptCode] || [];
+      }
+      
+      // Strategy 3: Partial name matching
+      if (courses.length === 0) {
+        for (const [deptKey, deptCourses] of Object.entries(this.departmentCourses)) {
+          // Check if department name contains key or vice versa
+          if (selectedDeptName.toLowerCase().includes(deptKey.toLowerCase()) || 
+              deptKey.toLowerCase().includes(selectedDeptName.toLowerCase())) {
+            courses = deptCourses;
+            console.log('Found partial match:', deptKey);
+            break;
+          }
+        }
+      }
+      
+      // Strategy 4: Match by department code in name (e.g., "School of Computer Studies (SCS)")
+      if (courses.length === 0 && selectedDeptCode) {
+        // Try to find department that contains the code
+        for (const [deptKey, deptCourses] of Object.entries(this.departmentCourses)) {
+          if (deptKey.includes(selectedDeptCode) || deptKey.includes(`(${selectedDeptCode})`)) {
+            courses = deptCourses;
+            console.log('Found code match:', deptKey);
+            break;
+          }
+        }
+      }
+
+      // Strategy 5: If still no courses found, provide a fallback list
+      if (courses.length === 0) {
+        console.warn('No courses found for department:', selectedDeptName, 'Code:', selectedDeptCode);
+        // Provide common courses as fallback based on department code
+        const fallbackCourses = {
+          'SCS': ['BS Computer Science', 'BS Information Technology', 'BS Entertainment and Multimedia Computing'],
+          'SBM': ['BS Accountancy', 'BS Business Administration', 'BS Management Accounting', 'BS Marketing Management'],
+          'SOE': ['BS Civil Engineering', 'BS Computer Engineering', 'BS Electrical Engineering', 'BS Electronics Engineering', 'BS Industrial Engineering', 'BS Mechanical Engineering'],
+          'SAS': ['AB Communication', 'AB Psychology', 'BS Biology', 'BS Social Work'],
+          'SOEd': ['BEED (Elementary Education)', 'BSED English', 'BSED Mathematics', 'BSED Science', 'BSED Social Studies'],
+          'SAMS': ['BS Nursing', 'BS Medical Technology', 'BS Pharmacy'],
+          'SOL': ['Bachelor of Laws (LLB)'],
+          'ETEEAP': ['BS Business Administration', 'BS Information Technology']
+        };
+        
+        courses = fallbackCourses[selectedDeptCode] || [
+          'BS Computer Science',
+          'BS Information Technology',
+          'BS Business Administration',
+          'BS Accountancy',
+          'BS Civil Engineering',
+          'BS Mechanical Engineering',
+          'BS Electrical Engineering',
+          'BS Nursing',
+          'BS Education',
+          'Other'
+        ];
+        console.log('Using fallback courses:', courses);
+      }
 
       courseSelect.innerHTML = '<option value="">Select course</option>';
 
@@ -386,9 +539,12 @@ class LoginModal {
           courseSelect.appendChild(option);
         });
         courseSelect.disabled = false;
+        courseSelect.setAttribute('required', 'required');
+        console.log('Course select enabled with', courses.length, 'courses');
       } else {
         courseSelect.disabled = true;
-        courseSelect.innerHTML = '<option value="">Select a department first</option>';
+        courseSelect.removeAttribute('required');
+        courseSelect.innerHTML = '<option value="">No courses available for this department</option>';
       }
     });
   }
@@ -530,9 +686,60 @@ class LoginModal {
       const departmentId = document.getElementById('departmentSelect')?.value || '';
       const course = document.getElementById('courseSelect')?.value || '';
       const yearLevel = document.getElementById('yearLevelSelect')?.value || '';
-      if (!departmentId || !course || !yearLevel) {
-        errorEl.textContent = 'Department, course, and year level are required for students.';
+      
+      // Check if course select is disabled (meaning no department selected)
+      const courseSelect = document.getElementById('courseSelect');
+      if (courseSelect && courseSelect.disabled) {
+        errorEl.textContent = 'Please select a department first, then select a course.';
         errorEl.classList.add('show');
+        // Highlight the department select
+        const deptSelect = document.getElementById('departmentSelect');
+        if (deptSelect) {
+          deptSelect.style.borderColor = '#dc3545';
+          deptSelect.focus();
+          setTimeout(() => {
+            deptSelect.style.borderColor = '';
+          }, 3000);
+        }
+        return;
+      }
+      
+      if (!departmentId || !course || !yearLevel) {
+        let missingFields = [];
+        if (!departmentId) missingFields.push('department');
+        if (!course) missingFields.push('course');
+        if (!yearLevel) missingFields.push('year level');
+        errorEl.textContent = `Please fill in: ${missingFields.join(', ')}.`;
+        errorEl.classList.add('show');
+        
+        // Highlight missing fields
+        if (!departmentId) {
+          const deptSelect = document.getElementById('departmentSelect');
+          if (deptSelect) {
+            deptSelect.style.borderColor = '#dc3545';
+            deptSelect.focus();
+          }
+        }
+        if (!course) {
+          const courseSelect = document.getElementById('courseSelect');
+          if (courseSelect) {
+            courseSelect.style.borderColor = '#dc3545';
+            if (departmentId) courseSelect.focus();
+          }
+        }
+        if (!yearLevel) {
+          const yearSelect = document.getElementById('yearLevelSelect');
+          if (yearSelect) {
+            yearSelect.style.borderColor = '#dc3545';
+            if (departmentId && course) yearSelect.focus();
+          }
+        }
+        
+        setTimeout(() => {
+          document.querySelectorAll('#signupForm select').forEach(select => {
+            select.style.borderColor = '';
+          });
+        }, 3000);
         return;
       }
     } else if (detectedRole === 'faculty' || detectedRole === 'admin') {

@@ -3,6 +3,18 @@ const { getConnection } = require('../config/db');
 
 const router = express.Router();
 
+// Fallback departments data when database is unavailable
+const FALLBACK_DEPARTMENTS = [
+  { id: 1, code: 'SCS', name: 'School of Computer Studies (SCS)', documents: [] },
+  { id: 2, code: 'SBM', name: 'School of Business Management (SBM)', documents: [] },
+  { id: 3, code: 'SOE', name: 'School of Engineering (SOE)', documents: [] },
+  { id: 4, code: 'SAS', name: 'School of Arts and Sciences (SAS)', documents: [] },
+  { id: 5, code: 'SOEd', name: 'School of Education (SOEd)', documents: [] },
+  { id: 6, code: 'SAMS', name: 'School of Allied Medical Sciences (SAMS)', documents: [] },
+  { id: 7, code: 'SOL', name: 'School of Law (SOL)', documents: [] },
+  { id: 8, code: 'ETEEAP', name: 'ETEEAP (Expanded Tertiary Education Equivalency and Accreditation Program)', documents: [] }
+];
+
 router.get('/', async (req, res) => {
   try {
     const conn = await getConnection();
@@ -34,7 +46,9 @@ router.get('/', async (req, res) => {
     }
   } catch (error) {
     console.error('Departments error:', error);
-    res.status(500).json({ message: 'Failed to load departments.' });
+    console.warn('Using fallback departments data due to database connection failure');
+    // Return fallback data instead of error - allows app to work without database
+    res.json(FALLBACK_DEPARTMENTS);
   }
 });
 
