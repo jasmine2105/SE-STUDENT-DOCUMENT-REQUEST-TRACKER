@@ -149,8 +149,21 @@ const Utils = {
       return await response.text();
     } catch (error) {
       console.error('API Request Error:', error);
-      this.showToast('Network error. Please try again.', 'error');
-      throw error;
+      
+      // Provide more specific error messages
+      let errorMessage = error.message || 'Network error';
+      
+      if (error.message && (
+        error.message.includes('Failed to fetch') ||
+        error.message.includes('ERR_CONNECTION_REFUSED') ||
+        error.message.includes('ERR_INTERNET_DISCONNECTED') ||
+        error.message.includes('NetworkError')
+      )) {
+        errorMessage = 'Cannot connect to server. Please make sure the server is running. Run "npm start" in the terminal.';
+      }
+      
+      this.showToast(errorMessage, 'error');
+      throw new Error(errorMessage);
     }
   },
 

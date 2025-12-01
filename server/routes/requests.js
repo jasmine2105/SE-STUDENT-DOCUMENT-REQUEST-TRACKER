@@ -45,6 +45,52 @@ function mapRequestRow(row) {
   };
 }
 
+// Fallback document types by department code
+const FALLBACK_DOCUMENT_TYPES = {
+  'SCS': [
+    { id: 'tor', value: 'Transcript of Records', name: 'Transcript of Records', requires_faculty: true },
+    { id: 'good_moral', value: 'Good Moral Certificate', name: 'Certificate of Good Moral Character', requires_faculty: true },
+    { id: 'syllabus', value: 'Course Syllabus', name: 'Course Syllabus', requires_faculty: true },
+    { id: 'clearance', value: 'Clearance', name: 'Clearance', requires_faculty: false },
+    { id: 'enrollment', value: 'Enrollment Certification', name: 'Enrollment Certification', requires_faculty: false }
+  ],
+  'SBM': [
+    { id: 'tor_sbm', value: 'Transcript of Records - SBM', name: 'Transcript of Records', requires_faculty: true },
+    { id: 'good_moral_sbm', value: 'Good Moral Certificate - SBM', name: 'Certificate of Good Moral Character', requires_faculty: true },
+    { id: 'internship', value: 'Internship Certification', name: 'Internship Certification', requires_faculty: true },
+    { id: 'clearance_sbm', value: 'Clearance - SBM', name: 'Clearance', requires_faculty: false }
+  ],
+  'SAS': [
+    { id: 'tor_sas', value: 'Transcript of Records - SAS', name: 'Transcript of Records', requires_faculty: true },
+    { id: 'program', value: 'Program Certification', name: 'Program Certification', requires_faculty: true },
+    { id: 'clearance_sas', value: 'Clearance - SAS', name: 'Clearance', requires_faculty: false }
+  ],
+  'SOE': [
+    { id: 'tor_soe', value: 'Transcript of Records - SOE', name: 'Transcript of Records', requires_faculty: true },
+    { id: 'board_exam', value: 'Board Exam Endorsement', name: 'Board Exam Endorsement', requires_faculty: true },
+    { id: 'clearance_soe', value: 'Clearance - SOE', name: 'Clearance', requires_faculty: false }
+  ],
+  'SAMS': [
+    { id: 'tor_sams', value: 'Transcript of Records - SAMS', name: 'Transcript of Records', requires_faculty: true },
+    { id: 'clinical', value: 'Clinical Rotation Certification', name: 'Clinical Rotation Certification', requires_faculty: true },
+    { id: 'good_moral_sams', value: 'Good Moral Certificate - SAMS', name: 'Certificate of Good Moral Character', requires_faculty: true }
+  ],
+  'SOL': [
+    { id: 'tor_sol', value: 'Transcript of Records - SOL', name: 'Transcript of Records', requires_faculty: true },
+    { id: 'bar', value: 'BAR Endorsement', name: 'BAR Endorsement', requires_faculty: true },
+    { id: 'grades', value: 'Certification of Grades', name: 'Certification of Grades', requires_faculty: true }
+  ],
+  'ETEEAP': [
+    { id: 'tor_eteeap', value: 'ETEEAP TOR', name: 'Transcript of Records', requires_faculty: true },
+    { id: 'competency', value: 'Competency Certificate', name: 'Competency Certificate', requires_faculty: true }
+  ],
+  'SOEd': [
+    { id: 'tor_soed', value: 'Transcript of Records - SOEd', name: 'Transcript of Records', requires_faculty: true },
+    { id: 'practice', value: 'Practice Teaching Certification', name: 'Practice Teaching Certification', requires_faculty: true },
+    { id: 'good_moral_soed', value: 'Good Moral Certificate - SOEd', name: 'Certificate of Good Moral Character', requires_faculty: true }
+  ]
+};
+
 // NEW ENDPOINT: Get document types by department
 router.get('/document-types/:departmentCode', authMiddleware(true), async (req, res) => {
   const { departmentCode } = req.params;
@@ -59,6 +105,12 @@ router.get('/document-types/:departmentCode', authMiddleware(true), async (req, 
       );
 
       if (deptRows.length === 0) {
+        // Department not found in DB, try fallback
+        console.warn(`Department ${departmentCode} not found in database, using fallback`);
+        const fallbackDocs = FALLBACK_DOCUMENT_TYPES[departmentCode] || [];
+        if (fallbackDocs.length > 0) {
+          return res.json(fallbackDocs);
+        }
         return res.status(404).json({ message: 'Department not found.' });
       }
 
@@ -80,12 +132,29 @@ router.get('/document-types/:departmentCode', authMiddleware(true), async (req, 
         requires_faculty: !!row.requires_faculty
       }));
 
+      // If no document types in DB, use fallback
+      if (documentTypes.length === 0) {
+        console.warn(`No document types found in DB for ${departmentCode}, using fallback`);
+        const fallbackDocs = FALLBACK_DOCUMENT_TYPES[departmentCode] || [];
+        if (fallbackDocs.length > 0) {
+          return res.json(fallbackDocs);
+        }
+      }
+
       res.json(documentTypes);
     } finally {
-      conn.release();
+      if (conn) conn.release();
     }
   } catch (error) {
     console.error('Document types get error:', error);
+    
+    // On error, try to return fallback data
+    const fallbackDocs = FALLBACK_DOCUMENT_TYPES[departmentCode] || [];
+    if (fallbackDocs.length > 0) {
+      console.warn(`Database error, using fallback document types for ${departmentCode}`);
+      return res.json(fallbackDocs);
+    }
+    
     res.status(500).json({ message: 'Failed to load document types.' });
   }
 });
@@ -240,7 +309,26 @@ router.post('/', authMiddleware(true), async (req, res) => {
     }
   } catch (error) {
     console.error('Request create error:', error);
-    res.status(500).json({ message: 'Failed to submit request.' });
+    console.error('Error details:', {
+      message: error.message,
+      stack: error.stack,
+      code: error.code,
+      sqlMessage: error.sqlMessage
+    });
+    
+    // Provide more specific error messages
+    let errorMessage = 'Failed to submit request.';
+    if (error.code === 'ER_NO_SUCH_TABLE') {
+      errorMessage = 'Database table not found. Please check database setup.';
+    } else if (error.code === 'ER_BAD_FIELD_ERROR') {
+      errorMessage = 'Database schema error. Please check database setup.';
+    } else if (error.sqlMessage) {
+      errorMessage = `Database error: ${error.sqlMessage}`;
+    } else if (error.message) {
+      errorMessage = error.message;
+    }
+    
+    res.status(500).json({ message: errorMessage });
   }
 });
 

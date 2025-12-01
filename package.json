@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "node server.js",
     "start": "node server.js",
-    "server": "node server.js"
+    "server": "node server.js",
+    "setup-db": "node setup-database.js",
+    "create-table": "node create-missing-table.js"
   },
   "keywords": [
     "recoletos",

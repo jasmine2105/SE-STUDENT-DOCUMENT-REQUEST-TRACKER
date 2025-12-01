@@ -83,11 +83,30 @@ router.post('/signup', async (req, res) => {
     const finalRole = detectedRole;
 
     // Get DB pool and check if user already exists
-    const pool = await initPool();
-    const [existingUsers] = await pool.query(
-      'SELECT id FROM users WHERE id_number = ? OR email = ?',
-      [idNumber, email]
-    );
+    let pool;
+    try {
+      pool = await initPool();
+    } catch (dbError) {
+      console.error('❌ Database connection failed during signup:', dbError);
+      return res.status(500).json({ 
+        error: 'Database connection failed',
+        message: 'Unable to connect to database. Please check your database configuration or contact support.' 
+      });
+    }
+
+    let existingUsers;
+    try {
+      [existingUsers] = await pool.query(
+        'SELECT id FROM users WHERE id_number = ? OR email = ?',
+        [idNumber, email]
+      );
+    } catch (queryError) {
+      console.error('❌ Database query failed during signup:', queryError);
+      return res.status(500).json({ 
+        error: 'Database query failed',
+        message: 'Unable to check existing users. Please try again later.' 
+      });
+    }
 
     if (existingUsers.length > 0) {
       return res.status(409).json({ 
@@ -164,28 +183,62 @@ router.post('/signup', async (req, res) => {
     }
 
     // Insert user into database
-    const [result] = await pool.query(insertQuery, insertParams);
+    let result;
+    try {
+      [result] = await pool.query(insertQuery, insertParams);
+    } catch (insertError) {
+      console.error('❌ Database insert failed during signup:', insertError);
+      return res.status(500).json({ 
+        error: 'Database insert failed',
+        message: 'Unable to create account. Please try again later or contact support.' 
+      });
+    }
+    
     const userId = result.insertId;
+    if (!userId) {
+      console.error('❌ No user ID returned from insert');
+      return res.status(500).json({ 
+        error: 'Account creation failed',
+        message: 'Unable to create account. Please try again.' 
+      });
+    }
 
     // Get the complete user data with department info
-    const [users] = await pool.query(`
-      SELECT 
-        u.id, 
-        u.role, 
-        u.id_number AS idNumber, 
-        u.full_name AS fullName, 
-        u.email, 
-        u.password_hash AS password,
-        u.department_id AS departmentId,
-        d.name as department,
-        d.code as departmentCode,
-        u.course,
-        u.year_level AS yearLevel,
-        u.position
-      FROM users u
-      LEFT JOIN departments d ON u.department_id = d.id
-      WHERE u.id = ?
-    `, [userId]);
+    let users;
+    try {
+      [users] = await pool.query(`
+        SELECT 
+          u.id, 
+          u.role, 
+          u.id_number AS idNumber, 
+          u.full_name AS fullName, 
+          u.email, 
+          u.password_hash AS password,
+          u.department_id AS departmentId,
+          d.name as department,
+          d.code as departmentCode,
+          u.course,
+          u.year_level AS yearLevel,
+          u.position
+        FROM users u
+        LEFT JOIN departments d ON u.department_id = d.id
+        WHERE u.id = ?
+      `, [userId]);
+    } catch (queryError) {
+      console.error('❌ Failed to fetch created user:', queryError);
+      return res.status(500).json({ 
+        error: 'Account created but failed to retrieve user data',
+        message: 'Your account may have been created. Please try logging in.' 
+      });
+    }
+
+    if (!users || users.length === 0) {
+      console.error('❌ User not found after creation');
+      return res.status(500).json({ 
+        error: 'User not found',
+        message: 'Account may have been created. Please try logging in.' 
+      });
+    }
 
     const user = users[0];
 
@@ -230,9 +283,24 @@ router.post('/signup', async (req, res) => {
 
   } catch (error) {
     console.error('❌ Signup error:', error);
+    console.error('Error stack:', error.stack);
+    
+    // Provide more helpful error messages
+    let errorMessage = 'An error occurred while creating your account. Please try again.';
+    
+    if (error.code === 'ER_DUP_ENTRY') {
+      errorMessage = 'An account with this ID number or email already exists.';
+    } else if (error.code === 'ER_NO_SUCH_TABLE') {
+      errorMessage = 'Database tables not found. Please ensure the database is properly set up.';
+    } else if (error.code === 'ECONNREFUSED' || error.code === 'ER_ACCESS_DENIED_ERROR') {
+      errorMessage = 'Database connection failed. Please check your database configuration.';
+    } else if (error.message) {
+      errorMessage = error.message;
+    }
+    
     res.status(500).json({ 
       error: 'Signup failed',
-      message: 'An error occurred while creating your account. Please try again.' 
+      message: errorMessage 
     });
   }
 });

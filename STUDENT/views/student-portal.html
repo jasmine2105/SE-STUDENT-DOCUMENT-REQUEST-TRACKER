@@ -7,17 +7,17 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="../../shared/styles-home.css">
     <link rel="stylesheet" href="../styles/student-portal.css">
     <style>
-        /* Add these temporary debug styles to check if button is clickable */
+      
         .btn-new-request {
             background-color: #004225 !important;
             position: relative !important;
             z-index: 100 !important;
         }
-        
-        /* Ensure modal is properly styled */
+  
         .modal.active {
             display: flex !important;
         }
@@ -36,7 +36,7 @@
         console.log('🔍 Has authToken:', !!localStorage.getItem('authToken'));
         console.log('🔍 isAuthenticated:', localStorage.getItem('currentUser') !== null && !!localStorage.getItem('authToken'));
         
-        // Parse and show user object if exists
+     
         try {
             const user = localStorage.getItem('currentUser');
             if (user) {
@@ -53,10 +53,11 @@
         <!-- Sidebar -->
         <aside class="portal-sidebar" id="portalSidebar">
             <div class="sidebar-header">
-                <div class="sidebar-logo">USJ-R</div>
+                <div class="sidebar-logo">
+                    <i class="fas fa-shield-alt"></i>
+                </div>
                 <div>
-                    <p class="sidebar-title">Student Portal</p>
-                    <span class="sidebar-subtitle" id="sidebarUserInfo">Loading...</span>
+                    <p class="sidebar-title">Documents & Records</p>
                 </div>
             </div>
             <nav class="sidebar-nav">
@@ -74,12 +75,14 @@
             <!-- Header -->
             <header class="portal-header">
                 <div class="header-left">
-                    <h1>Document Tracker</h1>
-                    <p id="userInfo">Loading...</p>
+                    <h1 id="welcomeHeader">Welcome, <span id="welcomeUserName">Loading...</span> Track Your Documents Here</h1>
                 </div>
                 <div class="header-right">
+                    <button class="btn-new-request-header" id="newRequestBtnHeader">
+                        <i class="fas fa-plus"></i> New Request
+                    </button>
                     <div class="notification-bell" id="notificationBell">
-                        <span class="bell-icon">🔔</span>
+                        <i class="fas fa-bell bell-icon"></i>
                         <span class="notification-count hidden" id="notificationCount">0</span>
                         <div class="notification-dropdown hidden" id="notificationDropdown">
                             <div class="notification-header">
@@ -89,8 +92,27 @@
                             <div class="notification-list" id="notificationList"></div>
                         </div>
                     </div>
-                    <div class="user-pill">
-                        <span class="user-name" id="userName">Loading...</span>
+                    <div class="user-profile-dropdown" id="userProfileDropdown">
+                        <div class="user-pill" id="userPill">
+                            <i class="fas fa-user-circle"></i>
+                            <span class="user-name" id="userName">Loading...</span>
+                            <i class="fas fa-chevron-down"></i>
+                        </div>
+                        <div class="profile-dropdown-menu hidden" id="profileDropdownMenu">
+                            <a href="#" class="dropdown-item" id="profileLink">
+                                <i class="fas fa-user"></i> My Profile
+                            </a>
+                            <a href="#" class="dropdown-item" id="notificationsLink">
+                                <i class="fas fa-bell"></i> Notifications
+                            </a>
+                            <a href="#" class="dropdown-item" id="settingsLink">
+                                <i class="fas fa-cog"></i> Settings
+                            </a>
+                            <div class="dropdown-divider"></div>
+                            <a href="#" class="dropdown-item" id="logoutLink">
+                                <i class="fas fa-sign-out-alt"></i> Logout
+                            </a>
+                        </div>
                     </div>
                 </div>
             </header>
@@ -98,35 +120,70 @@
             <!-- Dashboard View -->
             <main class="main-container" id="dashboardView">
                 <div class="stats-grid">
-                    <div class="stat-card">
-                        <div class="stat-value" id="statTotal">0</div>
-                        <div class="stat-label">Total Requests</div>
+                    <div class="stat-card stat-card-total">
+                        <div class="stat-icon">
+                            <i class="fas fa-file-alt"></i>
+                        </div>
+                        <div class="stat-content">
+                            <div class="stat-value" id="statTotal">0</div>
+                            <div class="stat-label">Total Requests</div>
+                            <div class="stat-trend" id="statTotalTrend"></div>
+                        </div>
                     </div>
-                    <div class="stat-card">
-                        <div class="stat-value" id="statPending">0</div>
-                        <div class="stat-label">In Progress</div>
+                    <div class="stat-card stat-card-pending">
+                        <div class="stat-icon">
+                            <i class="fas fa-clock"></i>
+                        </div>
+                        <div class="stat-content">
+                            <div class="stat-value" id="statPending">0</div>
+                            <div class="stat-label">In Progress</div>
+                            <div class="stat-trend" id="statPendingTrend"></div>
+                        </div>
                     </div>
-                    <div class="stat-card">
-                        <div class="stat-value" id="statCompleted">0</div>
-                        <div class="stat-label">Completed</div>
+                    <div class="stat-card stat-card-completed">
+                        <div class="stat-icon">
+                            <i class="fas fa-check-circle"></i>
+                        </div>
+                        <div class="stat-content">
+                            <div class="stat-value" id="statCompleted">0</div>
+                            <div class="stat-label">Completed</div>
+                            <div class="stat-trend" id="statCompletedTrend"></div>
+                        </div>
                     </div>
                 </div>
 
                 <div class="content-section">
                     <div class="section-header">
-                        <h2>My Documents</h2>
-                        <div style="display:flex; gap:0.5rem; align-items:center;">
-                            <select id="myDocsFilter" class="filter-select" style="min-width:160px;">
+                        <div class="section-title-wrapper">
+                            <i class="fas fa-folder-open section-icon"></i>
+                            <h2>My Documents</h2>
+                        </div>
+                        <div class="section-controls">
+                            <div class="filter-group">
+                                <label for="myDocsSort" class="filter-label">
+                                    <i class="fas fa-sort"></i> Sort By:
+                                </label>
+                                <select id="myDocsSort" class="filter-select">
+                                    <option value="date-desc">Date (Newest)</option>
+                                    <option value="date-asc">Date (Oldest)</option>
+                                    <option value="status">Status</option>
+                                    <option value="department">Department</option>
+                                    <option value="document">Document Name</option>
+                                </select>
+                            </div>
+                            <select id="myDocsFilter" class="filter-select">
                                 <option value="all">All Status</option>
                                 <option value="pending">Pending</option>
-                                <option value="pending_faculty">Pending Faculty</option>
+                                <option value="pending_faculty">Awaiting Approval</option>
                                 <option value="in_progress">In Progress</option>
                                 <option value="approved">Approved</option>
                                 <option value="completed">Completed</option>
                                 <option value="declined">Declined</option>
                             </select>
-                            <input id="myDocsSearch" class="form-input" placeholder="Search documents..." style="min-width:200px;" />
-                            <button class="btn-secondary" id="manageDocsBtn">Manage Documents</button>
+                            <input id="myDocsSearch" class="form-input" placeholder="Search documents..." />
+                            <button class="btn-secondary" id="manageDocsBtn">
+                                <i class="fas fa-cog"></i> Manage
+                            </button>
                         </div>
                     </div>
                     <div id="myDocuments">
@@ -140,8 +197,13 @@
 
                 <div class="content-section" style="margin-top:1.25rem;">
                     <div class="section-header">
-                        <h2>Recent Requests</h2>
-                        <button class="btn-new-request" id="newRequestBtn">+ New Request</button>
+                        <div class="section-title-wrapper">
+                            <i class="fas fa-history section-icon"></i>
+                            <h2>Recent Requests</h2>
+                        </div>
+                        <button class="btn-new-request" id="newRequestBtn">
+                            <i class="fas fa-plus"></i> New Request
+                        </button>
                     </div>
                     <div id="recentRequests">
                         <div class="empty-state">
@@ -157,13 +219,18 @@
             <section class="main-container hidden" id="historyView">
                 <div class="content-section">
                     <div class="section-header">
-                        <h2>Request History</h2>
+                        <div class="section-title-wrapper">
+                            <i class="fas fa-list-alt section-icon"></i>
+                            <h2>Request History</h2>
+                        </div>
                         <div class="history-filters">
-                            <select id="filterDepartment" class="filter-select"></select>
+                            <select id="filterDepartment" class="filter-select">
+                                <option value="all">All Departments</option>
+                            </select>
                             <select id="filterStatusHistory" class="filter-select">
                                 <option value="all">All Status</option>
                                 <option value="pending">Pending</option>
-                                <option value="pending_faculty">Pending Faculty</option>
+                                <option value="pending_faculty">Awaiting Approval</option>
                                 <option value="in_progress">In Progress</option>
                                 <option value="approved">Approved</option>
                                 <option value="completed">Completed</option>
@@ -184,8 +251,13 @@
             <section class="main-container hidden" id="notificationsView">
                 <div class="content-section">
                     <div class="section-header">
-                        <h2>Notifications</h2>
-                        <button class="btn-secondary" id="markAllReadSecondary">Mark all as read</button>
+                        <div class="section-title-wrapper">
+                            <i class="fas fa-bell section-icon"></i>
+                            <h2>Notifications</h2>
+                        </div>
+                        <button class="btn-secondary" id="markAllReadSecondary">
+                            <i class="fas fa-check-double"></i> Mark all as read
+                        </button>
                     </div>
                     <div id="notificationsFullList">
                         <div class="empty-state">
@@ -195,6 +267,195 @@
                     </div>
                 </div>
             </section>
+        </div>
+    </div>
+
+    <!-- My Profile Modal -->
+    <div id="profileModal" class="modal-overlay hidden">
+        <div class="request-modal profile-modal">
+            <div class="modal-header">
+                <h2><i class="fas fa-user"></i> My Profile</h2>
+                <button class="close-modal" id="closeProfileModal" title="Close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="profile-content">
+                    <!-- Profile Header with Photo -->
+                    <div class="profile-header-section">
+                        <div class="profile-photo-container">
+                            <div class="profile-photo" id="profilePhoto">
+                                <i class="fas fa-user"></i>
+                            </div>
+                            <button class="btn-update-photo" id="updatePhotoBtn" title="Update Photo">
+                                <i class="fas fa-camera"></i>
+                            </button>
+                        </div>
+                        <h3 id="profileName">Loading...</h3>
+                        <p class="profile-role">Student</p>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div class="profile-actions">
+                        <button class="btn-profile-action" id="editProfileBtn">
+                            <i class="fas fa-edit"></i> Edit Profile
+                        </button>
+                        <button class="btn-profile-action" id="viewRequestHistoryBtn">
+                            <i class="fas fa-history"></i> View Request History
+                        </button>
+                    </div>
+
+                    <!-- Personal Information Section -->
+                    <div class="profile-info-section">
+                        <div class="section-divider"></div>
+                        <h4 class="section-title">
+                            <i class="fas fa-id-card"></i> Personal Information
+                        </h4>
+                        <div class="info-list">
+                            <div class="info-row">
+                                <span class="info-label">Full Name:</span>
+                                <span class="info-value" id="profileFullName">-</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">ID Number:</span>
+                                <span class="info-value" id="profileIdNumber">-</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Email:</span>
+                                <span class="info-value" id="profileEmail">-</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Contact Number:</span>
+                                <span class="info-value" id="profileContact">-</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Academic Information Section -->
+                    <div class="profile-info-section">
+                        <div class="section-divider"></div>
+                        <h4 class="section-title">
+                            <i class="fas fa-graduation-cap"></i> Academic Information
+                        </h4>
+                        <div class="info-list">
+                            <div class="info-row">
+                                <span class="info-label">Department:</span>
+                                <span class="info-value" id="profileDepartment">-</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Course:</span>
+                                <span class="info-value" id="profileCourse">-</span>
+                            </div>
+                            <div class="info-row">
+                                <span class="info-label">Year Level:</span>
+                                <span class="info-value" id="profileYearLevel">-</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Document Records Section -->
+                    <div class="profile-info-section">
+                        <div class="section-divider"></div>
+                        <h4 class="section-title">
+                            <i class="fas fa-file-alt"></i> Document Records
+                        </h4>
+                        <div class="records-summary">
+                            <div class="record-stat">
+                                <div class="record-value" id="profileTotalRequests">0</div>
+                                <div class="record-label">Total Requests</div>
+                            </div>
+                            <div class="record-stat">
+                                <div class="record-value" id="profilePendingRequests">0</div>
+                                <div class="record-label">Pending</div>
+                            </div>
+                            <div class="record-stat">
+                                <div class="record-value" id="profileCompletedRequests">0</div>
+                                <div class="record-label">Completed</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settingsModal" class="modal-overlay hidden">
+        <div class="request-modal settings-modal">
+            <div class="modal-header">
+                <h2><i class="fas fa-cog"></i> Settings</h2>
+                <button class="close-modal" id="closeSettingsModal" title="Close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="settings-content">
+                    <div class="settings-section">
+                        <h3><i class="fas fa-user-edit"></i> Account Settings</h3>
+                        <div class="settings-item">
+                            <label>Email Address</label>
+                            <div class="settings-input-group">
+                                <input type="email" id="settingsEmail" class="form-input" />
+                                <button class="btn-secondary" id="updateEmailBtn">
+                                    <i class="fas fa-save"></i> Update
+                                </button>
+                            </div>
+                        </div>
+                        <div class="settings-item">
+                            <label>Contact Number</label>
+                            <div class="settings-input-group">
+                                <input type="tel" id="settingsContact" class="form-input" />
+                                <button class="btn-secondary" id="updateContactBtn">
+                                    <i class="fas fa-save"></i> Update
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="settings-section">
+                        <h3><i class="fas fa-lock"></i> Password</h3>
+                        <div class="settings-item">
+                            <label>Current Password</label>
+                            <input type="password" id="currentPassword" class="form-input" />
+                        </div>
+                        <div class="settings-item">
+                            <label>New Password</label>
+                            <input type="password" id="newPassword" class="form-input" />
+                        </div>
+                        <div class="settings-item">
+                            <label>Confirm New Password</label>
+                            <input type="password" id="confirmNewPassword" class="form-input" />
+                        </div>
+                        <button class="btn-primary" id="updatePasswordBtn" style="width: 100%; margin-top: 0.5rem;">
+                            <i class="fas fa-key"></i> Update Password
+                        </button>
+                    </div>
+
+                    <div class="settings-section">
+                        <h3><i class="fas fa-bell"></i> Notifications</h3>
+                        <div class="settings-item">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="emailNotifications" checked />
+                                <span>Email Notifications</span>
+                            </label>
+                        </div>
+                        <div class="settings-item">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="smsNotifications" />
+                                <span>SMS Notifications</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="settings-section">
+                        <h3><i class="fas fa-palette"></i> Appearance</h3>
+                        <div class="settings-item">
+                            <label>Theme</label>
+                            <select id="themeSelect" class="form-select">
+                                <option value="light">Light</option>
+                                <option value="dark">Dark</option>
+                                <option value="auto">Auto</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -329,6 +590,11 @@
             </div>
         </div>
     </div>
+
+    <!-- Floating New Request Button -->
+    <button class="floating-btn" id="floatingNewRequestBtn" title="New Request">
+        <i class="fas fa-plus"></i>
+    </button>
 
     <script src="../../shared/config.js"></script>
     <script src="../../shared/utils.js"></script>

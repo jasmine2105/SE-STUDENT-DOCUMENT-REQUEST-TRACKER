@@ -16,9 +16,9 @@ CREATE TABLE IF NOT EXISTS departments (
 );
 
 -- =======================
--- DOCUMENTS TABLE
+-- DOCUMENTS TABLE (also known as department_documents)
 -- =======================
-CREATE TABLE IF NOT EXISTS documents (
+CREATE TABLE IF NOT EXISTS department_documents (
   id INT AUTO_INCREMENT PRIMARY KEY,
   department_id INT NOT NULL,
   label VARCHAR(255) NOT NULL,
@@ -27,6 +27,9 @@ CREATE TABLE IF NOT EXISTS documents (
   UNIQUE KEY unique_department_document (department_id, value),
   FOREIGN KEY (department_id) REFERENCES departments(id)
 );
+
+-- Create alias table for backward compatibility
+CREATE TABLE IF NOT EXISTS documents LIKE department_documents;
 
 -- =======================
 -- USERS TABLE
@@ -127,7 +130,7 @@ INSERT INTO departments (code, name) VALUES
 ON DUPLICATE KEY UPDATE name = VALUES(name);
 
 -- Documents (per department)
-INSERT INTO documents (department_id, label, value, requires_faculty)
+INSERT INTO department_documents (department_id, label, value, requires_faculty)
 VALUES
   ((SELECT id FROM departments WHERE code = 'SCS'), 'Transcript of Records', 'SCS_TOR', TRUE),
   ((SELECT id FROM departments WHERE code = 'SCS'), 'Certificate of Good Moral Character', 'SCS_GM', TRUE),

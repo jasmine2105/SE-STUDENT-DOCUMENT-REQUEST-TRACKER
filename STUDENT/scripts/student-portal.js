@@ -12,6 +12,10 @@ class StudentPortal {
     this.defaultDepartment = 'School of Computer Studies (SCS)';
     this.documentTypes = {};
     
+    // Pagination state
+    this.currentPage = 1;
+    this.itemsPerPage = 10;
+    
     window.studentPortal = this;
     this.init();
   }
@@ -77,12 +81,25 @@ class StudentPortal {
     try {
       const data = await Utils.apiRequest('/departments');
       if (Array.isArray(data) && data.length) {
-        this.departments = data;
+        // Ensure all department IDs are numbers
+        this.departments = data.map(dept => ({
+          ...dept,
+          id: typeof dept.id === 'number' ? dept.id : parseInt(dept.id, 10) || dept.id
+        }));
+      } else {
+        throw new Error('No departments returned from API');
       }
     } catch (error) {
       console.warn('Failed to load departments from API', error);
-      this.departments = (window.RecoletosConfig && window.RecoletosConfig.departments) || [];
+      // Use fallback config, but convert IDs to numbers if possible
+      const fallbackDepts = (window.RecoletosConfig && window.RecoletosConfig.departments) || [];
+      this.departments = fallbackDepts.map((dept, index) => ({
+        ...dept,
+        id: typeof dept.id === 'number' ? dept.id : (parseInt(dept.id, 10) || index + 1),
+        code: dept.id || dept.code || `DEPT-${index + 1}`
+      }));
     }
+    console.log('Loaded departments:', this.departments);
   }
 
   async loadDocumentTypes(departmentCode) {
@@ -90,13 +107,50 @@ class StudentPortal {
       return this.documentTypes[departmentCode];
     }
 
+    // First, try to get from hardcoded config as fallback
+    const fallbackDept = window.RecoletosConfig?.findDepartmentByName?.(departmentCode);
+    const fallbackDocs = fallbackDept?.documents || [];
+
     try {
       const data = await Utils.apiRequest(`/requests/document-types/${departmentCode}`);
-      this.documentTypes[departmentCode] = data;
-      return data;
+      if (data && Array.isArray(data) && data.length > 0) {
+        this.documentTypes[departmentCode] = data;
+        return data;
+      } else {
+        // API returned empty array, use fallback
+        console.warn('API returned no document types, using fallback config');
+        if (fallbackDocs.length > 0) {
+          const formattedDocs = fallbackDocs.map(doc => ({
+            id: doc.value,
+            value: doc.value,
+            name: doc.label || doc.value,
+            requires_faculty: doc.requiresFaculty || false
+          }));
+          this.documentTypes[departmentCode] = formattedDocs;
+          return formattedDocs;
+        }
+        return [];
+      }
     } catch (error) {
-      console.error('Failed to load document types:', error);
-      Utils.showToast('Failed to load document types', 'error');
+      console.error('Failed to load document types from API:', error);
+      
+      // Use fallback if available
+      if (fallbackDocs.length > 0) {
+        console.log('Using fallback document types from config');
+        const formattedDocs = fallbackDocs.map(doc => ({
+          id: doc.value,
+          value: doc.value,
+          name: doc.label || doc.value,
+          requires_faculty: doc.requiresFaculty || false
+        }));
+        this.documentTypes[departmentCode] = formattedDocs;
+        return formattedDocs;
+      }
+      
+      // Only show error if no fallback available
+      if (fallbackDocs.length === 0) {
+        Utils.showToast('Failed to load document types. Please try again.', 'error');
+      }
       return [];
     }
   }
@@ -108,14 +162,12 @@ class StudentPortal {
 
   loadUserInfo() {
     const userNameEl = document.getElementById('userName');
-    const userInfoEl = document.getElementById('userInfo');
-    const sidebarInfo = document.getElementById('sidebarUserInfo');
+    const welcomeUserNameEl = document.getElementById('welcomeUserName');
+    const welcomeHeaderEl = document.getElementById('welcomeHeader');
 
     const displayName = this.currentUser.fullName || this.currentUser.name || 'Student';
     if (userNameEl) userNameEl.textContent = displayName;
-    const infoText = `${this.currentUser.course || ''} • ${this.currentUser.yearLevel || ''}`.trim();
-    if (userInfoEl) userInfoEl.textContent = infoText;
-    if (sidebarInfo) sidebarInfo.textContent = this.studentDepartmentName;
+    if (welcomeUserNameEl) welcomeUserNameEl.textContent = displayName;
 
     const departmentFilter = document.getElementById('filterDepartment');
     if (departmentFilter) {
@@ -143,14 +195,62 @@ class StudentPortal {
     const totalEl = document.getElementById('statTotal');
     const pendingEl = document.getElementById('statPending');
     const completedEl = document.getElementById('statCompleted');
+    const totalTrendEl = document.getElementById('statTotalTrend');
+    const pendingTrendEl = document.getElementById('statPendingTrend');
+    const completedTrendEl = document.getElementById('statCompletedTrend');
 
     const total = this.requests.length;
     const pending = this.requests.filter((r) => ['pending', 'pending_faculty', 'in_progress'].includes(r.status)).length;
     const completed = this.requests.filter((r) => r.status === 'completed').length;
 
+    // Calculate trends (today's requests)
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayTotal = this.requests.filter(r => {
+      const reqDate = new Date(r.submittedAt);
+      reqDate.setHours(0, 0, 0, 0);
+      return reqDate.getTime() === today.getTime();
+    }).length;
+
     if (totalEl) totalEl.textContent = total;
     if (pendingEl) pendingEl.textContent = pending;
     if (completedEl) completedEl.textContent = completed;
+
+    // Update trends
+    if (totalTrendEl) {
+      if (todayTotal > 0) {
+        totalTrendEl.innerHTML = `<span class="stat-trend positive"><i class="fas fa-arrow-up"></i> +${todayTotal} today</span>`;
+        totalTrendEl.className = 'stat-trend positive';
+      } else {
+        totalTrendEl.innerHTML = '';
+      }
+    }
+    if (pendingTrendEl) {
+      const todayPending = this.requests.filter(r => {
+        const reqDate = new Date(r.submittedAt);
+        reqDate.setHours(0, 0, 0, 0);
+        return reqDate.getTime() === today.getTime() && ['pending', 'pending_faculty', 'in_progress'].includes(r.status);
+      }).length;
+      if (todayPending > 0) {
+        pendingTrendEl.innerHTML = `<span class="stat-trend positive"><i class="fas fa-arrow-up"></i> +${todayPending} today</span>`;
+        pendingTrendEl.className = 'stat-trend positive';
+      } else {
+        pendingTrendEl.innerHTML = '';
+      }
+    }
+    if (completedTrendEl) {
+      const todayCompleted = this.requests.filter(r => {
+        const reqDate = new Date(r.submittedAt);
+        reqDate.setHours(0, 0, 0, 0);
+        return reqDate.getTime() === today.getTime() && r.status === 'completed';
+      }).length;
+      if (todayCompleted > 0) {
+        completedTrendEl.innerHTML = `<span class="stat-trend positive"><i class="fas fa-arrow-up"></i> +${todayCompleted} today</span>`;
+        completedTrendEl.className = 'stat-trend positive';
+      } else {
+        completedTrendEl.innerHTML = '';
+      }
+    }
   }
 
   renderDashboard() {
@@ -179,13 +279,38 @@ class StudentPortal {
     }
   }
 
+  getStatusIcon(status) {
+    const icons = {
+      pending: 'fa-clock',
+      pending_faculty: 'fa-hourglass-half',
+      in_progress: 'fa-spinner',
+      approved: 'fa-check-circle',
+      completed: 'fa-check-double',
+      declined: 'fa-times-circle'
+    };
+    return icons[status] || 'fa-circle';
+  }
+
+  getDocumentIcon(documentType) {
+    const type = (documentType || '').toLowerCase();
+    if (type.includes('transcript') || type.includes('record')) return 'fa-file-alt';
+    if (type.includes('certificate')) return 'fa-certificate';
+    if (type.includes('clearance')) return 'fa-shield-check';
+    if (type.includes('moral')) return 'fa-shield-alt';
+    if (type.includes('graduation')) return 'fa-graduation-cap';
+    if (type.includes('recommendation')) return 'fa-envelope-open-text';
+    return 'fa-file';
+  }
+
   renderMyDocuments() {
     const container = document.getElementById('myDocuments');
     if (!container) return;
     const filterEl = document.getElementById('myDocsFilter');
     const searchEl = document.getElementById('myDocsSearch');
+    const sortEl = document.getElementById('myDocsSort');
     const selectedStatus = filterEl ? filterEl.value : 'all';
     const searchTerm = searchEl ? (searchEl.value || '').toLowerCase().trim() : '';
+    const sortBy = sortEl ? sortEl.value : 'date-desc';
 
     let filtered = [...this.requests];
     if (selectedStatus && selectedStatus !== 'all') {
@@ -198,6 +323,24 @@ class StudentPortal {
       });
     }
 
+    // Apply sorting
+    filtered.sort((a, b) => {
+      switch (sortBy) {
+        case 'date-desc':
+          return new Date(b.submittedAt) - new Date(a.submittedAt);
+        case 'date-asc':
+          return new Date(a.submittedAt) - new Date(b.submittedAt);
+        case 'status':
+          return (a.status || '').localeCompare(b.status || '');
+        case 'department':
+          return (a.department || '').localeCompare(b.department || '');
+        case 'document':
+          return (a.documentType || '').localeCompare(b.documentType || '');
+        default:
+          return new Date(b.submittedAt) - new Date(a.submittedAt);
+      }
+    });
+
     if (!filtered.length) {
       container.innerHTML = `
         <div class="empty-state">
@@ -209,28 +352,47 @@ class StudentPortal {
       return;
     }
 
-    const rows = filtered
-      .sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt))
-      .map((req) => {
-        const statusClass = Utils.getStatusBadgeClass(req.status);
-        const statusText = Utils.getStatusText(req.status);
-        const submitted = Utils.formatDate(req.submittedAt);
-        const atts = Array.isArray(req.attachments) ? req.attachments : [];
-        const attCount = atts.length;
-        const firstAttUrl = atts[0] && atts[0].url ? atts[0].url : null;
+    // Pagination
+    const totalPages = Math.ceil(filtered.length / this.itemsPerPage);
+    const startIndex = (this.currentPage - 1) * this.itemsPerPage;
+    const endIndex = startIndex + this.itemsPerPage;
+    const paginatedData = filtered.slice(startIndex, endIndex);
 
-        return `
-          <tr>
-            <td>${req.documentType || req.documentValue || 'Document'}</td>
-            <td>${req.department || this.studentDepartmentName}</td>
-            <td>${submitted}</td>
-            <td><span class="status-badge ${statusClass}">${statusText}</span></td>
-            <td>
-              <button class="btn-secondary" onclick="studentPortal.viewRequest(${req.id})">View</button>
-            </td>
-          </tr>
-        `;
-      }).join('');
+    const rows = paginatedData.map((req) => {
+      const statusClass = Utils.getStatusBadgeClass(req.status);
+      const statusText = Utils.getStatusText(req.status);
+      const statusIcon = this.getStatusIcon(req.status);
+      const submitted = Utils.formatDate(req.submittedAt);
+      const docIcon = this.getDocumentIcon(req.documentType);
+      const docName = req.documentType || req.documentValue || 'Document';
+
+      return `
+        <tr>
+          <td>
+            <div style="display: flex; align-items: center;">
+              <i class="fas ${docIcon} document-icon file" style="margin-right: 0.75rem; color: var(--recoletos-green);"></i>
+              ${docName}
+            </div>
+          </td>
+          <td>${req.department || this.studentDepartmentName}</td>
+          <td>${submitted}</td>
+          <td>
+            <span class="status-badge ${statusClass}">
+              <i class="fas ${statusIcon}"></i>
+              ${statusText}
+            </span>
+          </td>
+          <td>
+            <button class="btn-secondary" onclick="studentPortal.viewRequest(${req.id})">
+              <i class="fas fa-eye"></i> View
+            </button>
+          </td>
+        </tr>
+      `;
+    }).join('');
+
+    // Pagination controls
+    const paginationHTML = this.renderPagination(filtered.length, totalPages);
 
     container.innerHTML = `
       <div class="table-wrapper">
@@ -247,7 +409,90 @@ class StudentPortal {
           <tbody>${rows}</tbody>
         </table>
       </div>
+      ${paginationHTML}
     `;
+  }
+
+  renderPagination(totalItems, totalPages) {
+    if (totalPages <= 1) return '';
+
+    const startItem = (this.currentPage - 1) * this.itemsPerPage + 1;
+    const endItem = Math.min(this.currentPage * this.itemsPerPage, totalItems);
+
+    let paginationControls = '';
+    
+    // Previous button
+    paginationControls += `
+      <button class="pagination-btn" ${this.currentPage === 1 ? 'disabled' : ''} 
+        onclick="studentPortal.goToPage(${this.currentPage - 1})">
+        <i class="fas fa-chevron-left"></i> Previous
+      </button>
+    `;
+
+    // Page numbers
+    for (let i = 1; i <= totalPages; i++) {
+      if (i === 1 || i === totalPages || (i >= this.currentPage - 2 && i <= this.currentPage + 2)) {
+        paginationControls += `
+          <button class="pagination-btn ${i === this.currentPage ? 'active' : ''}" 
+            onclick="studentPortal.goToPage(${i})">${i}</button>
+        `;
+      } else if (i === this.currentPage - 3 || i === this.currentPage + 3) {
+        paginationControls += `<span class="pagination-btn" style="cursor: default; opacity: 0.5;">...</span>`;
+      }
+    }
+
+    // Next button
+    paginationControls += `
+      <button class="pagination-btn" ${this.currentPage === totalPages ? 'disabled' : ''} 
+        onclick="studentPortal.goToPage(${this.currentPage + 1})">
+        Next <i class="fas fa-chevron-right"></i>
+      </button>
+    `;
+
+    return `
+      <div class="pagination">
+        <div class="pagination-info">
+          Showing ${startItem}-${endItem} of ${totalItems} entries
+        </div>
+        <div class="pagination-controls">
+          ${paginationControls}
+        </div>
+      </div>
+    `;
+  }
+
+  goToPage(page) {
+    const totalPages = Math.ceil(
+      (this.getFilteredRequests().length || this.requests.length) / this.itemsPerPage
+    );
+    if (page >= 1 && page <= totalPages) {
+      this.currentPage = page;
+      this.renderMyDocuments();
+      // Scroll to top of table
+      const container = document.getElementById('myDocuments');
+      if (container) {
+        container.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }
+  }
+
+  getFilteredRequests() {
+    const filterEl = document.getElementById('myDocsFilter');
+    const searchEl = document.getElementById('myDocsSearch');
+    const selectedStatus = filterEl ? filterEl.value : 'all';
+    const searchTerm = searchEl ? (searchEl.value || '').toLowerCase().trim() : '';
+
+    let filtered = [...this.requests];
+    if (selectedStatus && selectedStatus !== 'all') {
+      filtered = filtered.filter((r) => r.status === selectedStatus);
+    }
+    if (searchTerm) {
+      filtered = filtered.filter((r) => {
+        const doc = (r.documentType || r.document_value || '') + ' ' + (r.department || '');
+        return doc.toLowerCase().includes(searchTerm);
+      });
+    }
+    return filtered;
   }
 
   renderHistory() {
@@ -296,20 +541,30 @@ class StudentPortal {
   buildRequestRow(request, compact = false) {
     const statusClass = Utils.getStatusBadgeClass(request.status);
     const statusText = Utils.getStatusText(request.status);
+    const statusIcon = this.getStatusIcon(request.status);
     const submittedDate = Utils.formatDate(request.submittedAt);
+    const docIcon = this.getDocumentIcon(request.documentType);
     return `
       <div class="request-item${compact ? ' compact' : ''}">
         <div class="request-header">
           <div class="request-info">
-            <h3>${request.documentType}</h3>
+            <h3>
+              <i class="fas ${docIcon}" style="margin-right: 0.5rem; color: var(--recoletos-green);"></i>
+              ${request.documentType}
+            </h3>
             <div class="request-meta">
               <span><strong>Department:</strong> ${request.department || this.studentDepartmentName}</span>
               <span><strong>Submitted:</strong> ${submittedDate}</span>
             </div>
           </div>
           <div class="request-actions">
-            <span class="status-badge ${statusClass}">${statusText}</span>
-            <button class="btn-secondary" onclick="studentPortal.viewRequest(${request.id})">View</button>
+            <span class="status-badge ${statusClass}">
+              <i class="fas ${statusIcon}"></i>
+              ${statusText}
+            </span>
+            <button class="btn-secondary" onclick="studentPortal.viewRequest(${request.id})">
+              <i class="fas fa-eye"></i> View
+            </button>
           </div>
         </div>
       </div>
@@ -344,9 +599,26 @@ class StudentPortal {
     });
 
     const myDocsFilter = document.getElementById('myDocsFilter');
-    if (myDocsFilter) myDocsFilter.addEventListener('change', () => this.renderMyDocuments());
+    if (myDocsFilter) {
+      myDocsFilter.addEventListener('change', () => {
+        this.currentPage = 1; // Reset to first page on filter change
+        this.renderMyDocuments();
+      });
+    }
     const myDocsSearch = document.getElementById('myDocsSearch');
-    if (myDocsSearch) myDocsSearch.addEventListener('input', () => this.renderMyDocuments());
+    if (myDocsSearch) {
+      myDocsSearch.addEventListener('input', () => {
+        this.currentPage = 1; // Reset to first page on search
+        this.renderMyDocuments();
+      });
+    }
+    const myDocsSort = document.getElementById('myDocsSort');
+    if (myDocsSort) {
+      myDocsSort.addEventListener('change', () => {
+        this.currentPage = 1; // Reset to first page on sort change
+        this.renderMyDocuments();
+      });
+    }
 
     this.setupModalEventListeners();
 
@@ -365,6 +637,75 @@ class StudentPortal {
     const statusFilter = document.getElementById('filterStatusHistory');
     if (departmentFilter) departmentFilter.addEventListener('change', () => this.renderHistory());
     if (statusFilter) statusFilter.addEventListener('change', () => this.renderHistory());
+
+    // Profile dropdown
+    const userPill = document.getElementById('userPill');
+    const profileDropdown = document.getElementById('profileDropdownMenu');
+    if (userPill && profileDropdown) {
+      userPill.addEventListener('click', (e) => {
+        e.stopPropagation();
+        profileDropdown.classList.toggle('hidden');
+      });
+      
+      // Close dropdown when clicking outside
+      document.addEventListener('click', (e) => {
+        if (!userPill.contains(e.target) && !profileDropdown.contains(e.target)) {
+          profileDropdown.classList.add('hidden');
+        }
+      });
+    }
+
+    // Profile dropdown links
+    const profileLink = document.getElementById('profileLink');
+    const notificationsLink = document.getElementById('notificationsLink');
+    const settingsLink = document.getElementById('settingsLink');
+    const logoutLink = document.getElementById('logoutLink');
+
+    if (profileLink) {
+      profileLink.addEventListener('click', (e) => {
+        e.preventDefault();
+        this.showProfileModal();
+        if (profileDropdown) profileDropdown.classList.add('hidden');
+      });
+    }
+
+    if (notificationsLink) {
+      notificationsLink.addEventListener('click', (e) => {
+        e.preventDefault();
+        this.switchView('notifications');
+        if (profileDropdown) profileDropdown.classList.add('hidden');
+      });
+    }
+
+    if (settingsLink) {
+      settingsLink.addEventListener('click', (e) => {
+        e.preventDefault();
+        this.showSettingsModal();
+        if (profileDropdown) profileDropdown.classList.add('hidden');
+      });
+    }
+
+    if (logoutLink) {
+      logoutLink.addEventListener('click', (e) => {
+        e.preventDefault();
+        if (confirm('Are you sure you want to logout?')) {
+          Utils.clearCurrentUser();
+        }
+        if (profileDropdown) profileDropdown.classList.add('hidden');
+      });
+    }
+
+    // Floating button
+    const floatingBtn = document.getElementById('floatingNewRequestBtn');
+    if (floatingBtn) {
+      floatingBtn.addEventListener('click', () => this.showNewRequestModal());
+    }
+
+    // Header new request button
+    const newRequestBtnHeader = document.getElementById('newRequestBtnHeader');
+    if (newRequestBtnHeader) {
+      newRequestBtnHeader.addEventListener('click', () => this.showNewRequestModal());
+    }
 
     const bell = document.getElementById('notificationBell');
     if (bell) {
@@ -404,16 +745,53 @@ class StudentPortal {
     }
     
     if (documentRequestForm) {
-        documentRequestForm.addEventListener('submit', (e) => {
+        // Remove existing listener by cloning form
+        const newForm = documentRequestForm.cloneNode(true);
+        documentRequestForm.parentNode.replaceChild(newForm, documentRequestForm);
+        
+        newForm.addEventListener('submit', (e) => {
             e.preventDefault();
+            e.stopPropagation();
+            console.log('📝 Form submit event triggered');
             this.submitNewRequest();
-        });
+        }, true); // Use capture phase
+        
+        // Also add click handler to submit button as backup
+        const submitBtn = document.getElementById('submitRequestBtn');
+        if (submitBtn) {
+            const newBtn = submitBtn.cloneNode(true);
+            submitBtn.parentNode.replaceChild(newBtn, submitBtn);
+            
+            newBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                console.log('🔔 Submit button clicked');
+                const form = document.getElementById('documentRequestForm');
+                if (form) {
+                    this.submitNewRequest();
+                }
+            }, true);
+        }
     }
 
     const departmentSelect = document.getElementById('department');
     if (departmentSelect) {
         departmentSelect.addEventListener('change', (e) => {
-            this.updateDocumentTypes(e.target.value);
+            const selectedValue = e.target.value;
+            const selectedText = e.target.options[e.target.selectedIndex]?.text || '';
+            console.log('Department changed:', { value: selectedValue, text: selectedText });
+            
+            // Use the department code (value) to load document types
+            if (selectedValue) {
+                this.updateDocumentTypes(selectedValue);
+            } else {
+                // Reset document types if no department selected
+                const documentTypeSelect = document.getElementById('documentType');
+                if (documentTypeSelect) {
+                    documentTypeSelect.innerHTML = '<option value="">Select Department First</option>';
+                    documentTypeSelect.disabled = true;
+                }
+            }
         });
     }
 
@@ -727,23 +1105,51 @@ class StudentPortal {
     const selectedOption = documentSelect?.options[documentSelect.selectedIndex];
     const requiresFaculty = selectedOption ? selectedOption.getAttribute('data-requires-faculty') === 'true' : true;
 
-    const department = this.departments.find(dept => dept.code === departmentCode);
+    // Find department by code or name
+    let department = this.departments.find(dept => dept.code === departmentCode);
     if (!department) {
-      Utils.showToast('Invalid department selected.', 'error');
+      // Try finding by name if code doesn't match
+      department = this.departments.find(dept => 
+        dept.name && dept.name.toLowerCase().includes(departmentCode.toLowerCase())
+      );
+    }
+    
+    if (!department) {
+      console.error('Department not found:', departmentCode, 'Available departments:', this.departments);
+      Utils.showToast('Invalid department selected. Please refresh the page and try again.', 'error');
+      return;
+    }
+
+    // Ensure departmentId is a number
+    let departmentId = department.id;
+    if (typeof departmentId !== 'number') {
+      departmentId = parseInt(departmentId, 10);
+      if (isNaN(departmentId)) {
+        console.error('Invalid department ID:', department);
+        Utils.showToast('Invalid department ID. Please refresh the page and try again.', 'error');
+        return;
+      }
+    }
+
+    const quantity = parseInt(formData.get('quantity'), 10) || 1;
+    if (isNaN(quantity) || quantity < 1 || quantity > 10) {
+      Utils.showToast('Number of copies must be between 1 and 10.', 'warning');
       return;
     }
 
     const requestData = {
-      departmentId: department.id,
+      departmentId: departmentId,
       documentValue: documentValue,
       documentType: selectedOption ? selectedOption.text : documentValue,
-      quantity: parseInt(formData.get('quantity'), 10),
-      purpose: formData.get('purpose'),
-      contactNumber: formData.get('contactNumber'),
-      additionalNotes: formData.get('additionalNotes'),
-      crossDepartment: department.id != this.studentDepartmentId,
+      quantity: quantity,
+      purpose: formData.get('purpose') || '',
+      contactNumber: formData.get('contactNumber') || '',
+      additionalNotes: formData.get('additionalNotes') || '',
+      crossDepartment: departmentId != this.studentDepartmentId,
       requiresFaculty: requiresFaculty
     };
+
+    console.log('Submitting request with data:', { ...requestData, attachments: '[...]' });
 
     // check attachment requirement
     const uploadArea = document.getElementById('fileUploadArea');
@@ -780,7 +1186,26 @@ class StudentPortal {
       this.renderHistory();
     } catch (error) {
       console.error('Submit request error:', error);
-      Utils.showToast('Failed to submit request', 'error');
+      
+      // Parse error message to show user-friendly message
+      let errorMessage = 'Failed to submit request. Please try again.';
+      try {
+        if (error.message) {
+          const parsed = JSON.parse(error.message);
+          if (parsed && parsed.message) {
+            errorMessage = parsed.message;
+          } else if (typeof parsed === 'string') {
+            errorMessage = parsed;
+          }
+        }
+      } catch (e) {
+        // If error.message is not JSON, use it directly if it's a string
+        if (error.message && typeof error.message === 'string') {
+          errorMessage = error.message;
+        }
+      }
+      
+      Utils.showToast(errorMessage, 'error');
       
       const submitBtn = document.getElementById('submitRequestBtn');
       if (submitBtn) {
@@ -946,6 +1371,313 @@ class StudentPortal {
     modal.addEventListener('click', (e) => {
       if (e.target === modal) modal.remove();
     });
+  }
+
+  showProfileModal() {
+    const modal = document.getElementById('profileModal');
+    if (!modal) return;
+
+    // Helper function to format value or show "Not Provided"
+    const formatValue = (value) => {
+      if (!value || value === '-' || (typeof value === 'string' && value.trim() === '')) {
+        return 'Not Provided';
+      }
+      return value;
+    };
+
+    // Populate profile data
+    const displayName = this.currentUser.fullName || this.currentUser.name || 'Student';
+    document.getElementById('profileName').textContent = displayName;
+    document.getElementById('profileFullName').textContent = formatValue(displayName);
+    document.getElementById('profileIdNumber').textContent = formatValue(this.currentUser.idNumber);
+    document.getElementById('profileEmail').textContent = formatValue(this.currentUser.email);
+    document.getElementById('profileContact').textContent = formatValue(this.currentUser.contactNumber);
+    document.getElementById('profileDepartment').textContent = formatValue(this.studentDepartmentName);
+    document.getElementById('profileCourse').textContent = formatValue(this.currentUser.course);
+    document.getElementById('profileYearLevel').textContent = formatValue(this.currentUser.yearLevel);
+
+    // Update records summary
+    const total = this.requests.length;
+    const pending = this.requests.filter((r) => ['pending', 'pending_faculty', 'in_progress'].includes(r.status)).length;
+    const completed = this.requests.filter((r) => r.status === 'completed').length;
+    document.getElementById('profileTotalRequests').textContent = total;
+    document.getElementById('profilePendingRequests').textContent = pending;
+    document.getElementById('profileCompletedRequests').textContent = completed;
+
+    // Show modal
+    modal.classList.remove('hidden');
+    modal.classList.add('active');
+    document.body.style.overflow = 'hidden';
+    
+    // Ensure modal is displayed
+    modal.style.display = 'flex';
+
+    // Close button
+    const closeBtn = document.getElementById('closeProfileModal');
+    if (closeBtn) {
+      closeBtn.onclick = () => this.hideProfileModal();
+    }
+
+    // Edit Profile button
+    const editProfileBtn = document.getElementById('editProfileBtn');
+    if (editProfileBtn) {
+      editProfileBtn.onclick = () => {
+        this.hideProfileModal();
+        this.showSettingsModal();
+      };
+    }
+
+    // Update Photo button
+    const updatePhotoBtn = document.getElementById('updatePhotoBtn');
+    if (updatePhotoBtn) {
+      updatePhotoBtn.onclick = () => {
+        Utils.showToast('Photo upload feature coming soon!', 'info');
+      };
+    }
+
+    // View Request History button
+    const viewRequestHistoryBtn = document.getElementById('viewRequestHistoryBtn');
+    if (viewRequestHistoryBtn) {
+      viewRequestHistoryBtn.onclick = () => {
+        this.hideProfileModal();
+        this.switchView('history');
+      };
+    }
+
+    // Close on overlay click
+    modal.onclick = (e) => {
+      if (e.target === modal) this.hideProfileModal();
+    };
+  }
+
+  hideProfileModal() {
+    const modal = document.getElementById('profileModal');
+    if (modal) {
+      modal.classList.add('hidden');
+      modal.classList.remove('active');
+      modal.style.display = 'none';
+    }
+    document.body.style.overflow = '';
+  }
+
+  showSettingsModal() {
+    const modal = document.getElementById('settingsModal');
+    if (!modal) return;
+
+    // Populate current settings
+    document.getElementById('settingsEmail').value = this.currentUser.email || '';
+    document.getElementById('settingsContact').value = this.currentUser.contactNumber || '';
+    document.getElementById('emailNotifications').checked = this.currentUser.emailNotifications !== false;
+    document.getElementById('smsNotifications').checked = this.currentUser.smsNotifications === true;
+
+    // Show modal
+    modal.classList.remove('hidden');
+    modal.classList.add('active');
+    document.body.style.overflow = 'hidden';
+    
+    // Ensure modal is displayed
+    modal.style.display = 'flex';
+
+    // Close button
+    const closeBtn = document.getElementById('closeSettingsModal');
+    if (closeBtn) {
+      closeBtn.onclick = () => this.hideSettingsModal();
+    }
+
+    // Update email button
+    const updateEmailBtn = document.getElementById('updateEmailBtn');
+    if (updateEmailBtn) {
+      updateEmailBtn.onclick = () => this.updateEmail();
+    }
+
+    // Update contact button
+    const updateContactBtn = document.getElementById('updateContactBtn');
+    if (updateContactBtn) {
+      updateContactBtn.onclick = () => this.updateContact();
+    }
+
+    // Update password button
+    const updatePasswordBtn = document.getElementById('updatePasswordBtn');
+    if (updatePasswordBtn) {
+      updatePasswordBtn.onclick = () => this.updatePassword();
+    }
+
+    // Notification checkboxes
+    const emailNotif = document.getElementById('emailNotifications');
+    const smsNotif = document.getElementById('smsNotifications');
+    if (emailNotif) {
+      emailNotif.onchange = () => this.saveNotificationSettings();
+    }
+    if (smsNotif) {
+      smsNotif.onchange = () => this.saveNotificationSettings();
+    }
+
+    // Theme select
+    const themeSelect = document.getElementById('themeSelect');
+    if (themeSelect) {
+      themeSelect.value = this.currentUser.theme || 'light';
+      themeSelect.onchange = () => this.updateTheme();
+    }
+
+    // Close on overlay click
+    modal.onclick = (e) => {
+      if (e.target === modal) this.hideSettingsModal();
+    };
+  }
+
+  hideSettingsModal() {
+    const modal = document.getElementById('settingsModal');
+    if (modal) {
+      modal.classList.add('hidden');
+      modal.classList.remove('active');
+      modal.style.display = 'none';
+    }
+    document.body.style.overflow = '';
+  }
+
+  async updateEmail() {
+    const emailInput = document.getElementById('settingsEmail');
+    const newEmail = emailInput.value.trim();
+
+    if (!newEmail || !newEmail.includes('@')) {
+      Utils.showToast('Please enter a valid email address', 'error');
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch('/api/auth/update-profile', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ email: newEmail })
+      });
+
+      const data = await response.json();
+      if (response.ok) {
+        this.currentUser.email = newEmail;
+        localStorage.setItem('currentUser', JSON.stringify(this.currentUser));
+        Utils.showToast('Email updated successfully', 'success');
+        this.loadUserInfo();
+      } else {
+        Utils.showToast(data.message || 'Failed to update email', 'error');
+      }
+    } catch (error) {
+      console.error('Update email error:', error);
+      Utils.showToast('Failed to update email. Please try again.', 'error');
+    }
+  }
+
+  async updateContact() {
+    const contactInput = document.getElementById('settingsContact');
+    const newContact = contactInput.value.trim();
+
+    if (!newContact) {
+      Utils.showToast('Please enter a contact number', 'error');
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch('/api/auth/update-profile', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ contactNumber: newContact })
+      });
+
+      const data = await response.json();
+      if (response.ok) {
+        this.currentUser.contactNumber = newContact;
+        localStorage.setItem('currentUser', JSON.stringify(this.currentUser));
+        Utils.showToast('Contact number updated successfully', 'success');
+      } else {
+        Utils.showToast(data.message || 'Failed to update contact number', 'error');
+      }
+    } catch (error) {
+      console.error('Update contact error:', error);
+      Utils.showToast('Failed to update contact number. Please try again.', 'error');
+    }
+  }
+
+  async updatePassword() {
+    const currentPassword = document.getElementById('currentPassword').value;
+    const newPassword = document.getElementById('newPassword').value;
+    const confirmPassword = document.getElementById('confirmNewPassword').value;
+
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      Utils.showToast('Please fill in all password fields', 'error');
+      return;
+    }
+
+    if (newPassword.length < 3) {
+      Utils.showToast('New password must be at least 3 characters', 'error');
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      Utils.showToast('New passwords do not match', 'error');
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch('/api/auth/update-password', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          currentPassword,
+          newPassword
+        })
+      });
+
+      const data = await response.json();
+      if (response.ok) {
+        Utils.showToast('Password updated successfully', 'success');
+        document.getElementById('currentPassword').value = '';
+        document.getElementById('newPassword').value = '';
+        document.getElementById('confirmNewPassword').value = '';
+      } else {
+        Utils.showToast(data.message || 'Failed to update password', 'error');
+      }
+    } catch (error) {
+      console.error('Update password error:', error);
+      Utils.showToast('Failed to update password. Please try again.', 'error');
+    }
+  }
+
+  saveNotificationSettings() {
+    const emailNotif = document.getElementById('emailNotifications').checked;
+    const smsNotif = document.getElementById('smsNotifications').checked;
+
+    this.currentUser.emailNotifications = emailNotif;
+    this.currentUser.smsNotifications = smsNotif;
+    localStorage.setItem('currentUser', JSON.stringify(this.currentUser));
+    Utils.showToast('Notification settings saved', 'success');
+  }
+
+  updateTheme() {
+    const themeSelect = document.getElementById('themeSelect');
+    const theme = themeSelect.value;
+
+    this.currentUser.theme = theme;
+    localStorage.setItem('currentUser', JSON.stringify(this.currentUser));
+
+    // Apply theme (basic implementation)
+    if (theme === 'dark') {
+      document.body.classList.add('dark-theme');
+    } else {
+      document.body.classList.remove('dark-theme');
+    }
+
+    Utils.showToast('Theme updated', 'success');
   }
 }
 

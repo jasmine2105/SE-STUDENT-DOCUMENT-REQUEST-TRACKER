@@ -152,17 +152,18 @@ class LoginModal {
     };
 
     const modalHTML = `
+      <!-- Login Modal (Separate) -->
       <div class="modal-overlay" id="loginModal">
         <div class="login-modal">
           <button class="close-modal" id="closeModal">&times;</button>
           <div class="modal-header">
-            <h2 id="authTitle">Welcome Back</h2>
-            <p id="authSubtitle">Sign in to your account</p>
+            <h2>Welcome Back</h2>
+            <p>Sign in to your account</p>
           </div>
 
           <div class="auth-toggle">
-            <span id="authToggleHint">Don't have an account?</span>
-            <button type="button" id="toggleSignup" class="link-button">Sign up</button>
+            <span>Don't have an account?</span>
+            <button type="button" id="switchToSignup" class="link-button">Sign up</button>
           </div>
 
           <!-- Login Form -->
@@ -181,9 +182,25 @@ class LoginModal {
 
             <button type="submit" class="btn-primary" id="loginBtn">Sign In</button>
           </form>
+        </div>
+      </div>
+
+      <!-- Signup Modal (Separate) -->
+      <div class="modal-overlay" id="signupModal">
+        <div class="login-modal">
+          <button class="close-modal" id="closeSignupModal">&times;</button>
+          <div class="modal-header">
+            <h2>Create Account</h2>
+            <p>Sign up to get started</p>
+          </div>
+
+          <div class="auth-toggle">
+            <span>Already have an account?</span>
+            <button type="button" id="switchToLogin" class="link-button">Sign in</button>
+          </div>
 
           <!-- Signup Form -->
-          <form id="signupForm" class="auth-form hidden">
+          <form id="signupForm" class="auth-form">
             <!-- ID Number Field - Always shown first -->
             <div class="form-group">
               <label for="signupIdNumber">ID Number *</label>
@@ -197,12 +214,30 @@ class LoginModal {
             <div id="dynamicFields"></div>
 
             <div class="form-group">
-              <label for="signupPassword">Password *</label>
-              <input type="password" id="signupPassword" name="signupPassword" placeholder="Create a password (min 3 characters)" required />
-              <div class="error-message" id="signupError"></div>
+              <label for="signupPassword">Create Password *</label>
+              <div class="password-input-wrapper">
+                <input type="password" id="signupPassword" name="signupPassword" placeholder="Create a password (min 3 characters)" required />
+                <button type="button" class="password-toggle" id="togglePassword" aria-label="Show password">
+                  <i class="fas fa-eye"></i>
+                </button>
+              </div>
+              <div class="error-message" id="signupPasswordError"></div>
             </div>
 
-            <button type="submit" class="btn-primary" id="signupBtn" disabled>Create Account</button>
+            <div class="form-group">
+              <label for="confirmPassword">Confirm Password *</label>
+              <div class="password-input-wrapper">
+                <input type="password" id="confirmPassword" name="confirmPassword" placeholder="Confirm your password" required />
+                <button type="button" class="password-toggle" id="toggleConfirmPassword" aria-label="Show password">
+                  <i class="fas fa-eye"></i>
+                </button>
+              </div>
+              <div class="error-message" id="confirmPasswordError"></div>
+            </div>
+
+            <div class="error-message" id="signupError"></div>
+
+            <button type="submit" class="btn-primary" id="signupBtn">Create Account</button>
           </form>
         </div>
       </div>
@@ -210,6 +245,17 @@ class LoginModal {
 
     document.body.insertAdjacentHTML('beforeend', modalHTML);
     this.modal = document.getElementById('loginModal');
+    this.signupModal = document.getElementById('signupModal');
+    
+    // Initialize signup form fields when signup modal is created
+    if (this.signupModal) {
+      const signupIdInput = document.getElementById('signupIdNumber');
+      if (signupIdInput) {
+        signupIdInput.addEventListener('input', (e) => {
+          this.handleIdNumberChange(e.target.value);
+        });
+      }
+    }
 
     // Store department courses for dynamic population
     this.departmentCourses = departmentCourses;
@@ -224,42 +270,277 @@ class LoginModal {
     });
 
     const signupForm = document.getElementById('signupForm');
-    signupForm.addEventListener('submit', (event) => {
-      event.preventDefault();
-      this.handleSignup();
-    });
+    if (signupForm) {
+      // Remove existing listener by cloning form
+      const newForm = signupForm.cloneNode(true);
+      signupForm.parentNode.replaceChild(newForm, signupForm);
+      
+      newForm.addEventListener('submit', (event) => {
+        console.log('📝 Signup form SUBMITTED (form submit handler)');
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation();
+        try {
+          this.handleSignup();
+        } catch (err) {
+          console.error('❌ Error in form submit handler:', err);
+        }
+      }, true); // Use capture phase
+    } else {
+      console.error('❌ Signup form not found!');
+    }
 
     // Add a click fallback on the button in case form submit isn't firing
     const signupBtn = document.getElementById('signupBtn');
     if (signupBtn) {
-      signupBtn.addEventListener('click', (e) => {
-        if (signupBtn.disabled) return;
+      // Remove any existing listeners by cloning
+      const newBtn = signupBtn.cloneNode(true);
+      signupBtn.parentNode.replaceChild(newBtn, signupBtn);
+      
+      // Add multiple event listeners to ensure it works
+      newBtn.addEventListener('click', (e) => {
+        console.log('🔔 signupBtn CLICKED (click handler)', { 
+          disabled: newBtn.disabled, 
+          hasAttribute: newBtn.hasAttribute('disabled'),
+          type: newBtn.type,
+          target: e.target
+        });
+        
         e.preventDefault();
-        // Defensive: call handleSignup directly and log for debugging
-        console.log('🔔 signupBtn clicked (fallback)');
-        this.handleSignup();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        
+        // Always call handleSignup - it will handle validation and show errors
+        console.log('🚀 Calling handleSignup from button click');
+        try {
+          this.handleSignup();
+        } catch (err) {
+          console.error('❌ Error in handleSignup:', err);
+          const errorEl = document.getElementById('signupError');
+          if (errorEl) {
+            errorEl.textContent = 'An error occurred. Check console for details.';
+            errorEl.classList.add('show');
+          }
+        }
+      }, true); // Use capture phase
+      
+      // Also add mousedown as backup
+      newBtn.addEventListener('mousedown', (e) => {
+        console.log('🔔 signupBtn MOUSEDOWN');
+        if (e.button === 0) { // Left click only
+          e.preventDefault();
+        }
+      });
+    } else {
+      console.error('❌ Signup button not found during initialization!');
+    }
+
+    // Close buttons for both modals
+    const closeLoginBtn = document.getElementById('closeModal');
+    const closeSignupBtn = document.getElementById('closeSignupModal');
+    
+    if (closeLoginBtn) {
+      closeLoginBtn.addEventListener('click', () => this.hide());
+    }
+    
+    if (closeSignupBtn) {
+      closeSignupBtn.addEventListener('click', () => this.hideSignup());
+    }
+
+    // Switch from login to signup modal
+    const switchToSignupBtn = document.getElementById('switchToSignup');
+    if (switchToSignupBtn) {
+      switchToSignupBtn.addEventListener('click', () => {
+        this.hide();
+        this.showSignup();
       });
     }
 
-    document.getElementById('toggleSignup').addEventListener('click', () => {
-      this.toggleView(this.isSignup ? 'login' : 'signup');
-    });
-
-    document.getElementById('closeModal').addEventListener('click', () => this.hide());
-
-    this.modal.addEventListener('click', (event) => {
-      if (event.target === this.modal) this.hide();
-    });
-
-    document.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape' && this.modal.classList.contains('active')) this.hide();
-    });
+    // Switch from signup to login modal
+    const switchToLoginBtn = document.getElementById('switchToLogin');
+    if (switchToLoginBtn) {
+      switchToLoginBtn.addEventListener('click', () => {
+        this.hideSignup();
+        this.show();
+      });
+    }
+    
+    // Close on overlay click
+    if (this.modal) {
+      this.modal.addEventListener('click', (e) => {
+        if (e.target === this.modal) {
+          this.hide();
+        }
+      });
+    }
+    
+    if (this.signupModal) {
+      this.signupModal.addEventListener('click', (e) => {
+        if (e.target === this.signupModal) {
+          this.hideSignup();
+        }
+      });
+    }
 
     // Real-time ID number validation and role detection for signup
     const signupIdInput = document.getElementById('signupIdNumber');
     signupIdInput.addEventListener('input', (e) => {
       this.handleIdNumberChange(e.target.value);
     });
+
+    // Password visibility toggles
+    const togglePassword = document.getElementById('togglePassword');
+    const toggleConfirmPassword = document.getElementById('toggleConfirmPassword');
+    const passwordInput = document.getElementById('signupPassword');
+    const confirmPasswordInput = document.getElementById('confirmPassword');
+
+    if (togglePassword && passwordInput) {
+      togglePassword.addEventListener('click', () => {
+        const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
+        passwordInput.setAttribute('type', type);
+        togglePassword.querySelector('i').classList.toggle('fa-eye');
+        togglePassword.querySelector('i').classList.toggle('fa-eye-slash');
+      });
+    }
+
+    if (toggleConfirmPassword && confirmPasswordInput) {
+      toggleConfirmPassword.addEventListener('click', () => {
+        const type = confirmPasswordInput.getAttribute('type') === 'password' ? 'text' : 'password';
+        confirmPasswordInput.setAttribute('type', type);
+        toggleConfirmPassword.querySelector('i').classList.toggle('fa-eye');
+        toggleConfirmPassword.querySelector('i').classList.toggle('fa-eye-slash');
+      });
+    }
+
+    // Real-time password confirmation validation
+    if (confirmPasswordInput && passwordInput) {
+      confirmPasswordInput.addEventListener('input', () => {
+        this.validatePasswordMatch();
+        this.updateSignupButtonState();
+      });
+      passwordInput.addEventListener('input', () => {
+        this.validatePasswordMatch();
+        this.updateSignupButtonState();
+      });
+    }
+
+    // This will be called after dynamic fields are populated
+  }
+
+  attachFieldListeners() {
+    // Add listeners to other fields to update button state
+    const fullNameInput = document.getElementById('fullName');
+    const emailInput = document.getElementById('signupEmail');
+    const departmentSelect = document.getElementById('departmentSelect');
+    const courseSelect = document.getElementById('courseSelect');
+    const yearLevelSelect = document.getElementById('yearLevelSelect');
+
+    // Remove existing listeners by cloning (simple way to avoid duplicates)
+    if (fullNameInput) {
+      const newInput = fullNameInput.cloneNode(true);
+      fullNameInput.parentNode.replaceChild(newInput, fullNameInput);
+      newInput.addEventListener('input', () => this.updateSignupButtonState());
+    }
+    if (emailInput) {
+      const newInput = emailInput.cloneNode(true);
+      emailInput.parentNode.replaceChild(newInput, emailInput);
+      newInput.addEventListener('input', () => this.updateSignupButtonState());
+    }
+    if (departmentSelect) {
+      departmentSelect.addEventListener('change', () => {
+        this.updateSignupButtonState();
+        // Also trigger course select update
+        if (courseSelect) {
+          setTimeout(() => this.updateSignupButtonState(), 100);
+        }
+      });
+    }
+    if (courseSelect) {
+      courseSelect.addEventListener('change', () => this.updateSignupButtonState());
+    }
+    if (yearLevelSelect) {
+      yearLevelSelect.addEventListener('change', () => this.updateSignupButtonState());
+    }
+  }
+
+  validatePasswordMatch() {
+    const password = document.getElementById('signupPassword')?.value || '';
+    const confirmPassword = document.getElementById('confirmPassword')?.value || '';
+    const confirmPasswordError = document.getElementById('confirmPasswordError');
+
+    if (confirmPasswordError) {
+      if (confirmPassword && password !== confirmPassword) {
+        confirmPasswordError.textContent = 'Passwords do not match';
+        confirmPasswordError.classList.add('show');
+      } else {
+        confirmPasswordError.textContent = '';
+        confirmPasswordError.classList.remove('show');
+      }
+      // Update button visual state
+      this.updateSignupButtonState();
+    }
+  }
+
+  updateSignupButtonState() {
+    const signupBtn = document.getElementById('signupBtn');
+    if (!signupBtn) {
+      console.warn('⚠️ Signup button not found in updateSignupButtonState');
+      return;
+    }
+
+    const idNumber = document.getElementById('signupIdNumber')?.value.trim() || '';
+    const password = document.getElementById('signupPassword')?.value || '';
+    const confirmPassword = document.getElementById('confirmPassword')?.value || '';
+    const fullName = document.getElementById('fullName')?.value.trim() || '';
+    const email = document.getElementById('signupEmail')?.value.trim() || '';
+    const detectedRole = this.detectRoleFromId(idNumber);
+
+    // Basic validation - visually indicate if form is ready
+    // Button will always be clickable, but handleSignup will validate
+    const hasBasicFields = idNumber.length >= 3 && 
+                          password.length >= 3 && 
+                          confirmPassword.length >= 3 &&
+                          fullName.length > 0 && 
+                          email.length > 0;
+
+    let isReady = hasBasicFields && detectedRole;
+
+    // For students, check if department, course, and year level are filled
+    if (isReady && detectedRole === 'student') {
+      const departmentId = document.getElementById('departmentSelect')?.value || '';
+      const course = document.getElementById('courseSelect')?.value || '';
+      const yearLevel = document.getElementById('yearLevelSelect')?.value || '';
+      const courseSelect = document.getElementById('courseSelect');
+      
+      if (!departmentId || !course || !yearLevel || (courseSelect && courseSelect.disabled)) {
+        isReady = false;
+      }
+    }
+
+    // For faculty/admin, check if department is filled
+    if (isReady && (detectedRole === 'faculty' || detectedRole === 'admin')) {
+      const departmentId = document.getElementById('departmentSelect')?.value || '';
+      if (!departmentId) {
+        isReady = false;
+      }
+    }
+
+    // Update visual state (but keep button clickable)
+    if (isReady) {
+      signupBtn.classList.remove('disabled');
+      signupBtn.style.opacity = '1';
+      signupBtn.style.cursor = 'pointer';
+      signupBtn.removeAttribute('data-other-error');
+    } else {
+      signupBtn.classList.add('disabled');
+      signupBtn.style.opacity = '0.6';
+      signupBtn.style.cursor = 'not-allowed';
+    }
+    
+    // Never actually disable the button - let handleSignup do validation
+    signupBtn.disabled = false;
+    signupBtn.removeAttribute('disabled');
+    signupBtn.style.pointerEvents = 'auto';
   }
 
   handleIdNumberChange(idNumber) {
@@ -275,10 +556,15 @@ class LoginModal {
     if (idNumber.length < 3) {
       roleIndicator.classList.add('hidden');
       dynamicFields.innerHTML = '';
-      console.debug('handleIdNumberChange: short id - disabling signupBtn', { hasAttr: signupBtn?.hasAttribute('disabled'), propDisabled: signupBtn?.disabled });
-      signupBtn.disabled = true;
-      signupBtn.setAttribute('disabled', '');
-      signupBtn.style.pointerEvents = 'none';
+      console.debug('handleIdNumberChange: short id - marking button as not ready');
+      if (signupBtn) {
+        signupBtn.classList.add('disabled');
+        signupBtn.style.opacity = '0.6';
+        signupBtn.style.cursor = 'not-allowed';
+        // Don't actually disable - let handleSignup validate
+        signupBtn.disabled = false;
+        signupBtn.removeAttribute('disabled');
+      }
       return;
     }
 
@@ -288,10 +574,15 @@ class LoginModal {
       roleIndicator.classList.add('hidden');
       roleIndicator.innerHTML = '';
       dynamicFields.innerHTML = '';
-      console.debug('handleIdNumberChange: invalid role - disabling signupBtn', { hasAttr: signupBtn?.hasAttribute('disabled'), propDisabled: signupBtn?.disabled });
-      signupBtn.disabled = true;
-      signupBtn.setAttribute('disabled', '');
-      signupBtn.style.pointerEvents = 'none';
+      console.debug('handleIdNumberChange: invalid role - marking button as not ready');
+      if (signupBtn) {
+        signupBtn.classList.add('disabled');
+        signupBtn.style.opacity = '0.6';
+        signupBtn.style.cursor = 'not-allowed';
+        // Don't actually disable - let handleSignup validate
+        signupBtn.disabled = false;
+        signupBtn.removeAttribute('disabled');
+      }
       
       if (idNumber.length >= 5) {
         signupIdError.textContent = 'Invalid ID format. Use: Student (2022011084), Faculty (FAC-001), or Admin (ADM-001)';
@@ -319,11 +610,14 @@ class LoginModal {
 
     // Populate dynamic fields based on role
     this.populateDynamicFields(detectedRole);
-    console.debug('handleIdNumberChange: enabling signupBtn for detected role', { role: detectedRole, beforeAttr: signupBtn?.getAttribute('disabled'), beforeProp: signupBtn?.disabled });
-    signupBtn.disabled = false;
-    signupBtn.removeAttribute('disabled');
-    signupBtn.style.pointerEvents = 'auto';
-    console.debug('handleIdNumberChange: signupBtn enabled', { afterAttr: signupBtn?.getAttribute('disabled'), afterProp: signupBtn?.disabled });
+    console.debug('handleIdNumberChange: role detected, setting up form', { role: detectedRole });
+    
+    // Use setTimeout to ensure DOM is ready before updating button state
+    setTimeout(() => {
+      this.updateSignupButtonState();
+      // Re-attach event listeners for new fields
+      this.attachFieldListeners();
+    }, 150);
   }
 
   populateDynamicFields(role) {
@@ -378,6 +672,9 @@ class LoginModal {
         if (deptSelect && deptSelect.selectedIndex > 0) {
           deptSelect.dispatchEvent(new Event('change'));
         }
+        // Update button state after fields are set up
+        this.updateSignupButtonState();
+        this.attachFieldListeners();
       }, 100);
 
     } else if (role === 'faculty') {
@@ -550,12 +847,16 @@ class LoginModal {
   }
 
   toggleView(view) {
+    // Ensure login is default view
+    if (!view) view = 'login';
     this.isSignup = view === 'signup';
     const loginForm = document.getElementById('loginForm');
     const signupForm = document.getElementById('signupForm');
     const title = document.getElementById('authTitle');
     const subtitle = document.getElementById('authSubtitle');
     const toggleHint = document.getElementById('authToggleHint');
+    
+    console.log('🔄 Toggling view:', view, { isSignup: this.isSignup });
     const toggleLink = document.getElementById('toggleSignup');
 
     if (this.isSignup) {
@@ -571,6 +872,10 @@ class LoginModal {
       setTimeout(() => {
         const currentId = document.getElementById('signupIdNumber')?.value || '';
         this.handleIdNumberChange(currentId);
+        // Also update button state after a short delay to ensure all fields are ready
+        setTimeout(() => {
+          this.updateSignupButtonState();
+        }, 200);
       }, 0);
     } else {
       signupForm.classList.add('hidden');
@@ -648,17 +953,28 @@ class LoginModal {
     const idNumber = document.getElementById('signupIdNumber')?.value.trim() || '';
     const fullName = document.getElementById('fullName')?.value.trim() || '';
     const email = document.getElementById('signupEmail')?.value.trim() || '';
-    const password = document.getElementById('signupPassword').value;
+    const password = document.getElementById('signupPassword')?.value || '';
+    const confirmPassword = document.getElementById('confirmPassword')?.value || '';
     const signupBtn = document.getElementById('signupBtn');
     const errorEl = document.getElementById('signupError');
     const signupIdError = document.getElementById('signupIdError');
+    const confirmPasswordError = document.getElementById('confirmPasswordError');
 
-    console.log('🔔 handleSignup invoked', { idNumber, fullName, email });
+    console.log('🔔 handleSignup invoked', { idNumber, fullName, email, hasPassword: !!password, hasConfirmPassword: !!confirmPassword });
 
-    errorEl.textContent = '';
-    errorEl.classList.remove('show');
-    signupIdError.textContent = '';
-    signupIdError.classList.remove('show');
+    // Clear all errors
+    if (errorEl) {
+      errorEl.textContent = '';
+      errorEl.classList.remove('show');
+    }
+    if (signupIdError) {
+      signupIdError.textContent = '';
+      signupIdError.classList.remove('show');
+    }
+    if (confirmPasswordError) {
+      confirmPasswordError.textContent = '';
+      confirmPasswordError.classList.remove('show');
+    }
 
     // Validate role detection
     const detectedRole = this.detectRoleFromId(idNumber);
@@ -669,9 +985,44 @@ class LoginModal {
     }
 
     // Validate password length
-    if (password.length < 3) {
-      errorEl.textContent = 'Password must be at least 3 characters long.';
-      errorEl.classList.add('show');
+    if (!password || password.length < 3) {
+      const passwordError = document.getElementById('signupPasswordError');
+      if (passwordError) {
+        passwordError.textContent = 'Password must be at least 3 characters long.';
+        passwordError.classList.add('show');
+      }
+      if (errorEl) {
+        errorEl.textContent = 'Password must be at least 3 characters long.';
+        errorEl.classList.add('show');
+      }
+      console.error('Validation failed: Password too short');
+      return;
+    }
+
+    // Validate password match
+    if (!confirmPassword) {
+      if (confirmPasswordError) {
+        confirmPasswordError.textContent = 'Please confirm your password.';
+        confirmPasswordError.classList.add('show');
+      }
+      if (errorEl) {
+        errorEl.textContent = 'Please confirm your password.';
+        errorEl.classList.add('show');
+      }
+      console.error('Validation failed: Confirm password missing');
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      if (confirmPasswordError) {
+        confirmPasswordError.textContent = 'Passwords do not match';
+        confirmPasswordError.classList.add('show');
+      }
+      if (errorEl) {
+        errorEl.textContent = 'Passwords do not match.';
+        errorEl.classList.add('show');
+      }
+      console.error('Validation failed: Passwords do not match');
       return;
     }
 
@@ -751,8 +1102,26 @@ class LoginModal {
       }
     }
 
+    if (!signupBtn) {
+      console.error('Signup button not found!');
+      if (errorEl) {
+        errorEl.textContent = 'Form error. Please refresh the page.';
+        errorEl.classList.add('show');
+      }
+      return;
+    }
+
+    // Prevent multiple submissions
+    if (signupBtn.hasAttribute('data-submitting')) {
+      console.warn('⚠️ Signup already in progress, ignoring duplicate click');
+      return;
+    }
+
+    signupBtn.setAttribute('data-submitting', 'true');
     signupBtn.disabled = true;
     signupBtn.textContent = 'Creating account...';
+    signupBtn.style.cursor = 'wait';
+    console.log('🚀 Submitting signup request...', { role: detectedRole, hasDepartment: !!document.getElementById('departmentSelect')?.value });
 
     try {
       let requestBody = {
@@ -793,14 +1162,46 @@ class LoginModal {
         };
       }
 
+      console.log('📤 Sending signup request to server...', { ...requestBody, password: '[HIDDEN]' });
+      
+      // Show loading state
+      if (errorEl) {
+        errorEl.textContent = '';
+        errorEl.classList.remove('show');
+      }
+      
+      // First, check if server is reachable
+      try {
+        const healthCheck = await fetch(`${window.location.origin}/api/health`);
+        if (!healthCheck.ok) {
+          throw new Error('Server health check failed');
+        }
+        console.log('✅ Server is reachable');
+      } catch (healthError) {
+        console.error('❌ Server health check failed:', healthError);
+        throw new Error('Cannot connect to server. Please make sure the server is running. Open terminal and run: npm start');
+      }
+      
       const response = await Utils.apiRequest('/auth/signup', {
         method: 'POST',
         body: requestBody
       });
 
+      console.log('✅ Signup response received:', response);
+      
+      if (!response) {
+        throw new Error('No response from server');
+      }
+
       const { user, token } = response;
+      
+      if (!user || !token) {
+        throw new Error('Invalid response: missing user or token');
+      }
+
       Utils.setCurrentUser(user, token);
-      Utils.showToast('Account created successfully. Redirecting...', 'success');
+      Utils.showToast('Account created successfully! Redirecting...', 'success');
+      console.log('✅ Account created, redirecting...');
 
       setTimeout(() => {
         this.hide();
@@ -812,53 +1213,201 @@ class LoginModal {
           admin: '/ADMIN/views/admin-portal.html'
         };
         
-        window.location.href = redirectMap[detectedRole] || '/';
+        const redirectUrl = redirectMap[detectedRole] || '/';
+        console.log('🔄 Redirecting to:', redirectUrl);
+        window.location.href = redirectUrl;
       }, 800);
     } catch (error) {
-      console.error('Signup failed:', error);
+      console.error('❌ Signup failed:', error);
+      console.error('Error details:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      });
+      
       // Try to parse server error message (utils.apiRequest throws Error with response text)
       let friendly = 'Signup failed. Please verify your details and try again.';
+      let errorDetails = '';
+      
       try {
+        // Try to parse as JSON first
         const parsed = JSON.parse(error.message);
-        if (parsed && parsed.message) friendly = parsed.message;
-        else if (parsed && parsed.error) friendly = parsed.error;
+        if (parsed && parsed.message) {
+          friendly = parsed.message;
+          errorDetails = parsed.error || '';
+        } else if (parsed && parsed.error) {
+          friendly = parsed.error;
+        }
       } catch (e) {
         // Not JSON, use raw message if available
-        if (error.message) friendly = error.message;
+        if (error.message) {
+          friendly = error.message;
+          // If it's a network error, provide more helpful message
+          if (error.message.includes('Failed to fetch') || 
+              error.message.includes('NetworkError') ||
+              error.message.includes('ERR_CONNECTION_REFUSED') ||
+              error.message.includes('ERR_INTERNET_DISCONNECTED')) {
+            friendly = 'Cannot connect to server. Please make sure the server is running on localhost:3000.';
+          }
+        }
       }
-      // If the server message relates to the ID, show it under the ID field
-      const signupIdError = document.getElementById('signupIdError');
-      if (/id number/i.test(friendly) && signupIdError) {
-        signupIdError.textContent = friendly;
-        signupIdError.classList.add('show');
-      } else {
+      
+      // Always show error prominently
+      if (errorEl) {
         errorEl.textContent = friendly;
         errorEl.classList.add('show');
+        errorEl.style.display = 'block';
+        errorEl.style.color = '#dc3545';
+        errorEl.style.backgroundColor = '#f8d7da';
+        errorEl.style.padding = '12px';
+        errorEl.style.borderRadius = '4px';
+        errorEl.style.marginTop = '10px';
+        // Scroll to error
+        setTimeout(() => {
+          errorEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 100);
       }
+      
+      // Also show in ID error field if it's ID-related
+      if (/id number|id_number/i.test(friendly) && signupIdError) {
+        signupIdError.textContent = friendly;
+        signupIdError.classList.add('show');
+      }
+      
+      // Also show toast notification
+      Utils.showToast(friendly || 'Signup failed. Please try again.', 'error');
+      
+      // Log to help user debug
+      console.error('💡 TROUBLESHOOTING:');
+      console.error('   1. Make sure the server is running: npm start');
+      console.error('   2. Check if server is on port 3000');
+      console.error('   3. Check browser console for network errors');
     } finally {
-      signupBtn.disabled = false;
-      signupBtn.removeAttribute('disabled');
-      signupBtn.style.pointerEvents = 'auto';
-      signupBtn.textContent = 'Create Account';
+      if (signupBtn) {
+        signupBtn.removeAttribute('data-submitting');
+        signupBtn.disabled = false;
+        signupBtn.removeAttribute('disabled');
+        signupBtn.style.pointerEvents = 'auto';
+        signupBtn.style.cursor = 'pointer';
+        signupBtn.textContent = 'Create Account';
+        // Update button state based on current form values
+        this.updateSignupButtonState();
+      }
     }
   }
 
   show() {
-    this.modal.classList.add('active');
-    document.body.style.overflow = 'hidden';
+    // Show login modal
+    if (this.modal) {
+      this.modal.classList.add('active');
+      document.body.style.overflow = 'hidden';
+    }
+  }
+
+  showSignup() {
+    // Show signup modal
+    console.log('🔔 showSignup() called', { signupModal: this.signupModal });
+    if (this.signupModal) {
+      // Hide login modal if it's open
+      if (this.modal) {
+        this.modal.classList.remove('active');
+      }
+      
+      // Show signup modal
+      this.signupModal.classList.add('active');
+      document.body.style.overflow = 'hidden';
+      
+      console.log('✅ Signup modal shown');
+      
+      // Ensure signup form is visible (not hidden)
+      const signupForm = document.getElementById('signupForm');
+      if (signupForm) {
+        signupForm.classList.remove('hidden');
+        signupForm.style.display = 'block';
+      }
+      
+      // Initialize signup form when showing
+      setTimeout(() => {
+        // Re-attach event listeners for signup form fields
+        this.attachSignupFieldListeners();
+        
+        // Re-attach form submit handler
+        if (signupForm) {
+          signupForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            this.handleSignup();
+          });
+        }
+        
+        const currentId = document.getElementById('signupIdNumber')?.value || '';
+        if (currentId) {
+          this.handleIdNumberChange(currentId);
+        }
+        setTimeout(() => {
+          this.updateSignupButtonState();
+        }, 200);
+      }, 100);
+    } else {
+      console.error('❌ Signup modal not found!');
+    }
+  }
+
+  attachSignupFieldListeners() {
+    // Re-attach password visibility toggles for signup form
+    const togglePassword = document.getElementById('togglePassword');
+    const toggleConfirmPassword = document.getElementById('toggleConfirmPassword');
+    const passwordInput = document.getElementById('signupPassword');
+    const confirmPasswordInput = document.getElementById('confirmPassword');
+
+    if (togglePassword && passwordInput) {
+      togglePassword.addEventListener('click', () => {
+        const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
+        passwordInput.setAttribute('type', type);
+        togglePassword.querySelector('i').classList.toggle('fa-eye');
+        togglePassword.querySelector('i').classList.toggle('fa-eye-slash');
+      });
+    }
+
+    if (toggleConfirmPassword && confirmPasswordInput) {
+      toggleConfirmPassword.addEventListener('click', () => {
+        const type = confirmPasswordInput.getAttribute('type') === 'password' ? 'text' : 'password';
+        confirmPasswordInput.setAttribute('type', type);
+        toggleConfirmPassword.querySelector('i').classList.toggle('fa-eye');
+        toggleConfirmPassword.querySelector('i').classList.toggle('fa-eye-slash');
+      });
+    }
+
+    // Re-attach ID number change handler
+    const signupIdInput = document.getElementById('signupIdNumber');
+    if (signupIdInput) {
+      signupIdInput.addEventListener('input', (e) => {
+        this.handleIdNumberChange(e.target.value);
+      });
+    }
   }
 
   hide() {
-    this.modal.classList.remove('active');
-    document.body.style.overflow = '';
+    if (this.modal) {
+      this.modal.classList.remove('active');
+    }
     const loginForm = document.getElementById('loginForm');
-    const signupForm = document.getElementById('signupForm');
     if (loginForm) loginForm.reset();
+    document.body.style.overflow = '';
+  }
+
+  hideSignup() {
+    if (this.signupModal) {
+      this.signupModal.classList.remove('active');
+    }
+    const signupForm = document.getElementById('signupForm');
     if (signupForm) {
       signupForm.reset();
-      document.getElementById('dynamicFields').innerHTML = '';
-      document.getElementById('roleIndicator').classList.add('hidden');
+      const dynamicFields = document.getElementById('dynamicFields');
+      if (dynamicFields) dynamicFields.innerHTML = '';
+      const roleIndicator = document.getElementById('roleIndicator');
+      if (roleIndicator) roleIndicator.classList.add('hidden');
     }
+    document.body.style.overflow = '';
   }
 }
 
