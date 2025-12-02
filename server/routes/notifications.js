@@ -91,5 +91,49 @@ async function createNotification({ userId, role, type, title, message, requestI
 }
 
 // ✅ Export both router and your existing function - unchanged
-module.exports = router;
+// Provide access to the createNotification helper for other modules
 module.exports.createNotification = createNotification;
+
+// PATCH /:id - mark a single notification read/unread
+router.patch('/:id', async (req, res) => {
+  const id = req.params.id;
+  // Accept { read: true } or { read: false } in body. Default to setting to read (1).
+  const readFlag = (req.body && typeof req.body.read !== 'undefined') ? (req.body.read ? 1 : 0) : 1;
+
+  let conn;
+  try {
+    conn = await getConnection();
+    await conn.query('UPDATE notifications SET read_flag = ? WHERE id = ?', [readFlag, id]);
+    res.json({ success: true, id: id, read: !!readFlag });
+  } catch (error) {
+    console.error('Failed to update notification:', error);
+    res.status(500).json({ success: false, message: 'Failed to update notification' });
+  } finally {
+    if (conn) conn.release();
+  }
+});
+
+// Export the router (kept after routes are defined)
+module.exports = router;
+// Compatibility endpoint: allow batch marking notifications as read via POST /api/notifications/mark-read
+router.post('/mark-read', async (req, res) => {
+  const ids = req.body && req.body.ids ? req.body.ids : [];
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return res.json({ success: true, updated: 0 });
+  }
+
+  let conn;
+  try {
+    conn = await getConnection();
+    // Prepare placeholders and values
+    const placeholders = ids.map(() => '?').join(',');
+    const sql = `UPDATE notifications SET read_flag = 1 WHERE id IN (${placeholders})`;
+    await conn.query(sql, ids);
+    res.json({ success: true, updated: ids.length });
+  } catch (error) {
+    console.error('Failed to mark notifications read (batch):', error);
+    res.status(500).json({ success: false, message: 'Failed to mark notifications read' });
+  } finally {
+    if (conn) conn.release();
+  }
+});

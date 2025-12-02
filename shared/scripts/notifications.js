@@ -32,12 +32,22 @@
     },
 
     async markAllRead(ids = []) {
+      if (!Array.isArray(ids) || ids.length === 0) return;
+      // Make PATCH requests per notification to mark as read (server supports PATCH /api/notifications/:id)
       try {
-        // Attempt to call a server endpoint if exists
-        await Utils.apiRequest('/notifications/mark-read', { method: 'POST', body: { ids } });
+        const results = await Promise.allSettled(ids.map(id => {
+          return Utils.apiRequest(`/notifications/${id}`, {
+            method: 'PATCH',
+            body: { read: true }
+          });
+        }));
+
+        const failed = results.filter(r => r.status === 'rejected');
+        if (failed.length) {
+          console.warn(`markAllRead: ${failed.length} requests failed`);
+        }
       } catch (err) {
-        // If server endpoint is not available, silently continue
-        console.info('markAllRead: server endpoint not available or failed', err.message || err);
+        console.error('markAllRead unexpected error:', err);
       }
     },
 
