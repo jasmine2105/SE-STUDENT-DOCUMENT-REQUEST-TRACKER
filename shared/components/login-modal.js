@@ -217,7 +217,7 @@ class LoginModal {
               <label for="signupPassword">Create Password *</label>
               <div class="password-input-wrapper">
                 <input type="password" id="signupPassword" name="signupPassword" placeholder="Create a password (min 3 characters)" required />
-                <button type="button" class="password-toggle" id="togglePassword" aria-label="Show password">
+                <button type="button" class="password-toggle" id="togglePassword" data-target="signupPassword" aria-label="Show password" title="Show password">
                   <i class="fas fa-eye"></i>
                 </button>
               </div>
@@ -228,7 +228,7 @@ class LoginModal {
               <label for="confirmPassword">Confirm Password *</label>
               <div class="password-input-wrapper">
                 <input type="password" id="confirmPassword" name="confirmPassword" placeholder="Confirm your password" required />
-                <button type="button" class="password-toggle" id="toggleConfirmPassword" aria-label="Show password">
+                <button type="button" class="password-toggle" id="toggleConfirmPassword" data-target="confirmPassword" aria-label="Show password" title="Show password">
                   <i class="fas fa-eye"></i>
                 </button>
               </div>
@@ -411,6 +411,26 @@ class LoginModal {
         toggleConfirmPassword.querySelector('i').classList.toggle('fa-eye-slash');
       });
     }
+
+    // Delegated click handler for any password-toggle buttons (works even if form nodes are replaced)
+    document.body.addEventListener('click', (e) => {
+      const btn = e.target.closest && e.target.closest('.password-toggle');
+      if (!btn) return;
+      e.preventDefault();
+      const targetId = btn.getAttribute('data-target');
+      if (!targetId) return;
+      const input = document.getElementById(targetId);
+      if (!input) return;
+      const newType = input.type === 'password' ? 'text' : 'password';
+      input.type = newType;
+      const icon = btn.querySelector('i');
+      if (icon) {
+        icon.classList.toggle('fa-eye');
+        icon.classList.toggle('fa-eye-slash');
+      }
+      btn.setAttribute('aria-pressed', newType === 'text' ? 'true' : 'false');
+      btn.title = newType === 'text' ? 'Hide password' : 'Show password';
+    });
 
     // Real-time password confirmation validation
     if (confirmPasswordInput && passwordInput) {
