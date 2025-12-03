@@ -46,5 +46,39 @@ router.get('/admins', authMiddleware(true), async (req, res) => {
   }
 });
 
+// Get all students and faculty with full data
+router.get('/all', authMiddleware(true), async (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ message: 'Admins only.' });
+  }
+
+  try {
+    const conn = await getConnection();
+    try {
+      const [rows] = await conn.query(`
+        SELECT 
+          id, 
+          full_name AS fullName, 
+          email, 
+          role, 
+          id_number AS studentIdNumber,
+          course,
+          year_level AS year,
+          department_id AS departmentId,
+          created_at AS createdAt
+        FROM users 
+        WHERE role IN ('student', 'faculty')
+        ORDER BY role ASC, full_name ASC
+      `);
+      res.json(rows);
+    } finally {
+      conn.release();
+    }
+  } catch (error) {
+    console.error('All users list error:', error);
+    res.status(500).json({ message: 'Failed to load users.' });
+  }
+});
+
 module.exports = router;
 

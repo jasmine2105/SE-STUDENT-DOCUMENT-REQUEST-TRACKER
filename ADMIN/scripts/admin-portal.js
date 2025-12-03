@@ -31,6 +31,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     const view = btn.dataset.view;
     document.getElementById('dashboardView').classList.toggle('hidden', view !== 'dashboard');
     document.getElementById('requestsView').classList.toggle('hidden', view !== 'requests');
+    document.getElementById('usersView').classList.toggle('hidden', view !== 'users');
+    if (view === 'users') {
+      window.adminPortal?.loadUsers();
+    }
   }));
 
   const logoutBtn = document.getElementById('logoutBtn');
@@ -88,9 +92,12 @@ class AdminPortal {
     this.requests = [];
     this.filteredRequests = [];
     this.allFaculties = [];
+    this.allUsers = [];
     this.filterStatus = 'all';
     this.filterType = 'all';
     this.searchQuery = '';
+    this.usersSearchQuery = '';
+    this.usersRoleFilter = 'all';
     this.init();
   }
 
@@ -279,6 +286,24 @@ class AdminPortal {
       typeFilter.addEventListener('change', (e) => {
         this.filterType = e.target.value;
         this.filterRequests();
+      });
+    }
+
+    // Users search input
+    const usersSearch = document.getElementById('usersSearch');
+    if (usersSearch) {
+      usersSearch.addEventListener('input', (e) => {
+        this.usersSearchQuery = e.target.value;
+        this.filterAndRenderUsers();
+      });
+    }
+
+    // Users role filter
+    const usersRoleFilter = document.getElementById('usersRoleFilter');
+    if (usersRoleFilter) {
+      usersRoleFilter.addEventListener('change', (e) => {
+        this.usersRoleFilter = e.target.value;
+        this.filterAndRenderUsers();
       });
     }
 
@@ -510,11 +535,102 @@ class AdminPortal {
       }
     });
   }
-}
 
+  async loadUsers() {
+    try {
+      const users = await Utils.apiRequest('/users/all');
+      const departments = await Utils.apiRequest('/departments');
+      
+      this.allUsers = Array.isArray(users) ? users : [];
+      this.departments = Array.isArray(departments) ? departments : [];
+      
+      // Map department IDs to names
+      this.allUsers = this.allUsers.map(user => ({
+        ...user,
+        departmentName: this.departments.find(d => d.id === user.departmentId)?.name || 'N/A'
+      }));
+      
+      this.usersSearchQuery = '';
+      this.usersRoleFilter = 'all';
+      this.filterAndRenderUsers();
+    } catch (error) {
+      console.error('Failed to load users:', error);
+      Utils.showToast('Failed to load users', 'error');
+      const container = document.getElementById('usersList');
+      if (container) {
+        container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">❌</div><h3>Failed to load users</h3></div>';
+      }
+    }
+  }
+
+  filterAndRenderUsers() {
+    if (!this.allUsers) return;
+
+    let filtered = this.allUsers;
+
+    // Filter by role
+    if (this.usersRoleFilter !== 'all') {
+      filtered = filtered.filter(u => u.role === this.usersRoleFilter);
+    }
+
+    // Filter by search query
+    if (this.usersSearchQuery) {
+      const query = this.usersSearchQuery.toLowerCase();
+      filtered = filtered.filter(u => 
+        (u.fullName && u.fullName.toLowerCase().includes(query)) ||
+        (u.email && u.email.toLowerCase().includes(query)) ||
+        (u.studentIdNumber && u.studentIdNumber.toLowerCase().includes(query))
+      );
+    }
+
+    this.renderUsers(filtered);
+  }
+
+  renderUsers(users) {
+    const container = document.getElementById('usersList');
+    if (!container) return;
+
+    if (users.length === 0) {
+      container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">👥</div><h3>No users found</h3><p>Try adjusting your filters or search query.</p></div>';
+      return;
+    }
+
+    container.innerHTML = `
+      <div class="users-table-wrapper">
+        <table class="users-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Email</th>
+              <th>Role</th>
+              <th>Student ID</th>
+              <th>Course</th>
+              <th>Year</th>
+              <th>Department</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${users.map(user => `
+              <tr class="user-row user-role-${user.role}">
+                <td class="user-name"><strong>${user.fullName || 'N/A'}</strong></td>
+                <td class="user-email">${user.email || 'N/A'}</td>
+                <td><span class="role-badge role-${user.role}">${user.role === 'student' ? 'Student' : 'Faculty'}</span></td>
+                <td class="user-id">${user.studentIdNumber || '—'}</td>
+                <td class="user-course">${user.course || '—'}</td>
+                <td class="user-year">${user.year || '—'}</td>
+                <td class="user-dept">${user.departmentName || 'N/A'}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+  }
+}
 // Initialize portal when DOM is loaded
 let adminPortal;
 document.addEventListener('DOMContentLoaded', () => {
   adminPortal = new AdminPortal();
+  window.adminPortal = adminPortal;
 });
 

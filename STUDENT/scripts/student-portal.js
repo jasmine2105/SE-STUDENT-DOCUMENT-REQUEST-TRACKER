@@ -200,7 +200,7 @@ class StudentPortal {
     const completedTrendEl = document.getElementById('statCompletedTrend');
 
     const total = this.requests.length;
-    const pending = this.requests.filter((r) => r.status === 'in_progress').length;
+    const pending = this.requests.filter((r) => ['pending', 'pending_faculty', 'in_progress'].includes(r.status)).length;
     const completed = this.requests.filter((r) => r.status === 'completed').length;
 
     // Calculate trends (today's requests)
@@ -229,7 +229,7 @@ class StudentPortal {
       const todayPending = this.requests.filter(r => {
         const reqDate = new Date(r.submittedAt);
         reqDate.setHours(0, 0, 0, 0);
-        return reqDate.getTime() === today.getTime() && r.status === 'in_progress';
+        return reqDate.getTime() === today.getTime() && ['pending', 'pending_faculty', 'in_progress'].includes(r.status);
       }).length;
       if (todayPending > 0) {
         pendingTrendEl.innerHTML = `<span class="stat-trend positive"><i class="fas fa-arrow-up"></i> +${todayPending} today</span>`;

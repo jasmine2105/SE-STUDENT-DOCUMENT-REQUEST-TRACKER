@@ -62,6 +62,71 @@ body {
   background-color: rgba(255, 255, 255, 0.3);
 }
 
+/* User pill (match Student portal) */
+.user-profile-dropdown {
+  position: relative;
+}
+
+.user-pill {
+  background: var(--recoletos-green);
+  color: var(--white);
+  padding: 0.5rem 1rem;
+  border-radius: 999px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: all 0.2s ease;
+}
+
+.user-pill:hover {
+  background: #003318;
+  box-shadow: 0 2px 8px rgba(0, 66, 37, 0.2);
+}
+
+.user-pill i:first-child {
+  font-size: 1.2rem;
+}
+
+.user-pill i:last-child {
+  font-size: 0.75rem;
+  margin-left: 0.25rem;
+}
+
+.profile-dropdown-menu {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  right: 0;
+  background: var(--white);
+  border-radius: 12px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+  min-width: 200px;
+  padding: 0.5rem;
+  z-index: 1000;
+  border: 1px solid var(--border-gray);
+}
+
+.profile-dropdown-menu .dropdown-item {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  padding: 0.5rem;
+  color: var(--text-dark);
+  text-decoration: none;
+  border-radius: 8px;
+}
+
+.profile-dropdown-menu .dropdown-item:hover {
+  background: #f5f5f5;
+}
+
+.dropdown-divider {
+  height: 1px;
+  background: var(--border-gray);
+  margin: 0.5rem 0;
+}
+
 /* Main Container (match Student portal) */
 .main-container {
   flex: 1;
@@ -98,6 +163,12 @@ body {
   color: var(--text-dark);
   opacity: 0.7;
   font-size: 0.9rem;
+}
+
+.sidebar-subtitle {
+  color: #FFFFFF !important;
+  font-size: 0.85rem;
+  opacity: 1 !important;
 }
 
 /* Content Section */
@@ -449,6 +520,118 @@ body {
   margin-bottom: 1rem;
 }
 
+/* Users Table Styles */
+.section-controls {
+  display: flex;
+  gap: 1rem;
+  margin-top: 1rem;
+  flex-wrap: wrap;
+}
+
+.search-input,
+.filter-select {
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border-gray);
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 0.95rem;
+  background-color: var(--white);
+}
+
+.search-input {
+  flex: 1;
+  min-width: 250px;
+}
+
+.filter-select {
+  min-width: 150px;
+  cursor: pointer;
+}
+
+.users-table-wrapper {
+  overflow-x: auto;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  margin-top: 1rem;
+}
+
+.users-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--white);
+  font-size: 0.95rem;
+}
+
+.users-table thead {
+  background: var(--recoletos-green);
+  color: var(--white);
+  position: sticky;
+  top: 0;
+}
+
+.users-table th {
+  padding: 1rem;
+  text-align: left;
+  font-weight: 600;
+  border-bottom: 2px solid var(--recoletos-gold);
+}
+
+.users-table tbody tr {
+  border-bottom: 1px solid var(--border-gray);
+  transition: background-color 0.2s;
+}
+
+.users-table tbody tr:hover {
+  background-color: #f9f7f2;
+}
+
+.users-table td {
+  padding: 1rem;
+}
+
+.user-name {
+  font-weight: 600;
+  color: var(--text-dark);
+}
+
+.user-email {
+  color: #666;
+  font-size: 0.9rem;
+}
+
+.user-id,
+.user-course,
+.user-year,
+.user-date {
+  color: #999;
+  font-size: 0.9rem;
+}
+
+.user-dept {
+  color: #666;
+  font-size: 0.9rem;
+}
+
+.role-badge {
+  display: inline-block;
+  padding: 0.4rem 0.8rem;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.role-student {
+  background-color: #E3F2FD;
+  color: #1565C0;
+}
+
+.role-faculty {
+  background-color: #FCE4EC;
+  color: #C2185B;
+}
+
 /* Responsive */
 @media (max-width: 768px) {
   .header-content {
@@ -472,6 +655,24 @@ body {
 
   .modal-actions {
     flex-direction: column;
+  }
+
+  .section-controls {
+    flex-direction: column;
+  }
+
+  .search-input,
+  .filter-select {
+    width: 100%;
+  }
+
+  .users-table {
+    font-size: 0.85rem;
+  }
+
+  .users-table th,
+  .users-table td {
+    padding: 0.75rem 0.5rem;
   }
 }
 

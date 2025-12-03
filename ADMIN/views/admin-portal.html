@@ -7,6 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="../../shared/styles-home.css">
     <link rel="stylesheet" href="../../STUDENT/styles/student-portal.css">
     <link rel="stylesheet" href="../styles/admin-portal.css">
@@ -18,7 +19,9 @@
         <!-- Sidebar -->
         <aside class="portal-sidebar" id="portalSidebar">
             <div class="sidebar-header">
-                <div class="sidebar-logo">USJ-R</div>
+                <div class="sidebar-logo">
+                    <i class="fas fa-shield-alt"></i>
+                </div>
                 <div>
                     <p class="sidebar-title">Admin Portal</p>
                     <span class="sidebar-subtitle" id="sidebarUserInfo">Loading...</span>
@@ -54,8 +57,27 @@
                             <div class="notification-list" id="notificationList"></div>
                         </div>
                     </div>
-                    <div class="user-pill">
-                        <span class="user-name" id="userName">Loading...</span>
+                    <div class="user-profile-dropdown" id="userProfileDropdown">
+                        <div class="user-pill" id="userPill">
+                            <i class="fas fa-user-circle"></i>
+                            <span class="user-name" id="userName">Loading...</span>
+                            <i class="fas fa-chevron-down"></i>
+                        </div>
+                        <div class="profile-dropdown-menu hidden" id="profileDropdownMenu">
+                            <a href="#" class="dropdown-item" id="profileLink">
+                                <i class="fas fa-user"></i> My Profile
+                            </a>
+                            <a href="#" class="dropdown-item" id="notificationsLink">
+                                <i class="fas fa-bell"></i> Notifications
+                            </a>
+                            <a href="#" class="dropdown-item" id="settingsLink">
+                                <i class="fas fa-cog"></i> Settings
+                            </a>
+                            <div class="dropdown-divider"></div>
+                            <a href="#" class="dropdown-item" id="logoutLink">
+                                <i class="fas fa-sign-out-alt"></i> Logout
+                            </a>
+                        </div>
                     </div>
                 </div>
             </header>
@@ -101,6 +123,29 @@
                         <div class="empty-state">
                             <div class="empty-state-icon">🗂️</div>
                             <h3>Loading requests...</h3>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Users View -->
+            <section class="main-container hidden" id="usersView">
+                <div class="content-section">
+                    <div class="section-header">
+                        <h2>All Users</h2>
+                        <div class="section-controls">
+                            <input type="text" id="usersSearch" class="search-input" placeholder="Search by name or ID...">
+                            <select id="usersRoleFilter" class="filter-select">
+                                <option value="all">All Users</option>
+                                <option value="student">Students Only</option>
+                                <option value="faculty">Faculty Only</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div id="usersList">
+                        <div class="empty-state">
+                            <div class="empty-state-icon">👥</div>
+                            <h3>Loading users...</h3>
                         </div>
                     </div>
                 </div>
