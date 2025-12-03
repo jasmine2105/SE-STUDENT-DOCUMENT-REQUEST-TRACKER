@@ -23,6 +23,63 @@ document.addEventListener('DOMContentLoaded', async () => {
     console.warn('Notifications init failed', err.message || err);
   }
 
+  // Profile dropdown (match student behavior)
+  const userPillElem = document.getElementById('userPill');
+  const profileMenu = document.getElementById('profileDropdownMenu');
+  const profileLink = document.getElementById('profileLink');
+  const notificationsLink = document.getElementById('notificationsLink');
+  const settingsLink = document.getElementById('settingsLink');
+  const logoutLink = document.getElementById('logoutLink');
+
+  if (userPillElem && profileMenu) {
+    userPillElem.addEventListener('click', (e) => {
+      e.stopPropagation();
+      profileMenu.classList.toggle('hidden');
+    });
+
+    // Close when clicking outside
+    document.addEventListener('click', (e) => {
+      if (!userPillElem.contains(e.target) && !profileMenu.contains(e.target)) {
+        profileMenu.classList.add('hidden');
+      }
+    });
+  }
+
+  if (profileLink) {
+    profileLink.addEventListener('click', (e) => {
+      e.preventDefault();
+      profileMenu.classList.add('hidden');
+      window.location.href = 'admin-profile.html';
+    });
+  }
+
+  if (notificationsLink) {
+    notificationsLink.addEventListener('click', (e) => {
+      e.preventDefault();
+      // open notifications dropdown and close profile menu
+      const notifDropdown = document.getElementById('notificationDropdown');
+      if (notifDropdown) {
+        profileMenu.classList.add('hidden');
+        notifDropdown.classList.toggle('hidden');
+      }
+    });
+  }
+
+  if (settingsLink) {
+    settingsLink.addEventListener('click', (e) => {
+      e.preventDefault();
+      profileMenu.classList.add('hidden');
+      Utils.showToast('Settings page not implemented', 'info');
+    });
+  }
+
+  if (logoutLink) {
+    logoutLink.addEventListener('click', (e) => {
+      e.preventDefault();
+      Utils.clearCurrentUser();
+    });
+  }
+
   // Sidebar view switching
   const links = document.querySelectorAll('.sidebar-link');
   links.forEach(btn => btn.addEventListener('click', () => {

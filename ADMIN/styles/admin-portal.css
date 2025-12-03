@@ -594,6 +594,12 @@ body {
   color: var(--text-dark);
 }
 
+/* Ensure user name inside the rounded pill is white (overrides table styles) */
+.user-pill .user-name,
+.user-profile-dropdown .user-name {
+  color: var(--white);
+}
+
 .user-email {
   color: #666;
   font-size: 0.9rem;
@@ -674,5 +680,104 @@ body {
   .users-table td {
     padding: 0.75rem 0.5rem;
   }
+}
+
+/* Profile Page Styles */
+.avatar-large {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--recoletos-green), #006633);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 3rem;
+  color: var(--white);
+  position: relative;
+  overflow: hidden;
+  margin: 0 auto 1rem;
+}
+
+.avatar-large img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.upload-label {
+  display: block;
+  text-align: center;
+  padding: 0.5rem 1rem;
+  background-color: var(--recoletos-green);
+  color: var(--white);
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  margin: 0 auto;
+  width: max-content;
+}
+
+.upload-label:hover {
+  background-color: #003318;
+}
+
+.profile-card {
+  display: flex;
+  gap: 2rem;
+  align-items: center;
+  padding: 2rem;
+  background: var(--white);
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  margin-bottom: 2rem;
+}
+
+.profile-card-left {
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.profile-card-right h3 {
+  color: var(--recoletos-green);
+  font-size: 1.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.profile-card-right .muted {
+  color: #666;
+  font-size: 0.95rem;
+}
+
+.content-box {
+  background: var(--white);
+  border-radius: 12px;
+  padding: 2rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.content-box h3 {
+  color: var(--recoletos-green);
+  font-size: 1.3rem;
+  margin-bottom: 1.5rem;
+}
+
+.grid-3 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 2rem;
+}
+
+.grid-3 > div .label {
+  font-weight: 600;
+  color: var(--text-dark);
+  font-size: 0.9rem;
+  margin-bottom: 0.5rem;
+}
+
+.grid-3 > div > div:not(.label) {
+  color: var(--text-dark);
+  font-size: 1rem;
 }
 
