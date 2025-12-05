@@ -114,11 +114,11 @@ class FacultyPortal {
   loadUserInfo() {
     const userNameEl = document.getElementById('userName');
     const userInfoEl = document.getElementById('userInfo');
-    
+
     if (userNameEl) {
       userNameEl.textContent = this.currentUser.fullName || this.currentUser.name || 'Faculty';
     }
-    
+
     if (userInfoEl) {
       const dept = this.currentUser.department || this.currentUser.departmentName || 'Department';
       const position = this.currentUser.position || 'Faculty';
@@ -130,8 +130,8 @@ class FacultyPortal {
     try {
       const allRequests = await Utils.apiRequest('/requests');
       // Get requests assigned to this faculty or pending faculty approval
-      this.requests = allRequests.filter(r => 
-        r.status === 'pending_faculty' || 
+      this.requests = allRequests.filter(r =>
+        r.status === 'pending_faculty' ||
         (r.facultyId === this.currentUser.id && r.facultyApproval === null)
       );
       this.filterRequests();
@@ -213,7 +213,7 @@ class FacultyPortal {
 
     const total = this.requests.length;
     const pending = this.requests.filter(r => r.status === 'pending_faculty').length;
-    const approved = this.requests.filter(r => 
+    const approved = this.requests.filter(r =>
       r.facultyApproval && r.facultyApproval.status === 'approved'
     ).length;
 
@@ -304,7 +304,7 @@ class FacultyPortal {
 
   async submitApproval(requestId, action) {
     const comment = document.getElementById('comment').value.trim();
-    
+
     if (action === 'decline' && !comment) {
       Utils.showToast('Please provide a comment for declining the request', 'warning');
       return;

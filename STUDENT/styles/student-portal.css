@@ -136,13 +136,21 @@ body {
   font-size: 1.5rem;
   font-weight: 600;
   color: var(--recoletos-green);
-  margin: 0;
+  margin: 0 0 0.25rem 0;
   line-height: 1.4;
 }
 
 .header-left h1 span {
   font-weight: 700;
   color: var(--recoletos-green);
+}
+
+.welcome-subtitle {
+  font-size: 0.95rem;
+  color: var(--text-dark);
+  opacity: 0.7;
+  margin: 0;
+  font-weight: 400;
 }
 
 .header-right {
@@ -842,34 +850,82 @@ body {
   flex-wrap: wrap;
 }
 
+/* Filter Group Styling */
+.filter-group {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.filter-label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text-dark);
+  white-space: nowrap;
+}
+
+.filter-label i {
+  color: var(--recoletos-green);
+  font-size: 0.85rem;
+}
+
 .filter-select {
-  padding: 0.5rem 0.75rem;
+  padding: 0.6rem 0.9rem;
   border: 2px solid var(--border-gray);
   border-radius: 8px;
   background: var(--white);
   font-size: 0.9rem;
-  min-width: 180px;
+  color: var(--text-dark);
+  min-width: 160px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23004225' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  padding-right: 2.5rem;
+}
+
+.filter-select:hover {
+  border-color: var(--recoletos-green);
+  box-shadow: 0 0 0 3px rgba(0,66,37,0.05);
 }
 
 .filter-select:focus {
   outline: none;
   border-color: var(--recoletos-green);
+  box-shadow: 0 0 0 3px rgba(0,66,37,0.1);
 }
 
 /* My Documents search input */
 #myDocsSearch {
-  padding: 0.5rem 0.75rem;
+  padding: 0.6rem 0.9rem;
   border: 2px solid var(--border-gray);
   border-radius: 8px;
-  min-width: 200px;
-  font-size: 0.95rem;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  background: var(--white);
+  font-size: 0.9rem;
+  color: var(--text-dark);
+  min-width: 220px;
+  transition: all 0.2s ease;
+}
+
+#myDocsSearch::placeholder {
+  color: var(--text-dark);
+  opacity: 0.5;
+}
+
+#myDocsSearch:hover {
+  border-color: var(--recoletos-green);
+  box-shadow: 0 0 0 3px rgba(0,66,37,0.05);
 }
 
 #myDocsSearch:focus {
   outline: none;
   border-color: var(--recoletos-green);
-  box-shadow: 0 0 0 3px rgba(0,66,37,0.06);
+  box-shadow: 0 0 0 3px rgba(0,66,37,0.1);
 }
 
 .requests-table {
@@ -943,7 +999,7 @@ body {
 /* Reduce overall table density to match admin view */
 .table-wrapper {
   width: 100%;
-  overflow-x: auto;
+  overflow-x: hidden;
   padding-top: 0.25rem;
 }
 
@@ -995,7 +1051,7 @@ body {
 
 .table-wrapper {
   width: 100%;
-  overflow-x: auto;
+  overflow-x: hidden;
 }
 
 .notifications-full-list {
@@ -1467,6 +1523,84 @@ body {
 .document-icon.shield {
   background: rgba(59, 130, 246, 0.1);
   color: #3B82F6;
+}
+
+/* File Preview Styles */
+.file-preview-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.file-preview-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  background: var(--bg-cream);
+  border: 1px solid var(--border-gray);
+  border-radius: 8px;
+  max-width: 200px;
+}
+
+.file-preview-info {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.file-preview-image {
+  width: 60px;
+  height: 60px;
+  object-fit: cover;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.file-preview-icon {
+  width: 60px;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
+  background: var(--bg-white);
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.file-preview-name {
+  font-size: 0.85rem;
+  color: var(--text-dark);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+.file-preview-remove {
+  background: var(--error);
+  color: var(--white);
+  border: none;
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 1.2rem;
+  line-height: 1;
+  flex-shrink: 0;
+  transition: background 0.2s ease;
+}
+
+.file-preview-remove:hover {
+  background: #DC2626;
 }
 }
 

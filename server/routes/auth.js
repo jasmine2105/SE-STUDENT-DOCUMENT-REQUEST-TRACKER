@@ -13,7 +13,9 @@ try {
 const jwt = require('jsonwebtoken');
 const { initPool } = require('../config/db');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
+// JWT_SECRET: Use .env value if set, otherwise fallback to default
+// NOTE: In production, JWT_SECRET should ALWAYS be set in .env for security
+const JWT_SECRET = process.env.JWT_SECRET || 'recoletos-secret';
 
 // Helper function to detect role from ID number
 function detectRoleFromId(idNumber) {

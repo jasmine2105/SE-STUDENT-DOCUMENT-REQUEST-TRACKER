@@ -1,11 +1,7 @@
 (function () {
   const el = id => document.getElementById(id);
 
-  function formatDate(ts) {
-    if (!ts) return '-';
-    const d = new Date(ts);
-    return d.toLocaleDateString();
-  }
+  // Use Utils.formatDate instead of duplicate function
 
   function loadProfileImage() {
     const userId = (Utils.getCurrentUser() || {}).id;

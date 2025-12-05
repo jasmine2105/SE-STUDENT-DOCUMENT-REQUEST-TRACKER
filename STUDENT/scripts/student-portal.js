@@ -11,11 +11,12 @@ class StudentPortal {
     this.departments = [];
     this.defaultDepartment = 'School of Computer Studies (SCS)';
     this.documentTypes = {};
-    
+    this.currentDocumentTypeRequest = null; // Track current request to cancel if needed
+
     // Pagination state
     this.currentPage = 1;
     this.itemsPerPage = 10;
-    
+
     window.studentPortal = this;
     this.init();
   }
@@ -38,9 +39,9 @@ class StudentPortal {
 
   async init() {
     console.log('🚀 StudentPortal init started');
-    
+
     if (!Utils.requireAuth()) return;
-    
+
     if (this.currentUser.role !== 'student') {
       Utils.showToast('Access denied. Student portal only.', 'error');
       Utils.clearCurrentUser();
@@ -51,7 +52,7 @@ class StudentPortal {
       await this.loadDepartmentsFromApi();
       this.loadUserInfo();
       this.setupEventListeners();
-      
+
       try {
         console.log('📥 Loading requests...');
         await this.loadRequests();
@@ -60,15 +61,15 @@ class StudentPortal {
         console.error('❌ Failed to load requests:', error);
         Utils.showToast('Failed to load requests, but you can still submit new ones', 'warning');
       }
-      
+
       console.log('⏭️ Skipping notifications for now (will be fixed)');
       this.notifications = [];
-      
+
       this.updateStats();
       this.renderDashboard();
       this.renderHistory();
       this.renderNotifications();
-      
+
       console.log('✅ StudentPortal initialized successfully');
     } catch (error) {
       console.error('❌ Failed to initialize StudentPortal:', error);
@@ -79,7 +80,9 @@ class StudentPortal {
   async loadDepartmentsFromApi() {
     if (this.departments.length > 0) return;
     try {
-      const data = await Utils.apiRequest('/departments');
+      const data = await Utils.apiRequest('/departments', {
+        timeout: 30000 // 30 seconds timeout
+      });
       if (Array.isArray(data) && data.length) {
         // Ensure all department IDs are numbers
         this.departments = data.map(dept => ({
@@ -103,54 +106,67 @@ class StudentPortal {
   }
 
   async loadDocumentTypes(departmentCode) {
+    console.log('📚 loadDocumentTypes called for:', departmentCode);
+    
     if (this.documentTypes[departmentCode]) {
+      console.log('✅ Using cached document types for:', departmentCode);
       return this.documentTypes[departmentCode];
     }
 
-    // First, try to get from hardcoded config as fallback
+    // First, get fallback config ready (we'll use this immediately)
     const fallbackDept = window.RecoletosConfig?.findDepartmentByName?.(departmentCode);
     const fallbackDocs = fallbackDept?.documents || [];
+    console.log('📋 Fallback docs available:', fallbackDocs.length);
 
+    // If we have fallback docs, format them now and RETURN THEM IMMEDIATELY.
+    // This removes any waiting time for students while the database/API is down.
+    let formattedFallback = [];
+    if (fallbackDocs.length > 0) {
+      formattedFallback = fallbackDocs.map(doc => ({
+        id: doc.value,
+        value: doc.value,
+        name: doc.label || doc.value,
+        requires_faculty: doc.requiresFaculty || false
+      }));
+
+      console.log('⚡ Using fallback document types ONLY (skipping API) for department:', departmentCode);
+      this.documentTypes[departmentCode] = formattedFallback;
+      return formattedFallback;
+    }
+
+    // If no fallback docs, try the API with a short timeout (5 seconds)
     try {
-      const data = await Utils.apiRequest(`/requests/document-types/${departmentCode}`);
+      console.log('🌐 Making API request to /requests/document-types/' + departmentCode);
+      
+      // Use Utils.apiRequest with timeout option (no need for Promise.race)
+      const data = await Utils.apiRequest(`/requests/document-types/${departmentCode}`, {
+        timeout: 5000 // 5 seconds timeout for document types
+      });
+      
+      console.log('📥 API response received:', data);
+      
       if (data && Array.isArray(data) && data.length > 0) {
         this.documentTypes[departmentCode] = data;
+        console.log('✅ Cached', data.length, 'document types from API');
         return data;
       } else {
         // API returned empty array, use fallback
-        console.warn('API returned no document types, using fallback config');
-        if (fallbackDocs.length > 0) {
-          const formattedDocs = fallbackDocs.map(doc => ({
-            id: doc.value,
-            value: doc.value,
-            name: doc.label || doc.value,
-            requires_faculty: doc.requiresFaculty || false
-          }));
-          this.documentTypes[departmentCode] = formattedDocs;
-          return formattedDocs;
+        console.warn('⚠️ API returned no document types, using fallback config');
+        if (formattedFallback.length > 0) {
+          this.documentTypes[departmentCode] = formattedFallback;
+          console.log('✅ Using', formattedFallback.length, 'fallback document types');
+          return formattedFallback;
         }
+        console.warn('⚠️ No fallback docs available, returning empty array');
         return [];
       }
     } catch (error) {
-      console.error('Failed to load document types from API:', error);
-      
-      // Use fallback if available
-      if (fallbackDocs.length > 0) {
-        console.log('Using fallback document types from config');
-        const formattedDocs = fallbackDocs.map(doc => ({
-          id: doc.value,
-          value: doc.value,
-          name: doc.label || doc.value,
-          requires_faculty: doc.requiresFaculty || false
-        }));
-        this.documentTypes[departmentCode] = formattedDocs;
-        return formattedDocs;
-      }
-      
-      // Only show error if no fallback available
-      if (fallbackDocs.length === 0) {
-        Utils.showToast('Failed to load document types. Please try again.', 'error');
-      }
+      console.error('❌ Failed to load document types from API:', error);
+      console.error('❌ Error details:', error.message);
+
+      // No fallback docs available and API failed
+      console.error('❌ No fallback available, showing error toast');
+      Utils.showToast('Failed to load document types. Please try again.', 'error');
       return [];
     }
   }
@@ -179,14 +195,33 @@ class StudentPortal {
 
   async loadRequests() {
     try {
-      const allRequests = await Utils.apiRequest('/requests');
-      this.requests = allRequests.filter((r) => r.studentId === this.currentUser.id);
+      console.log('📥 Loading requests for user ID:', this.currentUser.id, 'Type:', typeof this.currentUser.id);
+      const allRequests = await Utils.apiRequest('/requests', {
+        timeout: 30000 // 30 seconds timeout
+      });
+      console.log('📥 Received', allRequests.length, 'requests from server');
+      
+      // Server already filters by student_id, but double-check with type-safe comparison
+      this.requests = allRequests.filter((r) => {
+        const matches = Number(r.studentId) === Number(this.currentUser.id);
+        if (!matches && allRequests.length > 0) {
+          console.warn('⚠️ Request mismatch:', { 
+            requestStudentId: r.studentId, 
+            requestStudentIdType: typeof r.studentId,
+            currentUserId: this.currentUser.id,
+            currentUserIdType: typeof this.currentUser.id
+          });
+        }
+        return matches;
+      });
+      
+      console.log('✅ Filtered to', this.requests.length, 'requests for current user');
       this.updateStats();
       this.renderDashboard();
       this.renderHistory();
     } catch (error) {
       console.error('Failed to load requests:', error);
-      Utils.showToast('Failed to load requests', 'error');
+      Utils.showToast(error.message || 'Failed to load requests', 'error');
       throw error;
     }
   }
@@ -195,62 +230,14 @@ class StudentPortal {
     const totalEl = document.getElementById('statTotal');
     const pendingEl = document.getElementById('statPending');
     const completedEl = document.getElementById('statCompleted');
-    const totalTrendEl = document.getElementById('statTotalTrend');
-    const pendingTrendEl = document.getElementById('statPendingTrend');
-    const completedTrendEl = document.getElementById('statCompletedTrend');
 
     const total = this.requests.length;
     const pending = this.requests.filter((r) => ['pending', 'pending_faculty', 'in_progress'].includes(r.status)).length;
     const completed = this.requests.filter((r) => r.status === 'completed').length;
 
-    // Calculate trends (today's requests)
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const todayTotal = this.requests.filter(r => {
-      const reqDate = new Date(r.submittedAt);
-      reqDate.setHours(0, 0, 0, 0);
-      return reqDate.getTime() === today.getTime();
-    }).length;
-
     if (totalEl) totalEl.textContent = total;
     if (pendingEl) pendingEl.textContent = pending;
     if (completedEl) completedEl.textContent = completed;
-
-    // Update trends
-    if (totalTrendEl) {
-      if (todayTotal > 0) {
-        totalTrendEl.innerHTML = `<span class="stat-trend positive"><i class="fas fa-arrow-up"></i> +${todayTotal} today</span>`;
-        totalTrendEl.className = 'stat-trend positive';
-      } else {
-        totalTrendEl.innerHTML = '';
-      }
-    }
-    if (pendingTrendEl) {
-      const todayPending = this.requests.filter(r => {
-        const reqDate = new Date(r.submittedAt);
-        reqDate.setHours(0, 0, 0, 0);
-        return reqDate.getTime() === today.getTime() && ['pending', 'pending_faculty', 'in_progress'].includes(r.status);
-      }).length;
-      if (todayPending > 0) {
-        pendingTrendEl.innerHTML = `<span class="stat-trend positive"><i class="fas fa-arrow-up"></i> +${todayPending} today</span>`;
-        pendingTrendEl.className = 'stat-trend positive';
-      } else {
-        pendingTrendEl.innerHTML = '';
-      }
-    }
-    if (completedTrendEl) {
-      const todayCompleted = this.requests.filter(r => {
-        const reqDate = new Date(r.submittedAt);
-        reqDate.setHours(0, 0, 0, 0);
-        return reqDate.getTime() === today.getTime() && r.status === 'completed';
-      }).length;
-      if (todayCompleted > 0) {
-        completedTrendEl.innerHTML = `<span class="stat-trend positive"><i class="fas fa-arrow-up"></i> +${todayCompleted} today</span>`;
-        completedTrendEl.className = 'stat-trend positive';
-      } else {
-        completedTrendEl.innerHTML = '';
-      }
-    }
   }
 
   renderDashboard() {
@@ -420,7 +407,7 @@ class StudentPortal {
     const endItem = Math.min(this.currentPage * this.itemsPerPage, totalItems);
 
     let paginationControls = '';
-    
+
     // Previous button
     paginationControls += `
       <button class="pagination-btn" ${this.currentPage === 1 ? 'disabled' : ''} 
@@ -592,11 +579,7 @@ class StudentPortal {
       newRequestBtn.addEventListener('click', () => this.showNewRequestModal());
     }
 
-    const manageDocsBtn = document.getElementById('manageDocsBtn');
-    if (manageDocsBtn) manageDocsBtn.addEventListener('click', () => {
-      const el = document.getElementById('myDocuments');
-      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    });
+    // Manage button removed - it was not useful
 
     const myDocsFilter = document.getElementById('myDocsFilter');
     if (myDocsFilter) {
@@ -646,7 +629,7 @@ class StudentPortal {
         e.stopPropagation();
         profileDropdown.classList.toggle('hidden');
       });
-      
+
       // Close dropdown when clicking outside
       document.addEventListener('click', (e) => {
         if (!userPill.contains(e.target) && !profileDropdown.contains(e.target)) {
@@ -735,64 +718,79 @@ class StudentPortal {
     const closeModalBtn = document.getElementById('closeModal');
     const cancelRequestBtn = document.getElementById('cancelRequest');
     const documentRequestForm = document.getElementById('documentRequestForm');
-    
+
     if (closeModalBtn) {
-        closeModalBtn.addEventListener('click', () => this.closeRequestModal());
+      closeModalBtn.addEventListener('click', () => this.closeRequestModal());
     }
-    
+
     if (cancelRequestBtn) {
-        cancelRequestBtn.addEventListener('click', () => this.closeRequestModal());
+      cancelRequestBtn.addEventListener('click', () => this.closeRequestModal());
     }
-    
+
     if (documentRequestForm) {
-        // Remove existing listener by cloning form
-        const newForm = documentRequestForm.cloneNode(true);
-        documentRequestForm.parentNode.replaceChild(newForm, documentRequestForm);
-        
-        newForm.addEventListener('submit', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            console.log('📝 Form submit event triggered');
+      // Remove existing listener by cloning form
+      const newForm = documentRequestForm.cloneNode(true);
+      documentRequestForm.parentNode.replaceChild(newForm, documentRequestForm);
+
+      newForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        console.log('📝 Form submit event triggered');
+        this.submitNewRequest();
+      }, true); // Use capture phase
+
+      // Also add click handler to submit button as backup
+      const submitBtn = document.getElementById('submitRequestBtn');
+      if (submitBtn) {
+        const newBtn = submitBtn.cloneNode(true);
+        submitBtn.parentNode.replaceChild(newBtn, submitBtn);
+
+        newBtn.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          console.log('🔔 Submit button clicked');
+          const form = document.getElementById('documentRequestForm');
+          if (form) {
             this.submitNewRequest();
-        }, true); // Use capture phase
-        
-        // Also add click handler to submit button as backup
-        const submitBtn = document.getElementById('submitRequestBtn');
-        if (submitBtn) {
-            const newBtn = submitBtn.cloneNode(true);
-            submitBtn.parentNode.replaceChild(newBtn, submitBtn);
-            
-            newBtn.addEventListener('click', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                console.log('🔔 Submit button clicked');
-                const form = document.getElementById('documentRequestForm');
-                if (form) {
-                    this.submitNewRequest();
-                }
-            }, true);
-        }
+          }
+        }, true);
+      }
     }
 
     const departmentSelect = document.getElementById('department');
     if (departmentSelect) {
-        departmentSelect.addEventListener('change', (e) => {
-            const selectedValue = e.target.value;
-            const selectedText = e.target.options[e.target.selectedIndex]?.text || '';
-            console.log('Department changed:', { value: selectedValue, text: selectedText });
-            
-            // Use the department code (value) to load document types
-            if (selectedValue) {
-                this.updateDocumentTypes(selectedValue);
-            } else {
-                // Reset document types if no department selected
-                const documentTypeSelect = document.getElementById('documentType');
-                if (documentTypeSelect) {
-                    documentTypeSelect.innerHTML = '<option value="">Select Department First</option>';
-                    documentTypeSelect.disabled = true;
-                }
+      departmentSelect.addEventListener('change', async (e) => {
+        const selectedValue = e.target.value;
+        const selectedText = e.target.options[e.target.selectedIndex]?.text || '';
+        console.log('🏢 Department changed:', { value: selectedValue, text: selectedText });
+
+        // Use the department code (value) to load document types
+        if (selectedValue) {
+          try {
+            console.log('🔄 Calling updateDocumentTypes from department change handler...');
+            await this.updateDocumentTypes(selectedValue);
+            console.log('✅ updateDocumentTypes completed from department change handler');
+          } catch (err) {
+            console.error('❌ Failed to update document types on department change:', err);
+            // Even on error, make sure select is enabled
+            const documentTypeSelect = document.getElementById('documentType');
+            if (documentTypeSelect) {
+              documentTypeSelect.disabled = false;
+              documentTypeSelect.removeAttribute('disabled');
+              documentTypeSelect.style.pointerEvents = 'auto';
             }
-        });
+          }
+        } else {
+          // Reset document types if no department selected
+          console.log('⚠️ No department selected, resetting documentType');
+          const documentTypeSelect = document.getElementById('documentType');
+          if (documentTypeSelect) {
+            documentTypeSelect.innerHTML = '<option value="">Select Department First</option>';
+            documentTypeSelect.disabled = true;
+            documentTypeSelect.style.pointerEvents = '';
+          }
+        }
+      });
     }
 
     const documentTypeSelect = document.getElementById('documentType');
@@ -806,11 +804,11 @@ class StudentPortal {
     }
 
     if (modal) {
-        modal.addEventListener('click', (e) => {
-            if (e.target === modal) {
-                this.closeRequestModal();
-            }
-        });
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+          this.closeRequestModal();
+        }
+      });
     }
 
     this.setupFileUpload();
@@ -819,47 +817,57 @@ class StudentPortal {
   showNewRequestModal() {
     const modal = document.getElementById('requestModal');
     if (modal) {
-        modal.classList.remove('hidden');
-        modal.classList.add('active');
-        document.body.style.overflow = 'hidden';
-        this.resetRequestForm();
-        this.autoFillUserInfo();
-        
-        const departmentSelect = document.getElementById('department');
-        if (departmentSelect && departmentSelect.value) {
-            this.updateDocumentTypes(departmentSelect.value);
-        }
-        // ensure attachment visibility/requirement is evaluated on open
-        setTimeout(() => this.evaluateAttachmentRequirement(), 100);
+      modal.classList.remove('hidden');
+      modal.classList.add('active');
+      document.body.style.overflow = 'hidden';
+      this.resetRequestForm();
+      this.autoFillUserInfo();
+
+      // After form reset, check if department has a value and load document types
+      const departmentSelect = document.getElementById('department');
+      if (departmentSelect && departmentSelect.value) {
+        console.log('🔄 Modal opened with department already selected:', departmentSelect.value);
+        // Use setTimeout to ensure DOM is ready
+        setTimeout(() => {
+          this.updateDocumentTypes(departmentSelect.value).catch(err => {
+            console.error('❌ Error loading document types on modal open:', err);
+          });
+        }, 50);
+      }
+      // ensure attachment visibility/requirement is evaluated on open
+      setTimeout(() => this.evaluateAttachmentRequirement(), 100);
     }
   }
 
   closeRequestModal() {
     const modal = document.getElementById('requestModal');
     if (modal) {
-        modal.classList.remove('active');
-        modal.classList.add('hidden');
-        document.body.style.overflow = '';
+      modal.classList.remove('active');
+      modal.classList.add('hidden');
+      document.body.style.overflow = '';
     }
   }
 
   resetRequestForm() {
     const form = document.getElementById('documentRequestForm');
     if (form) {
-        form.reset();
+      form.reset();
     }
-    
+
     const documentTypeSelect = document.getElementById('documentType');
     if (documentTypeSelect) {
-        documentTypeSelect.innerHTML = '<option value="">Select Department First</option>';
-        documentTypeSelect.disabled = true;
+      documentTypeSelect.innerHTML = '<option value="">Select Department First</option>';
+      documentTypeSelect.disabled = true;
+      documentTypeSelect.style.pointerEvents = '';
+      // Extra safety: ensure disabled attribute is in a known state
+      documentTypeSelect.setAttribute('disabled', 'disabled');
     }
-    
+
     const documentTypeLoading = document.getElementById('documentTypeLoading');
     if (documentTypeLoading) {
-        documentTypeLoading.classList.add('hidden');
+      documentTypeLoading.classList.add('hidden');
     }
-    
+
     this.selectedFiles = [];
     this.renderPreviews();
 
@@ -874,42 +882,142 @@ class StudentPortal {
     // No longer auto-filling personal info fields; user must enter them manually.
   }
 
+  ensureSelectEnabled(documentTypeSelect, loadingElement) {
+    if (!documentTypeSelect) return;
+    
+    // Always make the select clickable - NO MATTER WHAT
+    console.log('🔓 Ensuring documentType select is enabled');
+    
+    try {
+      documentTypeSelect.disabled = false;
+      documentTypeSelect.removeAttribute('disabled');
+      documentTypeSelect.style.pointerEvents = 'auto';
+      documentTypeSelect.style.cursor = 'pointer';
+      documentTypeSelect.style.opacity = '1';
+      
+      // Double-check it's actually enabled
+      if (documentTypeSelect.disabled) {
+        console.warn('⚠️ Select still disabled after enabling, forcing again...');
+        documentTypeSelect.disabled = false;
+        documentTypeSelect.removeAttribute('disabled');
+      }
+      
+      if (loadingElement) loadingElement.classList.add('hidden');
+      
+      console.log('✅ documentType select enabled. disabled attribute:', documentTypeSelect.hasAttribute('disabled'), 'disabled property:', documentTypeSelect.disabled);
+    } catch (e) {
+      console.error('❌ Error enabling select:', e);
+      // Last resort - try one more time
+      setTimeout(() => {
+        if (documentTypeSelect) {
+          documentTypeSelect.disabled = false;
+          documentTypeSelect.removeAttribute('disabled');
+          documentTypeSelect.style.pointerEvents = 'auto';
+        }
+      }, 100);
+    }
+  }
+
   async updateDocumentTypes(departmentCode) {
+    console.log('🔄 updateDocumentTypes called with departmentCode:', departmentCode);
+    
+    // Cancel any pending request
+    if (this.currentDocumentTypeRequest) {
+      console.log('⚠️ Cancelling previous document type request');
+      // Note: We can't actually cancel fetch, but we can ignore its result
+    }
+    
     const documentTypeSelect = document.getElementById('documentType');
     const loadingElement = document.getElementById('documentTypeLoading');
 
-    if (!documentTypeSelect) return;
-
-    documentTypeSelect.innerHTML = '<option value="">Select Document Type</option>';
-    documentTypeSelect.disabled = true;
-
-    if (!departmentCode) {
-        documentTypeSelect.innerHTML = '<option value="">Select Department First</option>';
-        return;
+    if (!documentTypeSelect) {
+      console.error('❌ documentTypeSelect element not found!');
+      return;
     }
 
-    if (loadingElement) loadingElement.classList.remove('hidden');
+    console.log('📝 Resetting documentType select...');
+    // Reset state before loading (but don't permanently disable)
+    documentTypeSelect.innerHTML = '<option value="">Select Document Type</option>';
+    documentTypeSelect.disabled = true; // Temporarily disable while loading
+
+    if (!departmentCode) {
+      console.log('⚠️ No departmentCode provided, disabling select');
+      documentTypeSelect.innerHTML = '<option value="">Select Department First</option>';
+      documentTypeSelect.disabled = true;
+      documentTypeSelect.style.pointerEvents = '';
+      documentTypeSelect.setAttribute('disabled', 'disabled');
+      this.currentDocumentTypeRequest = null;
+      return;
+    }
+
+    if (loadingElement) {
+      loadingElement.classList.remove('hidden');
+      console.log('⏳ Showing loading indicator');
+    }
+
+    // Create a request identifier to track this specific request
+    const requestId = Date.now();
+    this.currentDocumentTypeRequest = requestId;
 
     try {
-        const documentTypes = await this.loadDocumentTypes(departmentCode);
-        
-        if (documentTypes.length > 0) {
-            documentTypeSelect.innerHTML = '<option value="">Select Document Type</option>' + 
-              documentTypes.map((doc) => `
+      console.log('📡 Calling loadDocumentTypes for:', departmentCode);
+      const documentTypesPromise = this.loadDocumentTypes(departmentCode);
+      const documentTypes = await documentTypesPromise;
+      
+      // Check if this request is still current (user hasn't changed department)
+      if (this.currentDocumentTypeRequest !== requestId) {
+        console.log('⚠️ Request outdated, ignoring result');
+        // Still ensure select is enabled even if request is outdated
+        this.ensureSelectEnabled(documentTypeSelect, loadingElement);
+        return;
+      }
+      
+      console.log('✅ Loaded document types for department', departmentCode, ':', documentTypes);
+
+      if (Array.isArray(documentTypes) && documentTypes.length > 0) {
+        // Normal happy-path: we have document types from API or config
+        console.log('✅ Populating', documentTypes.length, 'document types');
+        documentTypeSelect.innerHTML =
+          '<option value="">Select Document Type</option>' +
+          documentTypes
+            .map(
+              (doc) => `
                 <option value="${doc.value}" data-requires-faculty="${doc.requires_faculty}" data-requires-attachment="${doc.requires_attachment || false}">
                   ${doc.name || doc.label}
                 </option>
-              `).join('') +
-              '<option value="others">Others</option>';
-            documentTypeSelect.disabled = false;
-        } else {
-            documentTypeSelect.innerHTML = '<option value="">No document types available</option>';
-        }
+              `
+            )
+            .join('') +
+          '<option value="others">Others</option>';
+      } else {
+        // Defensive fallback: still allow user interaction even if nothing came back
+        console.warn('⚠️ No document types returned for department', departmentCode);
+        documentTypeSelect.innerHTML =
+          '<option value="">No document types configured – please select "Others" and specify</option>' +
+          '<option value="others">Others</option>';
+      }
     } catch (error) {
-        console.error('Error populating document options:', error);
-        documentTypeSelect.innerHTML = '<option value="">Error loading document types</option>';
+      // Check if this request is still current
+      if (this.currentDocumentTypeRequest !== requestId) {
+        console.log('⚠️ Request outdated, ignoring error');
+        // Still ensure select is enabled even if request is outdated
+        this.ensureSelectEnabled(documentTypeSelect, loadingElement);
+        return;
+      }
+      console.error('❌ Error populating document options:', error);
+      documentTypeSelect.innerHTML = '<option value="">Error loading document types</option>';
     } finally {
-        if (loadingElement) loadingElement.classList.add('hidden');
+      // Always ensure select is enabled, even if request is outdated
+      // This prevents the select from staying disabled when requests are cancelled
+      if (this.currentDocumentTypeRequest === requestId) {
+        // This is the current request - enable and clear request ID
+        this.ensureSelectEnabled(documentTypeSelect, loadingElement);
+        this.currentDocumentTypeRequest = null;
+      } else {
+        // Request is outdated, but still ensure select is enabled
+        console.log('⚠️ Request outdated, but ensuring select is enabled anyway');
+        this.ensureSelectEnabled(documentTypeSelect, loadingElement);
+      }
     }
   }
 
@@ -1030,14 +1138,14 @@ class StudentPortal {
     previewContainer.innerHTML = this.selectedFiles.map((file, idx) => {
       const url = file.type.startsWith('image/') ? URL.createObjectURL(file) : '';
       const isPDF = file.type === 'application/pdf';
-      
+
       return `
         <div class="file-preview-item">
           <div class="file-preview-info">
-            ${isPDF ? 
-              '<div class="file-preview-icon">📄</div>' :
-              `<img src="${url}" alt="preview" class="file-preview-image" />`
-            }
+            ${isPDF ?
+          '<div class="file-preview-icon">📄</div>' :
+          `<img src="${url}" alt="preview" class="file-preview-image" style="width: 80px; height: 80px; object-fit: cover; border-radius: 4px;" />`
+        }
             <span class="file-preview-name">${file.name}</span>
           </div>
           <button type="button" class="file-preview-remove" onclick="studentPortal.removeSelectedFile(${idx})">
@@ -1055,21 +1163,43 @@ class StudentPortal {
 
   async uploadSelectedFiles() {
     if (this.selectedFiles.length === 0) return [];
+    
     const formData = new FormData();
     formData.append('studentId', this.currentUser.id);
     this.selectedFiles.forEach((file) => formData.append('files', file));
-    
+
     try {
+      // Use AbortController for timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 seconds timeout
+      
       const response = await fetch(`${window.location.origin}/api/uploads`, {
         method: 'POST',
-        body: formData
+        body: formData,
+        signal: controller.signal
       });
-      if (!response.ok) throw new Error('Upload failed');
+      
+      clearTimeout(timeoutId);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || 'Upload failed');
+      }
+      
       const data = await response.json();
       return data.attachments || [];
     } catch (error) {
       console.error('File upload error:', error);
-      throw error;
+      
+      // Handle timeout specifically
+      if (error.name === 'AbortError' || error.message.includes('aborted')) {
+        console.warn('File upload timed out - continuing without attachments');
+      } else {
+        console.warn('File upload failed - continuing without attachments:', error.message);
+      }
+      
+      // Don't throw - allow request to continue without attachments if upload fails
+      return [];
     }
   }
 
@@ -1095,7 +1225,7 @@ class StudentPortal {
     const formData = new FormData(form);
     const departmentCode = formData.get('department');
     const documentValue = formData.get('documentType');
-    
+
     if (!departmentCode || !documentValue) {
       Utils.showToast('Please select both department and document type.', 'warning');
       return;
@@ -1109,11 +1239,11 @@ class StudentPortal {
     let department = this.departments.find(dept => dept.code === departmentCode);
     if (!department) {
       // Try finding by name if code doesn't match
-      department = this.departments.find(dept => 
+      department = this.departments.find(dept =>
         dept.name && dept.name.toLowerCase().includes(departmentCode.toLowerCase())
       );
     }
-    
+
     if (!department) {
       console.error('Department not found:', departmentCode, 'Available departments:', this.departments);
       Utils.showToast('Invalid department selected. Please refresh the page and try again.', 'error');
@@ -1168,45 +1298,86 @@ class StudentPortal {
       btnText.classList.add('hidden');
       btnLoading.classList.remove('hidden');
 
+      console.log('📤 Uploading files...');
       const attachments = await this.uploadSelectedFiles();
       requestData.attachments = attachments;
+      console.log('✅ Files uploaded:', attachments.length);
 
+      console.log('📤 Submitting request to API...');
+      console.log('📤 Request data:', JSON.stringify(requestData, null, 2));
+      
+      // Use Utils.apiRequest with timeout option (no need for Promise.race - apiRequest handles timeout)
       const newRequest = await Utils.apiRequest('/requests', {
         method: 'POST',
-        body: requestData
+        body: requestData,
+        timeout: 30000 // 30 seconds timeout
+      });
+      console.log('✅ Request submitted successfully:', newRequest);
+      console.log('📋 New request details:', {
+        id: newRequest.id,
+        studentId: newRequest.studentId,
+        studentIdType: typeof newRequest.studentId,
+        currentUserId: this.currentUser.id,
+        currentUserIdType: typeof this.currentUser.id,
+        status: newRequest.status,
+        documentType: newRequest.documentType
       });
 
-      Utils.showToast('Request submitted successfully!', 'success');
+      // Close modal first for better UX
       this.closeRequestModal();
-      this.selectedFiles = [];
       
-      await this.loadRequests();
-      this.updateStats();
-      this.renderDashboard();
-      this.renderHistory();
+      // Clear form
+      this.selectedFiles = [];
+      const form = document.getElementById('documentRequestForm');
+      if (form) form.reset();
+
+      Utils.showToast('Request submitted successfully!', 'success');
+
+      // Refresh dashboard immediately
+      console.log('🔄 Refreshing dashboard...');
+      console.log('🔄 Current requests count before refresh:', this.requests.length);
+      try {
+        await this.loadRequests();
+        console.log('🔄 Requests count after refresh:', this.requests.length);
+        this.updateStats();
+        this.renderDashboard();
+        this.renderHistory();
+        console.log('✅ Dashboard refreshed successfully');
+        
+        // Scroll to top of dashboard to show new request
+        const dashboardView = document.getElementById('dashboardView');
+        if (dashboardView) {
+          dashboardView.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      } catch (refreshError) {
+        console.error('❌ Error refreshing dashboard:', refreshError);
+        console.error('❌ Refresh error details:', refreshError.message);
+        // Still show success message even if refresh fails
+        Utils.showToast('Request submitted, but failed to refresh dashboard. Please reload the page.', 'warning');
+      }
     } catch (error) {
       console.error('Submit request error:', error);
-      
+
       // Parse error message to show user-friendly message
       let errorMessage = 'Failed to submit request. Please try again.';
-      try {
-        if (error.message) {
+      
+      if (error.message) {
+        // Try to parse as JSON first
+        try {
           const parsed = JSON.parse(error.message);
           if (parsed && parsed.message) {
             errorMessage = parsed.message;
           } else if (typeof parsed === 'string') {
             errorMessage = parsed;
           }
-        }
-      } catch (e) {
-        // If error.message is not JSON, use it directly if it's a string
-        if (error.message && typeof error.message === 'string') {
+        } catch (e) {
+          // If error.message is not JSON, use it directly
           errorMessage = error.message;
         }
       }
-      
+
       Utils.showToast(errorMessage, 'error');
-      
+
       const submitBtn = document.getElementById('submitRequestBtn');
       if (submitBtn) {
         submitBtn.disabled = false;
@@ -1408,7 +1579,7 @@ class StudentPortal {
     modal.classList.remove('hidden');
     modal.classList.add('active');
     document.body.style.overflow = 'hidden';
-    
+
     // Ensure modal is displayed
     modal.style.display = 'flex';
 
@@ -1474,7 +1645,7 @@ class StudentPortal {
     modal.classList.remove('hidden');
     modal.classList.add('active');
     document.body.style.overflow = 'hidden';
-    
+
     // Ensure modal is displayed
     modal.style.display = 'flex';
 

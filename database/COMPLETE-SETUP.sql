@@ -1,10 +1,10 @@
-CREATE DATABASE recoletos_tracker;
+-- ====================================================
+-- COMPLETE DATABASE SETUP FOR RECOLETOS TRACKER
+-- Run this entire script to set up your database correctly
+-- ====================================================
 
+CREATE DATABASE IF NOT EXISTS recoletos_tracker;
 USE recoletos_tracker;
-
--- ====================================================
--- RECOLETOS STUDENT DOCUMENT REQUEST TRACKER SCHEMA
--- ====================================================
 
 -- =======================
 -- DEPARTMENTS TABLE
@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS departments (
 );
 
 -- =======================
--- DOCUMENTS TABLE (also known as department_documents)
+-- DEPARTMENT_DOCUMENTS TABLE (REQUIRED BY APPLICATION)
 -- =======================
 CREATE TABLE IF NOT EXISTS department_documents (
   id INT AUTO_INCREMENT PRIMARY KEY,
@@ -27,9 +27,6 @@ CREATE TABLE IF NOT EXISTS department_documents (
   UNIQUE KEY unique_department_document (department_id, value),
   FOREIGN KEY (department_id) REFERENCES departments(id)
 );
-
--- Create alias table for backward compatibility
-CREATE TABLE IF NOT EXISTS documents LIKE department_documents;
 
 -- =======================
 -- USERS TABLE
@@ -45,13 +42,13 @@ CREATE TABLE IF NOT EXISTS users (
   course VARCHAR(255),
   year_level VARCHAR(64),
   position VARCHAR(255),
+  contact_number VARCHAR(32),
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (department_id) REFERENCES departments(id)
 );
 
 -- =======================
 -- FACULTY TABLE
--- (Faculty-specific data; linked to users)
 -- =======================
 CREATE TABLE IF NOT EXISTS faculty (
   id INT AUTO_INCREMENT PRIMARY KEY,
@@ -83,7 +80,7 @@ CREATE TABLE IF NOT EXISTS requests (
   purpose TEXT,
   cross_department BOOLEAN DEFAULT FALSE,
   cross_department_details TEXT,
-  faculty_id INT NULL, -- ✅ faculty can be NULL (not required for all documents)
+  faculty_id INT NULL,
   attachments JSON,
   admin_notes JSON,
   faculty_approval JSON,
@@ -129,60 +126,63 @@ INSERT INTO departments (code, name) VALUES
   ('SOED', 'School of Education (SOEd)')
 ON DUPLICATE KEY UPDATE name = VALUES(name);
 
--- Documents (per department)
+-- Department Documents (with correct values matching frontend expectations)
 INSERT INTO department_documents (department_id, label, value, requires_faculty)
 VALUES
-  ((SELECT id FROM departments WHERE code = 'SCS'), 'Transcript of Records', 'SCS_TOR', TRUE),
-  ((SELECT id FROM departments WHERE code = 'SCS'), 'Certificate of Good Moral Character', 'SCS_GM', TRUE),
-  ((SELECT id FROM departments WHERE code = 'SCS'), 'Clearance', 'SCS_CLEARANCE', FALSE),
-  ((SELECT id FROM departments WHERE code = 'SBM'), 'Transcript of Records', 'SBM_TOR', TRUE),
-  ((SELECT id FROM departments WHERE code = 'SBM'), 'Internship Certification', 'SBM_INTERNSHIP', TRUE),
-  ((SELECT id FROM departments WHERE code = 'SAS'), 'Transcript of Records', 'SAS_TOR', TRUE),
-  ((SELECT id FROM departments WHERE code = 'SOE'), 'Board Exam Endorsement', 'SOE_BOARD_ENDORSEMENT', TRUE),
-  ((SELECT id FROM departments WHERE code = 'SAMS'), 'Clinical Rotation Certification', 'SAMS_CLINICAL', TRUE),
-  ((SELECT id FROM departments WHERE code = 'SOL'), 'BAR Endorsement', 'SOL_BAR_ENDORSEMENT', TRUE),
-  ((SELECT id FROM departments WHERE code = 'ETEEAP'), 'Competency Certificate', 'ETEEAP_COMPETENCY', TRUE),
-  ((SELECT id FROM departments WHERE code = 'SOED'), 'Practice Teaching Certification', 'SOED_PRACTICE_TEACHING', TRUE)
-ON DUPLICATE KEY UPDATE label = VALUES(label), requires_faculty = VALUES(requires_faculty);
+  -- SCS Documents
+  ((SELECT id FROM departments WHERE code = 'SCS'), 'Transcript of Records', 'Transcript of Records', TRUE),
+  ((SELECT id FROM departments WHERE code = 'SCS'), 'Certificate of Good Moral Character', 'Good Moral Certificate', TRUE),
+  ((SELECT id FROM departments WHERE code = 'SCS'), 'Course Syllabus', 'Course Syllabus', TRUE),
+  ((SELECT id FROM departments WHERE code = 'SCS'), 'Clearance', 'Clearance', FALSE),
+  ((SELECT id FROM departments WHERE code = 'SCS'), 'Enrollment Certification', 'Enrollment Certification', FALSE),
+  
+  -- SBM Documents
+  ((SELECT id FROM departments WHERE code = 'SBM'), 'Transcript of Records', 'Transcript of Records - SBM', TRUE),
+  ((SELECT id FROM departments WHERE code = 'SBM'), 'Certificate of Good Moral Character', 'Good Moral Certificate - SBM', TRUE),
+  ((SELECT id FROM departments WHERE code = 'SBM'), 'Internship Certification', 'Internship Certification', TRUE),
+  ((SELECT id FROM departments WHERE code = 'SBM'), 'Clearance', 'Clearance - SBM', FALSE),
+  
+  -- SAS Documents
+  ((SELECT id FROM departments WHERE code = 'SAS'), 'Transcript of Records', 'Transcript of Records - SAS', TRUE),
+  ((SELECT id FROM departments WHERE code = 'SAS'), 'Program Certification', 'Program Certification', TRUE),
+  ((SELECT id FROM departments WHERE code = 'SAS'), 'Clearance', 'Clearance - SAS', FALSE),
+  
+  -- SOE Documents
+  ((SELECT id FROM departments WHERE code = 'SOE'), 'Transcript of Records', 'Transcript of Records - SOE', TRUE),
+  ((SELECT id FROM departments WHERE code = 'SOE'), 'Board Exam Endorsement', 'Board Exam Endorsement', TRUE),
+  ((SELECT id FROM departments WHERE code = 'SOE'), 'Clearance', 'Clearance - SOE', FALSE),
+  
+  -- SAMS Documents
+  ((SELECT id FROM departments WHERE code = 'SAMS'), 'Transcript of Records', 'Transcript of Records - SAMS', TRUE),
+  ((SELECT id FROM departments WHERE code = 'SAMS'), 'Clinical Rotation Certification', 'Clinical Rotation Certification', TRUE),
+  ((SELECT id FROM departments WHERE code = 'SAMS'), 'Certificate of Good Moral Character', 'Good Moral Certificate - SAMS', TRUE),
+  
+  -- SOL Documents
+  ((SELECT id FROM departments WHERE code = 'SOL'), 'Transcript of Records', 'Transcript of Records - SOL', TRUE),
+  ((SELECT id FROM departments WHERE code = 'SOL'), 'BAR Endorsement', 'BAR Endorsement', TRUE),
+  ((SELECT id FROM departments WHERE code = 'SOL'), 'Certification of Grades', 'Certification of Grades', TRUE),
+  
+  -- ETEEAP Documents
+  ((SELECT id FROM departments WHERE code = 'ETEEAP'), 'Transcript of Records', 'ETEEAP TOR', TRUE),
+  ((SELECT id FROM departments WHERE code = 'ETEEAP'), 'Competency Certificate', 'Competency Certificate', TRUE),
+  
+  -- SOED Documents
+  ((SELECT id FROM departments WHERE code = 'SOED'), 'Transcript of Records', 'Transcript of Records - SOEd', TRUE),
+  ((SELECT id FROM departments WHERE code = 'SOED'), 'Practice Teaching Certification', 'Practice Teaching Certification', TRUE),
+  ((SELECT id FROM departments WHERE code = 'SOED'), 'Certificate of Good Moral Character', 'Good Moral Certificate - SOEd', TRUE)
+ON DUPLICATE KEY UPDATE 
+  label = VALUES(label), 
+  requires_faculty = VALUES(requires_faculty);
 
--- Sample Faculty User
-INSERT INTO users (role, id_number, email, password_hash, full_name, department_id, position)
-VALUES
-  ('faculty', 'FAC1001', 'scs.prof1@recoletos.edu', 'hashed_pass_here', 'Prof. Maria Dela Cruz', 
-   (SELECT id FROM departments WHERE code = 'SCS'), 'Instructor')
-ON DUPLICATE KEY UPDATE full_name = VALUES(full_name);
+-- ====================================================
+-- VERIFICATION
+-- ====================================================
+SELECT 'Database setup complete!' as status;
+SELECT COUNT(*) as department_count FROM departments;
+SELECT COUNT(*) as document_count FROM department_documents;
+SELECT d.code, d.name, COUNT(dd.id) as doc_count 
+FROM departments d 
+LEFT JOIN department_documents dd ON dd.department_id = d.id 
+GROUP BY d.id, d.code, d.name
+ORDER BY d.code;
 
--- Faculty Profile (linked to users)
-INSERT INTO faculty (user_id, department_id, specialization, designation)
-VALUES
-  ((SELECT id FROM users WHERE id_number = 'FAC1001'),
-   (SELECT id FROM departments WHERE code = 'SCS'),
-   'Software Engineering', 'Program Chair')
-ON DUPLICATE KEY UPDATE designation = VALUES(designation);
-
-
-USE recoletos_tracker;
-
--- First, let's check if we have any users to link notifications to
-SELECT id, role, id_number, full_name FROM users LIMIT 5;
-
--- If you have users, note their IDs and use them below
--- If no users exist, let's create a test student first
-INSERT INTO users (role, id_number, email, password_hash, full_name, department_id, course, year_level) 
-VALUES 
-('student', 'STU2024001', 'test.student@recoletos.edu', 'hashed_password', 'Juan Dela Cruz', 
- (SELECT id FROM departments WHERE code = 'SCS'), 'BS Computer Science', '3rd Year')
-ON DUPLICATE KEY UPDATE full_name = VALUES(full_name);
-
--- Now add sample notifications
-INSERT INTO notifications (user_id, role, type, title, message, request_id, read_flag) 
-VALUES 
-((SELECT id FROM users WHERE id_number = 'STU2024001'), 'student', 'info', 'Welcome!', 'Welcome to Recoletos Document Tracker', NULL, FALSE),
-((SELECT id FROM users WHERE id_number = 'STU2024001'), 'student', 'reminder', 'Document Tip', 'Make sure to specify the purpose of your document request', NULL, FALSE),
-((SELECT id FROM users WHERE id_number = 'STU2024001'), 'student', 'update', 'System Update', 'New features added to the portal', NULL, TRUE);
-
--- Verify notifications were added
-SELECT * FROM notifications;
-
-USE recoletos_tracker;
-SHOW TABLES;

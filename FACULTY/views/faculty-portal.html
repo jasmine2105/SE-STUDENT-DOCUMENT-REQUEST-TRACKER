@@ -1,17 +1,20 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Faculty Portal | Recoletos Document Tracker</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="../../shared/styles-home.css">
     <link rel="stylesheet" href="../../STUDENT/styles/student-portal.css">
     <link rel="stylesheet" href="../styles/faculty-portal.css">
 </head>
+
 <body>
     <div class="portal-layout">
         <!-- Sidebar -->
@@ -39,10 +42,10 @@
         <div class="portal-main">
             <!-- Header -->
             <header class="portal-header">
-                    <div class="header-left">
-                        <h1>Document Tracker</h1>
-                        <p id="userInfo">Loading...</p>
-                    </div>
+                <div class="header-left">
+                    <h1>Document Tracker</h1>
+                    <p id="userInfo">Loading...</p>
+                </div>
                 <div class="header-right">
                     <div class="notification-bell" id="notificationBell">
                         <span class="bell-icon">🔔</span>
@@ -79,9 +82,9 @@
                 </div>
 
                 <div class="content-section">
-                        <div class="section-header">
-                            <h2>Recent Requests</h2>
-                        </div>
+                    <div class="section-header">
+                        <h2>Recent Requests</h2>
+                    </div>
                     <div id="recentRequests">
                         <div class="empty-state">
                             <div class="empty-state-icon">📄</div>
@@ -99,6 +102,13 @@
                         <h2>Document Requests</h2>
                     </div>
                     <div class="filter-section">
+                        <!-- New Filter Tabs -->
+                        <div class="filter-tabs">
+                            <button class="filter-tab active" data-filter="all">All</button>
+                            <button class="filter-tab" data-filter="urgent">🚨 Urgent</button>
+                            <button class="filter-tab" data-filter="deadline">⏳ Near Deadline</button>
+                            <button class="filter-tab" data-filter="returned">🔄 Returned</button>
+                        </div>
                         <select id="filterStatus" class="filter-select">
                             <option value="all">All Requests</option>
                             <option value="pending_faculty">Pending Approval</option>
@@ -123,5 +133,5 @@
     <script src="../../shared/scripts/notifications.js"></script>
     <script src="../scripts/faculty-portal.js"></script>
 </body>
-</html>
 
+</html>

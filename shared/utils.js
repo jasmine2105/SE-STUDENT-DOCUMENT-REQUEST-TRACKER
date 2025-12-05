@@ -115,6 +115,10 @@ const Utils = {
   },
 
   async apiRequest(endpoint, options = {}) {
+    const timeoutMs = options.timeout || 30000; // 30 seconds default (increased for slow database)
+    const controller = new AbortController();
+    let timeoutId = null;
+    
     try {
       const headers = {
         'Content-Type': 'application/json',
@@ -132,7 +136,22 @@ const Utils = {
         fetchOptions.body = JSON.stringify(fetchOptions.body);
       }
 
+      console.log('🌐 Making API request to:', `${API_BASE}${endpoint}`, 'Method:', options.method || 'GET');
+      
+      // Add timeout wrapper for fetch
+      timeoutId = setTimeout(() => {
+        controller.abort();
+      }, timeoutMs);
+      
+      fetchOptions.signal = controller.signal;
+      
       const response = await fetch(`${API_BASE}${endpoint}`, fetchOptions);
+      
+      // Clear timeout if request completed successfully
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
 
       if (!response.ok) {
         if (response.status === 401) {
@@ -148,12 +167,20 @@ const Utils = {
       }
       return await response.text();
     } catch (error) {
+      // Clear timeout in case of error
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
+      
       console.error('API Request Error:', error);
       
       // Provide more specific error messages
       let errorMessage = error.message || 'Network error';
       
-      if (error.message && (
+      if (error.name === 'AbortError' || error.message.includes('aborted') || error.message.includes('signal is aborted')) {
+        errorMessage = 'Request timeout. The server is taking too long to respond. Please check if the database is running.';
+      } else if (error.message && (
         error.message.includes('Failed to fetch') ||
         error.message.includes('ERR_CONNECTION_REFUSED') ||
         error.message.includes('ERR_INTERNET_DISCONNECTED') ||
@@ -162,7 +189,7 @@ const Utils = {
         errorMessage = 'Cannot connect to server. Please make sure the server is running. Run "npm start" in the terminal.';
       }
       
-      this.showToast(errorMessage, 'error');
+      // Don't show toast here - let the caller handle it
       throw new Error(errorMessage);
     }
   },

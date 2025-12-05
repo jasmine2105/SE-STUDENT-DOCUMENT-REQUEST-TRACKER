@@ -5,6 +5,18 @@ const { createNotification } = require('../services/notifications');
 
 const router = express.Router();
 
+// Log all route matches for debugging
+router.use((req, res, next) => {
+  console.log(`🎯 Route matched: ${req.method} ${req.path}`);
+  next();
+});
+
+// TEST ROUTE - No auth to verify routing works
+router.get('/test', (req, res) => {
+  console.log('✅ TEST ROUTE HIT - Routing works!');
+  res.json({ message: 'Test route works', timestamp: new Date().toISOString() });
+});
+
 function parseJsonField(value, fallback) {
   if (!value) return fallback;
   try {
@@ -35,180 +47,219 @@ function mapRequestRow(row) {
     crossDepartment: !!row.cross_department,
     crossDepartmentDetails: row.cross_department_details,
     facultyId: row.faculty_id,
-    facultyApproval: parseJsonField(row.faculty_approval, null),
+    facultyApproval: parseJsonField(row.faculty_approval, {}),
     adminNotes: parseJsonField(row.admin_notes, []),
-    attachments: parseJsonField(row.attachments, []),
-    requiresFaculty: !!row.requires_faculty,
     submittedAt: row.submitted_at,
-    updatedAt: row.updated_at,
-    completedAt: row.completed_at
+    createdAt: row.submitted_at, // Keep for backward compatibility
+    updatedAt: row.updated_at
   };
 }
 
-// Fallback document types by department code
-const FALLBACK_DOCUMENT_TYPES = {
-  'SCS': [
-    { id: 'tor', value: 'Transcript of Records', name: 'Transcript of Records', requires_faculty: true },
-    { id: 'good_moral', value: 'Good Moral Certificate', name: 'Certificate of Good Moral Character', requires_faculty: true },
-    { id: 'syllabus', value: 'Course Syllabus', name: 'Course Syllabus', requires_faculty: true },
-    { id: 'clearance', value: 'Clearance', name: 'Clearance', requires_faculty: false },
-    { id: 'enrollment', value: 'Enrollment Certification', name: 'Enrollment Certification', requires_faculty: false }
-  ],
-  'SBM': [
-    { id: 'tor_sbm', value: 'Transcript of Records - SBM', name: 'Transcript of Records', requires_faculty: true },
-    { id: 'good_moral_sbm', value: 'Good Moral Certificate - SBM', name: 'Certificate of Good Moral Character', requires_faculty: true },
-    { id: 'internship', value: 'Internship Certification', name: 'Internship Certification', requires_faculty: true },
-    { id: 'clearance_sbm', value: 'Clearance - SBM', name: 'Clearance', requires_faculty: false }
-  ],
-  'SAS': [
-    { id: 'tor_sas', value: 'Transcript of Records - SAS', name: 'Transcript of Records', requires_faculty: true },
-    { id: 'program', value: 'Program Certification', name: 'Program Certification', requires_faculty: true },
-    { id: 'clearance_sas', value: 'Clearance - SAS', name: 'Clearance', requires_faculty: false }
-  ],
-  'SOE': [
-    { id: 'tor_soe', value: 'Transcript of Records - SOE', name: 'Transcript of Records', requires_faculty: true },
-    { id: 'board_exam', value: 'Board Exam Endorsement', name: 'Board Exam Endorsement', requires_faculty: true },
-    { id: 'clearance_soe', value: 'Clearance - SOE', name: 'Clearance', requires_faculty: false }
-  ],
-  'SAMS': [
-    { id: 'tor_sams', value: 'Transcript of Records - SAMS', name: 'Transcript of Records', requires_faculty: true },
-    { id: 'clinical', value: 'Clinical Rotation Certification', name: 'Clinical Rotation Certification', requires_faculty: true },
-    { id: 'good_moral_sams', value: 'Good Moral Certificate - SAMS', name: 'Certificate of Good Moral Character', requires_faculty: true }
-  ],
-  'SOL': [
-    { id: 'tor_sol', value: 'Transcript of Records - SOL', name: 'Transcript of Records', requires_faculty: true },
-    { id: 'bar', value: 'BAR Endorsement', name: 'BAR Endorsement', requires_faculty: true },
-    { id: 'grades', value: 'Certification of Grades', name: 'Certification of Grades', requires_faculty: true }
-  ],
-  'ETEEAP': [
-    { id: 'tor_eteeap', value: 'ETEEAP TOR', name: 'Transcript of Records', requires_faculty: true },
-    { id: 'competency', value: 'Competency Certificate', name: 'Competency Certificate', requires_faculty: true }
-  ],
-  'SOEd': [
-    { id: 'tor_soed', value: 'Transcript of Records - SOEd', name: 'Transcript of Records', requires_faculty: true },
-    { id: 'practice', value: 'Practice Teaching Certification', name: 'Practice Teaching Certification', requires_faculty: true },
-    { id: 'good_moral_soed', value: 'Good Moral Certificate - SOEd', name: 'Certificate of Good Moral Character', requires_faculty: true }
-  ]
-};
-
-// NEW ENDPOINT: Get document types by department
-router.get('/document-types/:departmentCode', authMiddleware(true), async (req, res) => {
-  const { departmentCode } = req.params;
+// GET all requests (with role-based filtering)
+router.get('/', authMiddleware(), async (req, res) => {
+  console.log('🚀🚀🚀 GET /api/requests ROUTE HANDLER EXECUTING 🚀🚀🚀');
+  let conn = null;
+  const requestTimeout = setTimeout(() => {
+    if (!res.headersSent) {
+      console.error('❌ GET /requests timeout');
+      if (conn) {
+        try {
+          conn.release();
+        } catch (e) {
+          // Ignore
+        }
+      }
+      res.status(504).json({ message: 'Request timeout - database connection issue' });
+    }
+  }, 30000); // 30 second timeout
 
   try {
-    const conn = await getConnection();
-    try {
-      // First, get department ID from code
-      const [deptRows] = await conn.query(
-        'SELECT id FROM departments WHERE code = ? OR name LIKE ?', 
-        [departmentCode, `%${departmentCode}%`]
-      );
-
-      if (deptRows.length === 0) {
-        // Department not found in DB, try fallback
-        console.warn(`Department ${departmentCode} not found in database, using fallback`);
-        const fallbackDocs = FALLBACK_DOCUMENT_TYPES[departmentCode] || [];
-        if (fallbackDocs.length > 0) {
-          return res.json(fallbackDocs);
-        }
-        return res.status(404).json({ message: 'Department not found.' });
-      }
-
-      const departmentId = deptRows[0].id;
-
-      // Get document types for this department (use `department_documents` table present in DB)
-      const [docRows] = await conn.query(
-        `SELECT id, value, label, requires_faculty 
-         FROM department_documents 
-         WHERE department_id = ? 
-         ORDER BY label`,
-        [departmentId]
-      );
-
-      const documentTypes = docRows.map(row => ({
-        id: row.id,
-        value: row.value,
-        name: row.label,
-        requires_faculty: !!row.requires_faculty
-      }));
-
-      // If no document types in DB, use fallback
-      if (documentTypes.length === 0) {
-        console.warn(`No document types found in DB for ${departmentCode}, using fallback`);
-        const fallbackDocs = FALLBACK_DOCUMENT_TYPES[departmentCode] || [];
-        if (fallbackDocs.length > 0) {
-          return res.json(fallbackDocs);
-        }
-      }
-
-      res.json(documentTypes);
-    } finally {
-      if (conn) conn.release();
-    }
-  } catch (error) {
-    console.error('Document types get error:', error);
+    console.log('📥 GET /requests - Starting request for user:', req.user?.id, 'role:', req.user?.role);
     
-    // On error, try to return fallback data
-    const fallbackDocs = FALLBACK_DOCUMENT_TYPES[departmentCode] || [];
-    if (fallbackDocs.length > 0) {
-      console.warn(`Database error, using fallback document types for ${departmentCode}`);
-      return res.json(fallbackDocs);
-    }
-    
-    res.status(500).json({ message: 'Failed to load document types.' });
-  }
-});
+    // Get connection directly
+    console.log('⏳ Getting database connection...');
+    conn = await getConnection();
+    console.log('✅ Database connection obtained');
 
-// EXISTING ENDPOINTS - NO CHANGES
-router.get('/', authMiddleware(true), async (req, res) => {
-  const { role, id } = req.user;
-  const departmentId = req.user.departmentId !== undefined && req.user.departmentId !== null
-    ? Number(req.user.departmentId)
-    : null;
-  const filters = [];
-  const params = [];
+    let query = `
+      SELECT r.*, d.name AS department_name, dd.label AS document_label
+      FROM requests r
+      LEFT JOIN departments d ON d.id = r.department_id
+      LEFT JOIN department_documents dd ON dd.value = r.document_value
+    `;
 
-  if (role === 'student') {
-    filters.push('r.student_id = ?');
-    params.push(id);
-  } else if (role === 'faculty') {
-    if (departmentId) {
-      filters.push('(r.department_id = ? AND (r.status IN ("pending_faculty", "in_progress") OR r.faculty_id = ?))');
-      params.push(departmentId, id);
-    } else {
-      filters.push('(r.status IN ("pending_faculty", "in_progress") OR r.faculty_id = ?)');
+    const params = [];
+    const { role, id, departmentId } = req.user || {};
+
+    // Role-based filtering
+    if (role === 'student') {
+      query += ' WHERE r.student_id = ?';
       params.push(id);
+      console.log('📋 Filtering for student ID:', id);
+    } else if (role === 'faculty') {
+      // Faculty see: requests from their dept (pending_faculty/in_progress) OR assigned to them
+      query += ' WHERE (r.department_id = ? AND r.status IN (?, ?)) OR r.faculty_id = ?';
+      params.push(departmentId, 'pending_faculty', 'in_progress', id);
+      console.log('📋 Filtering for faculty ID:', id, 'department:', departmentId);
     }
-  } // admin sees all
+    // Admin sees all requests (no WHERE clause)
 
-  const whereClause = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+    query += ' ORDER BY r.submitted_at DESC';
 
-  try {
-    const conn = await getConnection();
-    try {
-      const [rows] = await conn.query(
-        `SELECT r.*, d.name AS department_name, dd.label AS document_label
-         FROM requests r
-         LEFT JOIN departments d ON d.id = r.department_id
-         LEFT JOIN department_documents dd ON dd.value = r.document_value
-         ${whereClause}
-         ORDER BY r.submitted_at DESC`, params
-      );
+    // Execute query
+    console.log('⏳ Executing query...');
+    console.log('📋 Query:', query);
+    console.log('📋 Params:', params);
+    const [rows] = await conn.query(query, params);
+    console.log('✅ Query completed, found', rows.length, 'requests');
+    
+    clearTimeout(requestTimeout);
+    conn.release();
 
-      res.json(rows.map(mapRequestRow));
-    } finally {
-      conn.release();
-    }
+    const requests = rows.map(mapRequestRow);
+    res.json(requests);
   } catch (error) {
-    console.error('Requests get error:', error);
-    res.status(500).json({ message: 'Failed to load requests.' });
+    clearTimeout(requestTimeout);
+    if (conn) {
+      try {
+        conn.release();
+      } catch (e) {
+        // Ignore
+      }
+    }
+    console.error('Error fetching requests:', error);
+    if (!res.headersSent) {
+      const errorMessage = error.message || 'Failed to fetch requests';
+      let userMessage = 'Failed to fetch requests. ';
+      if (error.message.includes('timeout') || error.code === 'ETIMEDOUT') {
+        userMessage += 'Database connection timeout. Please check if MySQL is running.';
+      } else if (error.code === 'ECONNREFUSED') {
+        userMessage += 'Cannot connect to MySQL server. Please make sure MySQL is running.';
+      } else {
+        userMessage += errorMessage;
+      }
+      res.status(500).json({ message: userMessage });
+    }
   }
 });
 
-router.post('/', authMiddleware(true), async (req, res) => {
-  if (req.user.role !== 'student') {
-    return res.status(403).json({ message: 'Only students can submit requests.' });
+// GET document types by department (MUST come before /:id route)
+router.get('/document-types/:departmentCode', authMiddleware(), async (req, res) => {
+  const { departmentCode } = req.params;
+  let conn = null;
+  let timeout = null;
+  
+  // Set timeout for the entire request (3 seconds - faster than client timeout)
+  timeout = setTimeout(() => {
+    if (!res.headersSent) {
+      console.error('Document types request timeout for:', departmentCode);
+      if (conn) {
+        try {
+          conn.release();
+        } catch (e) {
+          // Ignore
+        }
+      }
+      res.status(504).json({ message: 'Request timeout - database connection issue' });
+    }
+  }, 3000); // 3 second timeout (faster than client's 5 second timeout)
+
+  try {
+    // Get connection directly
+    conn = await getConnection();
+    
+    const [deptRows] = await conn.query('SELECT id FROM departments WHERE code = ?', [departmentCode]);
+    if (deptRows.length === 0) {
+      if (timeout) clearTimeout(timeout);
+      conn.release();
+      return res.status(404).json({ message: 'Department not found' });
+    }
+    const departmentId = deptRows[0].id;
+    const [docRows] = await conn.query(
+      'SELECT id, value, label, requires_faculty FROM department_documents WHERE department_id = ? ORDER BY label',
+      [departmentId]
+    );
+    if (timeout) clearTimeout(timeout);
+    conn.release();
+    const documentTypes = docRows.map(row => ({
+      id: row.id,
+      value: row.value,
+      name: row.label,
+      requires_faculty: !!row.requires_faculty
+    }));
+    res.json(documentTypes);
+  } catch (error) {
+    if (timeout) clearTimeout(timeout);
+    if (conn) {
+      try {
+        conn.release();
+      } catch (e) {
+        // Ignore release errors
+      }
+    }
+    console.error('Document types error for', departmentCode, ':', error.message);
+    if (!res.headersSent) {
+      // Return error quickly so client can use fallback
+      res.status(500).json({ 
+        message: 'Database connection failed. Using fallback configuration.',
+        error: error.message 
+      });
+    }
   }
+});
+
+// GET single request
+router.get('/:id', authMiddleware(), async (req, res) => {
+  try {
+    const conn = await getConnection();
+    const [rows] = await conn.query(`
+      SELECT r.*, d.name AS department_name, dd.label AS document_label
+      FROM requests r
+      LEFT JOIN departments d ON d.id = r.department_id
+      LEFT JOIN department_documents dd ON dd.value = r.document_value
+      WHERE r.id = ?
+    `, [req.params.id]);
+    conn.release();
+
+    if (rows.length === 0) {
+      return res.status(404).json({ message: 'Request not found' });
+    }
+
+    res.json(mapRequestRow(rows[0]));
+  } catch (error) {
+    console.error('Error fetching request:', error);
+    res.status(500).json({ message: 'Failed to fetch request' });
+  }
+});
+
+// POST create new request
+router.post('/', authMiddleware(), async (req, res) => {
+  const startTime = Date.now();
+  console.log('🚀🚀🚀 POST /api/requests ROUTE HANDLER EXECUTING 🚀🚀🚀');
+  console.log('📨 POST /api/requests received at', new Date().toISOString());
+  console.log('📨 User:', req.user ? { id: req.user.id, role: req.user.role, roleType: typeof req.user.role } : 'NO USER');
+  console.log('📨 Full req.user object:', JSON.stringify(req.user, null, 2));
+  console.log('📨 Request body keys:', Object.keys(req.body || {}));
+  console.log('📨 Request headers:', {
+    'content-type': req.headers['content-type'],
+    'authorization': req.headers['authorization'] ? 'Bearer ***' : 'MISSING'
+  });
+  
+  if (!req.user) {
+    console.error('❌ NO USER IN REQUEST');
+    return res.status(401).json({ message: 'Not authenticated' });
+  }
+  
+  // Normalize role comparison (trim whitespace, lowercase)
+  const userRole = String(req.user.role || '').trim().toLowerCase();
+  console.log('🔍 Role check - raw role:', req.user.role, 'normalized:', userRole, 'expected: student');
+  
+  if (userRole !== 'student') {
+    console.log('❌ User is not a student, role:', req.user.role, 'type:', typeof req.user.role, 'normalized:', userRole);
+    return res.status(403).json({ message: 'Only students can submit requests' });
+  }
+  
+  console.log('✅ User is a student, proceeding...');
 
   const {
     departmentId,
@@ -222,218 +273,224 @@ router.post('/', authMiddleware(true), async (req, res) => {
     requiresFaculty
   } = req.body;
 
+  console.log('📨 Request body received:', {
+    departmentId,
+    documentValue,
+    documentType,
+    quantity,
+    attachmentsCount: attachments.length
+  });
+
   const departmentNumeric = parseInt(departmentId, 10);
   if (Number.isNaN(departmentNumeric) || !documentValue) {
-    return res.status(400).json({ message: 'Department and document type are required.' });
+    return res.status(400).json({ message: 'Department and document type required' });
   }
 
   const initialStatus = requiresFaculty ? 'pending_faculty' : 'pending';
+  let conn = null;
+  
+  // Set overall request timeout (increased to 30 seconds to match client)
+  const requestTimeout = setTimeout(() => {
+    if (!res.headersSent) {
+      console.error('❌ Request POST timeout for user:', req.user.id);
+      if (conn) {
+        try {
+          conn.release();
+        } catch (e) {
+          // Ignore
+        }
+      }
+      res.status(504).json({ message: 'Request timeout - database connection issue' });
+    }
+  }, 30000); // 30 second timeout (increased from 10s)
 
   try {
-    const conn = await getConnection();
-    try {
-      const [studentRows] = await conn.query('SELECT full_name, id_number FROM users WHERE id = ?', [req.user.id]);
-      const student = studentRows[0];
-
-      const [result] = await conn.query(
-        `INSERT INTO requests
-         (student_id, student_name, student_id_number, department_id, document_value, document_label, status,
-          quantity, purpose, cross_department, cross_department_details, attachments, requires_faculty)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)` ,
-        [
-          req.user.id,
-          student.full_name,
-          student.id_number,
-          departmentNumeric,
-          documentValue,
-          documentType,
-          initialStatus,
-          quantity || 1,
-          purpose || null,
-          !!crossDepartment,
-          crossDepartmentDetails || null,
-          JSON.stringify(attachments),
-          !!requiresFaculty
-        ]
-      );
-
-      const requestId = result.insertId;
-      const requestCode = `REQ-${new Date().getFullYear()}-${String(requestId).padStart(5, '0')}`;
-      await conn.query('UPDATE requests SET request_code = ? WHERE id = ?', [requestCode, requestId]);
-
-      // Notify admins
-      const [admins] = await conn.query('SELECT id FROM users WHERE role = "admin"');
-      await Promise.all(admins.map((admin) => createNotification({
-        userId: admin.id,
-        role: 'admin',
-        type: 'new_request',
-        title: 'New Document Request',
-        message: `${student.full_name} submitted ${documentType}`,
-        requestId,
-      })));
-
-      // Notify faculty if needed
-      if (requiresFaculty) {
-        const [faculty] = await conn.query('SELECT id FROM users WHERE role = "faculty" AND department_id = ?', [departmentId]);
-        await Promise.all(faculty.map((fac) => createNotification({
-          userId: fac.id,
-          role: 'faculty',
-          type: 'approval_needed',
-          title: 'Approval Required',
-          message: `${student.full_name} needs approval for ${documentType}`,
-          requestId,
-        })));
-      }
-
-      await createNotification({
-        userId: req.user.id,
-        role: 'student',
-        type: 'status_update',
-        title: 'Request Submitted',
-        message: `Your request for ${documentType} has been submitted`,
-        requestId,
-      });
-
-      const [createdRows] = await conn.query(
-        `SELECT r.*, d.name AS department_name, dd.label AS document_label
-         FROM requests r
-         LEFT JOIN departments d ON d.id = r.department_id
-         LEFT JOIN department_documents dd ON dd.value = r.document_value
-         WHERE r.id = ?`,
-        [requestId]
-      );
-
-      res.status(201).json(mapRequestRow(createdRows[0]));
-    } finally {
+    console.log('📥 Creating request for user:', req.user.id, 'department:', departmentNumeric);
+    console.log('📥 Request data:', JSON.stringify({ departmentId: departmentNumeric, documentValue, documentType, quantity, purpose: purpose?.substring(0, 50) + '...' }, null, 2));
+    
+    // Get connection directly
+    conn = await getConnection();
+    console.log('✅ Database connection established');
+    
+    console.log('🔍 Querying student info...');
+    const [studentRows] = await conn.query('SELECT full_name, id_number FROM users WHERE id = ?', [req.user.id]);
+    
+    if (!studentRows || studentRows.length === 0) {
+      clearTimeout(requestTimeout);
       conn.release();
+      return res.status(404).json({ message: 'Student not found' });
     }
+    const student = studentRows[0];
+    console.log('✅ Student found:', student.full_name);
+
+    console.log('📝 Inserting request into database...');
+    const [result] = await conn.query(
+      `INSERT INTO requests (student_id, student_name, student_id_number, department_id, document_value, document_label, status, quantity, purpose, cross_department, cross_department_details, attachments, requires_faculty) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [req.user.id, student.full_name, student.id_number, departmentNumeric, documentValue, documentType, initialStatus, quantity || 1, purpose || null, !!crossDepartment, crossDepartmentDetails || null, JSON.stringify(attachments), !!requiresFaculty]
+    );
+
+    const requestId = result.insertId;
+    console.log('✅ Request inserted with ID:', requestId);
+    
+    const requestCode = `REQ-${new Date().getFullYear()}-${String(requestId).padStart(5, '0')}`;
+    console.log('📝 Updating request code...');
+    await conn.query('UPDATE requests SET request_code = ? WHERE id = ?', [requestCode, requestId]);
+    console.log('✅ Request code assigned:', requestCode);
+
+    console.log('🔍 Fetching created request...');
+    const [createdRows] = await conn.query(
+      `SELECT r.*, d.name AS department_name, dd.label AS document_label 
+       FROM requests r 
+       LEFT JOIN departments d ON d.id = r.department_id 
+       LEFT JOIN department_documents dd ON dd.value = r.document_value 
+       WHERE r.id = ?`,
+      [requestId]
+    );
+
+    clearTimeout(requestTimeout);
+    conn.release();
+    const duration = Date.now() - startTime;
+    console.log('✅ Request created successfully in', duration, 'ms');
+    res.status(201).json(mapRequestRow(createdRows[0]));
   } catch (error) {
-    console.error('Request create error:', error);
-    console.error('Error details:', {
+    clearTimeout(requestTimeout);
+    if (conn) {
+      try {
+        conn.release();
+      } catch (e) {
+        // Ignore release errors
+      }
+    }
+    const duration = Date.now() - startTime;
+    console.error('❌ Request create error after', duration, 'ms:', error.message);
+    console.error('❌ Error details:', {
       message: error.message,
-      stack: error.stack,
       code: error.code,
-      sqlMessage: error.sqlMessage
+      errno: error.errno,
+      sqlState: error.sqlState,
+      stack: error.stack?.split('\n').slice(0, 3).join('\n')
     });
     
-    // Provide more specific error messages
-    let errorMessage = 'Failed to submit request.';
-    if (error.code === 'ER_NO_SUCH_TABLE') {
-      errorMessage = 'Database table not found. Please check database setup.';
-    } else if (error.code === 'ER_BAD_FIELD_ERROR') {
-      errorMessage = 'Database schema error. Please check database setup.';
-    } else if (error.sqlMessage) {
-      errorMessage = `Database error: ${error.sqlMessage}`;
-    } else if (error.message) {
-      errorMessage = error.message;
+    if (!res.headersSent) {
+      const errorMessage = error.message || 'Failed to submit request';
+      // Provide more specific error messages
+      let userMessage = 'Failed to submit request. ';
+      if (error.message.includes('timeout') || error.code === 'ETIMEDOUT') {
+        userMessage += 'Database connection timeout. Please check if MySQL is running and your .env file is correct.';
+      } else if (error.message.includes('Access denied') || error.code === 'ER_ACCESS_DENIED_ERROR') {
+        userMessage += 'Database authentication failed. Please check your MySQL password in .env file.';
+      } else if (error.code === 'ECONNREFUSED') {
+        userMessage += 'Cannot connect to MySQL server. Please make sure MySQL is running.';
+      } else if (error.code === 'ER_BAD_DB_ERROR') {
+        userMessage += 'Database does not exist. Please run database/COMPLETE-SETUP.sql in MySQL.';
+      } else if (error.code === 'ER_NO_SUCH_TABLE') {
+        userMessage += 'Database tables missing. Please run database/COMPLETE-SETUP.sql in MySQL.';
+      } else {
+        userMessage += errorMessage;
+      }
+      res.status(500).json({ message: userMessage, error: error.code || error.message });
     }
-    
-    res.status(500).json({ message: errorMessage });
   }
 });
 
-router.patch('/:id', authMiddleware(true), async (req, res) => {
-  const { id } = req.params;
-  const {
-    status,
-    priority,
-    facultyId,
-    adminNote,
-    attachments,
-    facultyApproval,
-  } = req.body;
-
+// UPDATE request
+router.put('/:id', authMiddleware(), async (req, res) => {
   try {
+    const { id } = req.params;
+    const { status, adminNote, facultyApproval } = req.body;
+
     const conn = await getConnection();
-    try {
-      const [rows] = await conn.query('SELECT * FROM requests WHERE id = ?', [id]);
-      if (rows.length === 0) {
-        return res.status(404).json({ message: 'Request not found.' });
-      }
 
-      const request = rows[0];
-      const updates = [];
-      const params = [];
+    // Get current request
+    const [requestRows] = await conn.query(
+      `SELECT r.*, d.name AS department_name, dd.label AS document_label
+       FROM requests r
+       LEFT JOIN departments d ON d.id = r.department_id
+       LEFT JOIN department_documents dd ON dd.value = r.document_value
+       WHERE r.id = ?`,
+      [id]
+    );
 
-      if (status && status !== request.status) {
-        updates.push('status = ?');
-        params.push(status);
-        if (status === 'completed') {
-          updates.push('completed_at = CURRENT_TIMESTAMP');
-        } else if (request.status === 'completed') {
-          updates.push('completed_at = NULL');
-        }
-      }
-      if (priority && priority !== request.priority) {
-        updates.push('priority = ?');
-        params.push(priority);
-      }
-      if (facultyId !== undefined) {
-        updates.push('faculty_id = ?');
-        params.push(facultyId || null);
-      }
-      if (attachments) {
-        updates.push('attachments = ?');
-        params.push(JSON.stringify(attachments));
-      }
+    if (requestRows.length === 0) {
+      conn.release();
+      return res.status(404).json({ message: 'Request not found' });
+    }
 
-      // admin notes
-      let updatedAdminNotes = parseJsonField(request.admin_notes, []);
-      if (adminNote) {
-        updatedAdminNotes.push({
+    const request = mapRequestRow(requestRows[0]);
+    const updates = [];
+    const params = [];
+
+    // Status update
+    if (status) {
+      updates.push('status = ?');
+      params.push(status);
+    }
+
+    // Admin note update
+    if (adminNote && req.user) {
+      const updatedAdminNotes = [
+        ...(request.adminNotes || []),
+        {
           adminId: req.user.id,
           adminName: req.user.fullName || req.user.name || 'Admin',
           note: adminNote,
           timestamp: new Date().toISOString(),
-        });
-        updates.push('admin_notes = ?');
-        params.push(JSON.stringify(updatedAdminNotes));
-      }
-
-      // faculty approval update
-      if (facultyApproval) {
-        updates.push('faculty_approval = ?');
-        params.push(JSON.stringify(facultyApproval));
-      }
-
-      if (!updates.length) {
-        return res.json(mapRequestRow(request));
-      }
-
-      updates.push('updated_at = CURRENT_TIMESTAMP');
-      const sql = `UPDATE requests SET ${updates.join(', ')} WHERE id = ?`;
-      params.push(id);
-      await conn.query(sql, params);
-
-      const [updatedRows] = await conn.query(
-        `SELECT r.*, d.name AS department_name, dd.label AS document_label
-         FROM requests r
-         LEFT JOIN departments d ON d.id = r.department_id
-         LEFT JOIN department_documents dd ON dd.value = r.document_value
-         WHERE r.id = ?`, [id]
-      );
-      const updated = mapRequestRow(updatedRows[0]);
-
-      // Notification updates
-      if (status && status !== request.status) {
-        await createNotification({
-          userId: request.student_id,
-          role: 'student',
-          type: 'status_update',
-          title: `Request ${status.replace('_', ' ')}`,
-          message: `Your request ${updated.requestCode || ''} status is now ${status}.`,
-          requestId: request.id,
-        });
-      }
-
-      res.json(updated);
-    } finally {
-      conn.release();
+        }
+      ];
+      updates.push('admin_notes = ?');
+      params.push(JSON.stringify(updatedAdminNotes));
     }
+
+    // Faculty approval update
+    if (facultyApproval) {
+      updates.push('faculty_approval = ?');
+      params.push(JSON.stringify(facultyApproval));
+    }
+
+    if (!updates.length) {
+      conn.release();
+      return res.json(request);
+    }
+
+    updates.push('updated_at = CURRENT_TIMESTAMP');
+    const sql = `UPDATE requests SET ${updates.join(', ')} WHERE id = ?`;
+    params.push(id);
+
+    await conn.query(sql, params);
+
+    // Get updated request
+    const [updatedRows] = await conn.query(
+      `SELECT r.*, d.name AS department_name, dd.label AS document_label
+       FROM requests r
+       LEFT JOIN departments d ON d.id = r.department_id
+       LEFT JOIN department_documents dd ON dd.value = r.document_value
+       WHERE r.id = ?`,
+      [id]
+    );
+
+    const updated = mapRequestRow(updatedRows[0]);
+
+    // Notification updates
+    if (status && status !== request.status) {
+      await createNotification({
+        userId: request.studentId,
+        role: 'student',
+        type: 'status_update',
+        title: `Request ${status.replace('_', ' ')}`,
+        message: `Your request ${updated.requestCode || ''} status is now ${status}.`,
+        requestId: request.id,
+      });
+    }
+
+    conn.release();
+    res.json(updated);
   } catch (error) {
     console.error('Request update error:', error);
     res.status(500).json({ message: 'Failed to update request.' });
   }
 });
+
+console.log('✅ Requests routes loaded - GET / and POST / registered');
 
 module.exports = router;

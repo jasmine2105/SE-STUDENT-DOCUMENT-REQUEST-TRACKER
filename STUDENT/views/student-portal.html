@@ -75,7 +75,8 @@
             <!-- Header -->
             <header class="portal-header">
                 <div class="header-left">
-                    <h1 id="welcomeHeader">Welcome, <span id="welcomeUserName">Loading...</span> Track Your Documents Here</h1>
+                    <h1 id="welcomeHeader">Welcome, <span id="welcomeUserName">Loading...</span></h1>
+                    <p class="welcome-subtitle">Track Your Documents Here</p>
                 </div>
                 <div class="header-right">
                     <button class="btn-new-request-header" id="newRequestBtnHeader">
@@ -121,33 +122,21 @@
             <main class="main-container" id="dashboardView">
                 <div class="stats-grid">
                     <div class="stat-card stat-card-total">
-                        <div class="stat-icon">
-                            <i class="fas fa-file-alt"></i>
-                        </div>
                         <div class="stat-content">
                             <div class="stat-value" id="statTotal">0</div>
                             <div class="stat-label">Total Requests</div>
-                            <div class="stat-trend" id="statTotalTrend"></div>
                         </div>
                     </div>
                     <div class="stat-card stat-card-pending">
-                        <div class="stat-icon">
-                            <i class="fas fa-clock"></i>
-                        </div>
                         <div class="stat-content">
                             <div class="stat-value" id="statPending">0</div>
                             <div class="stat-label">In Progress</div>
-                            <div class="stat-trend" id="statPendingTrend"></div>
                         </div>
                     </div>
                     <div class="stat-card stat-card-completed">
-                        <div class="stat-icon">
-                            <i class="fas fa-check-circle"></i>
-                        </div>
                         <div class="stat-content">
                             <div class="stat-value" id="statCompleted">0</div>
                             <div class="stat-label">Completed</div>
-                            <div class="stat-trend" id="statCompletedTrend"></div>
                         </div>
                     </div>
                 </div>
@@ -181,9 +170,6 @@
                                 <option value="declined">Declined</option>
                             </select>
                             <input id="myDocsSearch" class="form-input" placeholder="Search documents..." />
-                            <button class="btn-secondary" id="manageDocsBtn">
-                                <i class="fas fa-cog"></i> Manage
-                            </button>
                         </div>
                     </div>
                     <div id="myDocuments">
@@ -570,7 +556,7 @@
                             <label>Upload Supporting Documents (JPG/PNG/PDF, up to 3 files, max 5MB each)</label>
                             <button type="button" id="addAttachmentBtn" class="btn-secondary" style="margin-bottom: 1rem;">Add Supporting Documents</button>
                             <input type="file" id="attachments" name="attachments" multiple accept="image/jpeg,image/png,.pdf" class="file-input" style="display:none;">
-                            <div id="file-preview" class="file-preview-container"></div>
+                            <div id="file-preview" class="file-preview-container" style="display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 1rem;"></div>
                             <div id="uploadError" class="error-message hidden" style="color: red; margin-top: 0.5rem;"></div>
                         </div>
                     </div>
