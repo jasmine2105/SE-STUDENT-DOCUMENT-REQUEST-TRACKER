@@ -28,12 +28,20 @@ body {
   padding: 1.5rem 2rem;
   background: var(--white);
   border-bottom: 1px solid var(--border-gray);
+  position: fixed;
+  top: 0;
+  left: 270px;
+  right: 0;
+  z-index: 999;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
 .header-left h1 {
-  font-size: 1.8rem;
+  font-size: 1.5rem;
+  font-weight: 600;
   color: var(--recoletos-green);
-  margin-bottom: 0.25rem;
+  margin: 0 0 0.25rem 0;
+  line-height: 1.4;
 }
 
 .header-left p {
@@ -187,11 +195,25 @@ body {
   margin-bottom: 1.5rem;
   padding-bottom: 1rem;
   border-bottom: 2px solid var(--border-gray);
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.section-title-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.section-icon {
+  color: var(--recoletos-green);
+  font-size: 1.25rem;
 }
 
 .section-header h2 {
   color: var(--recoletos-green);
   font-size: 1.5rem;
+  margin: 0;
 }
 
 /* Filter and Search Section */
@@ -520,102 +542,190 @@ body {
   margin-bottom: 1rem;
 }
 
-/* Users Table Styles */
+/* Requests Table Styles - Match Student Portal */
+.table-wrapper {
+  width: 100%;
+  overflow-x: hidden;
+  padding-top: 0.25rem;
+}
+
+.requests-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.requests-table th,
+.requests-table td {
+  text-align: left;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--border-gray);
+  vertical-align: middle;
+}
+
+.requests-table tbody tr {
+  transition: all 0.2s ease;
+}
+
+.requests-table tbody tr:hover {
+  background-color: var(--bg-cream);
+  transform: scale(1.01);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+/* Reduce left padding on the first column */
+.requests-table th:first-child,
+.requests-table td:first-child {
+  padding-left: 0.4rem;
+}
+
+/* Reduce right padding on last column */
+.requests-table th:last-child,
+.requests-table td:last-child {
+  padding-right: 0.6rem;
+}
+
+.requests-table th {
+  color: var(--recoletos-green);
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 700;
+}
+
+.requests-table td {
+  font-size: 0.9rem;
+}
+
+/* Align action column to the right */
+.requests-table td:last-child {
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* Status badges */
+.requests-table .status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  vertical-align: middle;
+  padding: 0.4rem 0.75rem;
+  border-radius: 12px;
+  font-size: 0.82rem;
+}
+
+/* Button styling to match student portal */
+.requests-table .btn-secondary {
+  padding: 0.4rem 0.75rem;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  border: 1px solid var(--border-gray);
+  background: transparent;
+  color: var(--text-dark);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.requests-table .btn-secondary i {
+  font-size: 0.75rem;
+}
+
+.requests-table .btn-secondary:hover {
+  background: var(--bg-cream);
+  border-color: var(--recoletos-green);
+  color: var(--recoletos-green);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Priority badges in table */
+.requests-table .priority-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.4rem 0.75rem;
+  border-radius: 12px;
+  font-size: 0.82rem;
+  font-weight: 500;
+}
+
+/* Users Table Styles - Match Dashboard Design */
 .section-controls {
   display: flex;
   gap: 1rem;
-  margin-top: 1rem;
   flex-wrap: wrap;
+  align-items: center;
 }
 
 .search-input,
 .filter-select {
-  padding: 0.75rem 1rem;
-  border: 1px solid var(--border-gray);
+  padding: 0.6rem 0.9rem;
+  border: 2px solid var(--border-gray);
   border-radius: 8px;
   font-family: inherit;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   background-color: var(--white);
+  color: var(--text-dark);
+  transition: all 0.2s ease;
 }
 
 .search-input {
   flex: 1;
-  min-width: 250px;
+  min-width: 220px;
+}
+
+.search-input::placeholder {
+  color: var(--text-dark);
+  opacity: 0.5;
+}
+
+.search-input:hover {
+  border-color: var(--recoletos-green);
+  box-shadow: 0 0 0 3px rgba(0,66,37,0.05);
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: var(--recoletos-green);
+  box-shadow: 0 0 0 3px rgba(0,66,37,0.1);
 }
 
 .filter-select {
-  min-width: 150px;
+  min-width: 160px;
   cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23004225' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  padding-right: 2.5rem;
 }
 
-.users-table-wrapper {
-  overflow-x: auto;
-  border-radius: 8px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  margin-top: 1rem;
+.filter-select:hover {
+  border-color: var(--recoletos-green);
+  box-shadow: 0 0 0 3px rgba(0,66,37,0.05);
 }
 
-.users-table {
-  width: 100%;
-  border-collapse: collapse;
-  background: var(--white);
-  font-size: 0.95rem;
+.filter-select:focus {
+  outline: none;
+  border-color: var(--recoletos-green);
+  box-shadow: 0 0 0 3px rgba(0,66,37,0.1);
 }
 
-.users-table thead {
-  background: var(--recoletos-green);
-  color: var(--white);
-  position: sticky;
-  top: 0;
-}
-
-.users-table th {
-  padding: 1rem;
-  text-align: left;
-  font-weight: 600;
-  border-bottom: 2px solid var(--recoletos-gold);
-}
-
-.users-table tbody tr {
-  border-bottom: 1px solid var(--border-gray);
-  transition: background-color 0.2s;
-}
-
-.users-table tbody tr:hover {
-  background-color: #f9f7f2;
-}
-
-.users-table td {
-  padding: 1rem;
-}
-
-.user-name {
-  font-weight: 600;
-  color: var(--text-dark);
+/* Users table uses same styling as requests-table */
+.requests-table .role-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.4rem 0.75rem;
+  border-radius: 12px;
+  font-size: 0.82rem;
+  font-weight: 500;
 }
 
 /* Ensure user name inside the rounded pill is white (overrides table styles) */
 .user-pill .user-name,
 .user-profile-dropdown .user-name {
   color: var(--white);
-}
-
-.user-email {
-  color: #666;
-  font-size: 0.9rem;
-}
-
-.user-id,
-.user-course,
-.user-year,
-.user-date {
-  color: #999;
-  font-size: 0.9rem;
-}
-
-.user-dept {
-  color: #666;
-  font-size: 0.9rem;
 }
 
 .role-badge {
@@ -672,12 +782,12 @@ body {
     width: 100%;
   }
 
-  .users-table {
+  .requests-table {
     font-size: 0.85rem;
   }
 
-  .users-table th,
-  .users-table td {
+  .requests-table th,
+  .requests-table td {
     padding: 0.75rem 0.5rem;
   }
 }

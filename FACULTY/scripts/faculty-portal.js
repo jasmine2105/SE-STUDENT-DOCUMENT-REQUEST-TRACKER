@@ -55,24 +55,63 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
       }
 
-      // Populate cards
-      recentEl.innerHTML = '';
-      requests.slice(0, 6).forEach(r => {
-        const card = document.createElement('div');
-        card.className = 'request-card';
-        card.innerHTML = `
-          <div class="request-header">
-            <strong>${r.requestCode || ''}</strong>
-            <span class="request-status ${Utils.getStatusBadgeClass(r.status)}">${Utils.getStatusText(r.status)}</span>
-          </div>
-          <div class="request-body">
-            <div>${r.studentName || r.student_name || ''}</div>
-            <div class="muted">${r.documentType || r.document_label || r.documentValue || ''}</div>
-            <div class="muted small">${Utils.formatRelativeTime(r.submittedAt || r.submitted_at)}</div>
-          </div>
-        `;
-        recentEl.appendChild(card);
-      });
+      // Create table structure matching admin dashboard design
+      function getStatusIcon(status) {
+        const icons = {
+          pending: 'fa-clock',
+          pending_faculty: 'fa-hourglass-half',
+          in_progress: 'fa-spinner',
+          approved: 'fa-check-circle',
+          completed: 'fa-check-double',
+          declined: 'fa-times-circle'
+        };
+        return icons[status] || 'fa-circle';
+      }
+
+      recentEl.innerHTML = `
+        <div class="table-wrapper">
+          <table class="requests-table">
+            <thead>
+              <tr>
+                <th>Request Code</th>
+                <th>Student Name</th>
+                <th>Document Name</th>
+                <th>Department</th>
+                <th>Date Submitted</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${requests.slice(0, 10).map(r => {
+                const statusClass = Utils.getStatusBadgeClass(r.status);
+                const statusText = Utils.getStatusText(r.status);
+                const statusIcon = getStatusIcon(r.status);
+                return `
+                <tr>
+                  <td><strong>${r.requestCode || 'N/A'}</strong></td>
+                  <td>${r.studentName || r.student_name || 'N/A'}</td>
+                  <td>${r.documentType || r.document_label || r.documentValue || 'N/A'}</td>
+                  <td>${r.department || 'N/A'}</td>
+                  <td>${Utils.formatDate(r.submittedAt || r.submitted_at)}</td>
+                  <td>
+                    <span class="status-badge ${statusClass}">
+                      <i class="fas ${statusIcon}"></i>
+                      ${statusText}
+                    </span>
+                  </td>
+                  <td>
+                    <button class="btn-secondary" onclick="window.facultyPortal?.viewRequest(${r.id})" title="View Details">
+                      <i class="fas fa-eye"></i> View
+                    </button>
+                  </td>
+                </tr>
+              `;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
+      `;
 
       // Stats
       if (statTotal) statTotal.textContent = String(requests.length || 0);
@@ -164,10 +203,80 @@ class FacultyPortal {
       return;
     }
 
-    container.innerHTML = this.filteredRequests
-      .sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt))
-      .map(request => this.createRequestCard(request))
-      .join('');
+    function getStatusIcon(status) {
+      const icons = {
+        pending: 'fa-clock',
+        pending_faculty: 'fa-hourglass-half',
+        in_progress: 'fa-spinner',
+        approved: 'fa-check-circle',
+        completed: 'fa-check-double',
+        declined: 'fa-times-circle'
+      };
+      return icons[status] || 'fa-circle';
+    }
+
+    const sortedRequests = this.filteredRequests.sort((a, b) => {
+      // Sort by priority first (urgent first), then by date (newest first)
+      if (a.priority === 'urgent' && b.priority !== 'urgent') return -1;
+      if (b.priority === 'urgent' && a.priority !== 'urgent') return 1;
+      return new Date(b.submittedAt || b.submitted_at) - new Date(a.submittedAt || a.submitted_at);
+    });
+
+    container.innerHTML = `
+      <div class="table-wrapper">
+        <table class="requests-table">
+          <thead>
+            <tr>
+              <th>Request Code</th>
+              <th>Student Name</th>
+              <th>Document Name</th>
+              <th>Department</th>
+              <th>Date Submitted</th>
+              <th>Priority</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${sortedRequests.map(r => {
+              const statusClass = Utils.getStatusBadgeClass(r.status);
+              const statusText = Utils.getStatusText(r.status);
+              const statusIcon = getStatusIcon(r.status);
+              const priorityClass = r.priority === 'urgent' ? 'urgent' : 'normal';
+              return `
+              <tr>
+                <td><strong>${r.requestCode || 'N/A'}</strong></td>
+                <td>${r.studentName || r.student_name || 'N/A'}</td>
+                <td>${r.documentType || r.document_label || r.documentValue || 'N/A'}</td>
+                <td>${r.department || 'N/A'}</td>
+                <td>${Utils.formatDate(r.submittedAt || r.submitted_at)}</td>
+                <td><span class="priority-badge ${priorityClass}">${(r.priority || 'normal').toUpperCase()}</span></td>
+                <td>
+                  <span class="status-badge ${statusClass}">
+                    <i class="fas ${statusIcon}"></i>
+                    ${statusText}
+                  </span>
+                </td>
+                <td>
+                  ${r.status === 'pending_faculty' ? `
+                    <button class="btn-approve" onclick="window.facultyPortal?.showApprovalModal(${r.id}, 'approve')" title="Approve" style="margin-right: 0.5rem;">
+                      <i class="fas fa-check"></i> Approve
+                    </button>
+                    <button class="btn-decline" onclick="window.facultyPortal?.showApprovalModal(${r.id}, 'decline')" title="Decline" style="margin-right: 0.5rem;">
+                      <i class="fas fa-times"></i> Decline
+                    </button>
+                  ` : ''}
+                  <button class="btn-secondary" onclick="window.facultyPortal?.viewRequest(${r.id})" title="View Details">
+                    <i class="fas fa-eye"></i> View
+                  </button>
+                </td>
+              </tr>
+            `;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
   }
 
   createRequestCard(request) {
@@ -421,5 +530,6 @@ class FacultyPortal {
 let facultyPortal;
 document.addEventListener('DOMContentLoaded', () => {
   facultyPortal = new FacultyPortal();
+  window.facultyPortal = facultyPortal;
 });
 

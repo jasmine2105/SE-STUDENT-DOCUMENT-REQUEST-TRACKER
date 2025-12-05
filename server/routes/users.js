@@ -28,7 +28,16 @@ router.get('/faculty', authMiddleware(true), async (req, res) => {
 });
 
 router.get('/admins', authMiddleware(true), async (req, res) => {
-  if (req.user.role !== 'admin') {
+  // Normalize role comparison (trim whitespace, lowercase)
+  const userRole = String(req.user?.role || '').trim().toLowerCase();
+  console.log('🔍 /api/users/admins - User role check:', { 
+    rawRole: req.user?.role, 
+    normalizedRole: userRole, 
+    userId: req.user?.id 
+  });
+  
+  if (userRole !== 'admin') {
+    console.log('❌ Access denied - user is not admin:', { role: userRole, userId: req.user?.id });
     return res.status(403).json({ message: 'Admins only.' });
   }
 
@@ -48,7 +57,16 @@ router.get('/admins', authMiddleware(true), async (req, res) => {
 
 // Get all students and faculty with full data
 router.get('/all', authMiddleware(true), async (req, res) => {
-  if (req.user.role !== 'admin') {
+  // Normalize role comparison (trim whitespace, lowercase)
+  const userRole = String(req.user?.role || '').trim().toLowerCase();
+  console.log('🔍 /api/users/all - User role check:', { 
+    rawRole: req.user?.role, 
+    normalizedRole: userRole, 
+    userId: req.user?.id 
+  });
+  
+  if (userRole !== 'admin') {
+    console.log('❌ Access denied - user is not admin:', { role: userRole, userId: req.user?.id });
     return res.status(403).json({ message: 'Admins only.' });
   }
 

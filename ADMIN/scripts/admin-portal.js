@@ -97,6 +97,18 @@ document.addEventListener('DOMContentLoaded', async () => {
   const logoutBtn = document.getElementById('logoutBtn');
   if (logoutBtn) logoutBtn.addEventListener('click', () => Utils.clearCurrentUser());
 
+  function getStatusIcon(status) {
+    const icons = {
+      pending: 'fa-clock',
+      pending_faculty: 'fa-hourglass-half',
+      in_progress: 'fa-spinner',
+      approved: 'fa-check-circle',
+      completed: 'fa-check-double',
+      declined: 'fa-times-circle'
+    };
+    return icons[status] || 'fa-circle';
+  }
+
   async function loadRecent() {
     try {
       const requests = await Utils.apiRequest('/requests', { method: 'GET' });
@@ -113,27 +125,60 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
       }
 
-      recentEl.innerHTML = '';
-      requests.slice(0, 8).forEach(r => {
-        const card = document.createElement('div');
-        card.className = 'request-card';
-        card.innerHTML = `
-          <div class="request-header">
-            <strong>${r.requestCode || ''}</strong>
-            <span class="request-status ${Utils.getStatusBadgeClass(r.status)}">${Utils.getStatusText(r.status)}</span>
-          </div>
-          <div class="request-body">
-            <div>${r.studentName || r.student_name || ''}</div>
-            <div class="muted">${r.documentType || r.document_label || r.documentValue || ''}</div>
-            <div class="muted small">${Utils.formatRelativeTime(r.submittedAt || r.submitted_at)}</div>
-          </div>
-        `;
-        recentEl.appendChild(card);
-      });
+      // Create table structure matching student portal design
+      recentEl.innerHTML = `
+        <div class="table-wrapper">
+          <table class="requests-table">
+            <thead>
+              <tr>
+                <th>Request Code</th>
+                <th>Student Name</th>
+                <th>Document Name</th>
+                <th>Department</th>
+                <th>Date Submitted</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${requests.slice(0, 10).map(r => {
+                const statusClass = Utils.getStatusBadgeClass(r.status);
+                const statusText = Utils.getStatusText(r.status);
+                const statusIcon = getStatusIcon(r.status);
+                return `
+                <tr>
+                  <td><strong>${r.requestCode || 'N/A'}</strong></td>
+                  <td>${r.studentName || r.student_name || 'N/A'}</td>
+                  <td>${r.documentType || r.document_label || r.documentValue || 'N/A'}</td>
+                  <td>${r.department || 'N/A'}</td>
+                  <td>${Utils.formatDate(r.submittedAt || r.submitted_at)}</td>
+                  <td>
+                    <span class="status-badge ${statusClass}">
+                      <i class="fas ${statusIcon}"></i>
+                      ${statusText}
+                    </span>
+                  </td>
+                  <td>
+                    <button class="btn-secondary" onclick="window.adminPortal?.viewRequest(${r.id})" title="View Details">
+                      <i class="fas fa-eye"></i> View
+                    </button>
+                  </td>
+                </tr>
+              `;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
+      `;
 
       if (statTotal) statTotal.textContent = String(requests.length || 0);
       if (statPending) statPending.textContent = String(requests.filter(x => x.status && x.status.includes('pending')).length || 0);
       if (statCompleted) statCompleted.textContent = String(requests.filter(x => x.status === 'completed' || x.status === 'approved').length || 0);
+
+      // Store requests in adminPortal instance so viewRequest can access them
+      if (window.adminPortal) {
+        window.adminPortal.requests = requests;
+      }
 
     } catch (error) {
       console.error('Failed to load recent requests', error);
@@ -250,15 +295,75 @@ class AdminPortal {
       return;
     }
 
-    container.innerHTML = this.filteredRequests
-      .sort((a, b) => {
-        // Sort by priority first (urgent first), then by date (newest first)
-        if (a.priority === 'urgent' && b.priority !== 'urgent') return -1;
-        if (b.priority === 'urgent' && a.priority !== 'urgent') return 1;
-        return new Date(b.submittedAt) - new Date(a.submittedAt);
-      })
-      .map(request => this.createRequestCard(request))
-      .join('');
+    const sortedRequests = this.filteredRequests.sort((a, b) => {
+      // Sort by priority first (urgent first), then by date (newest first)
+      if (a.priority === 'urgent' && b.priority !== 'urgent') return -1;
+      if (b.priority === 'urgent' && a.priority !== 'urgent') return 1;
+      return new Date(b.submittedAt || b.submitted_at) - new Date(a.submittedAt || a.submitted_at);
+    });
+
+    function getStatusIcon(status) {
+      const icons = {
+        pending: 'fa-clock',
+        pending_faculty: 'fa-hourglass-half',
+        in_progress: 'fa-spinner',
+        approved: 'fa-check-circle',
+        completed: 'fa-check-double',
+        declined: 'fa-times-circle'
+      };
+      return icons[status] || 'fa-circle';
+    }
+
+    container.innerHTML = `
+      <div class="table-wrapper">
+        <table class="requests-table">
+          <thead>
+            <tr>
+              <th>Request Code</th>
+              <th>Student Name</th>
+              <th>Document Name</th>
+              <th>Department</th>
+              <th>Date Submitted</th>
+              <th>Priority</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${sortedRequests.map(r => {
+              const statusClass = Utils.getStatusBadgeClass(r.status);
+              const statusText = Utils.getStatusText(r.status);
+              const statusIcon = getStatusIcon(r.status);
+              const priorityClass = r.priority === 'urgent' ? 'urgent' : 'normal';
+              return `
+              <tr>
+                <td><strong>${r.requestCode || 'N/A'}</strong></td>
+                <td>${r.studentName || r.student_name || 'N/A'}</td>
+                <td>${r.documentType || r.document_label || r.documentValue || 'N/A'}</td>
+                <td>${r.department || 'N/A'}</td>
+                <td>${Utils.formatDate(r.submittedAt || r.submitted_at)}</td>
+                <td><span class="priority-badge ${priorityClass}">${(r.priority || 'normal').toUpperCase()}</span></td>
+                <td>
+                  <span class="status-badge ${statusClass}">
+                    <i class="fas ${statusIcon}"></i>
+                    ${statusText}
+                  </span>
+                </td>
+                <td>
+                  <button class="btn-secondary" onclick="adminPortal.showUpdateModal(${r.id})" title="Update Request" style="margin-right: 0.5rem;">
+                    <i class="fas fa-edit"></i> Update
+                  </button>
+                  <button class="btn-secondary" onclick="window.adminPortal?.viewRequest(${r.id})" title="View Details">
+                    <i class="fas fa-eye"></i> View
+                  </button>
+                </td>
+              </tr>
+            `;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
   }
 
   createRequestCard(request) {
@@ -491,8 +596,21 @@ class AdminPortal {
     }
   }
 
-  viewRequest(requestId) {
-    const request = this.requests.find(r => r.id === requestId);
+  async viewRequest(requestId) {
+    // Try to find request in loaded requests first
+    let request = this.requests?.find(r => r.id === requestId);
+    
+    // If not found, fetch it from the API
+    if (!request) {
+      try {
+        request = await Utils.apiRequest(`/requests/${requestId}`, { method: 'GET' });
+      } catch (error) {
+        console.error('Failed to load request:', error);
+        Utils.showToast('Failed to load request details', 'error');
+        return;
+      }
+    }
+    
     if (!request) return;
 
     const statusClass = Utils.getStatusBadgeClass(request.status);
@@ -510,14 +628,14 @@ class AdminPortal {
         `).join('')
       : '<p style="opacity: 0.6; padding: 1rem;">No notes yet</p>';
 
-    const approvalHTML = request.facultyApproval
+    const approvalHTML = request.facultyApproval && request.facultyApproval.status
       ? `
           <div style="padding: 0.75rem; background: ${request.facultyApproval.status === 'approved' ? '#D1FAE5' : '#FEE2E2'}; border-radius: 6px;">
             <div style="font-weight: 600; margin-bottom: 0.25rem;">
-              ${request.facultyApproval.facultyName} - ${request.facultyApproval.status.toUpperCase()}
+              ${request.facultyApproval.facultyName || 'Faculty'} - ${(request.facultyApproval.status || 'pending').toUpperCase()}
             </div>
             ${request.facultyApproval.comment ? `<div style="margin-top: 0.5rem;">${request.facultyApproval.comment}</div>` : ''}
-            <div style="font-size: 0.8rem; opacity: 0.6; margin-top: 0.25rem;">${Utils.formatDate(request.facultyApproval.timestamp)}</div>
+            ${request.facultyApproval.timestamp ? `<div style="font-size: 0.8rem; opacity: 0.6; margin-top: 0.25rem;">${Utils.formatDate(request.facultyApproval.timestamp)}</div>` : ''}
           </div>
         `
       : '<p style="opacity: 0.6;">No faculty approval yet</p>';
@@ -548,17 +666,19 @@ class AdminPortal {
           </div>
           <div>
             <div style="margin-bottom: 1.5rem;">
-              <h3 style="color: var(--recoletos-green); margin-bottom: 0.5rem;">${request.documentType}</h3>
+              <h3 style="color: var(--recoletos-green); margin-bottom: 0.5rem;">${request.documentType || request.documentValue || 'N/A'}</h3>
               <div class="status-badge ${statusClass}" style="margin-bottom: 1rem;">${statusText}</div>
             </div>
             
             <div style="margin-bottom: 1.5rem;">
-              <strong>Student:</strong> ${request.studentName} (${request.studentIdNumber})<br>
-              <strong>Submitted:</strong> ${Utils.formatDate(request.submittedAt)}<br>
-              <strong>Last Updated:</strong> ${Utils.formatDate(request.updatedAt)}<br>
-              <strong>Quantity:</strong> ${request.quantity}<br>
-              <strong>Purpose:</strong> ${request.purpose}<br>
-              <strong>Priority:</strong> <span class="priority-badge ${request.priority}">${request.priority.toUpperCase()}</span><br>
+              <strong>Request Code:</strong> ${request.requestCode || 'N/A'}<br>
+              <strong>Student:</strong> ${request.studentName || 'N/A'} (${request.studentIdNumber || 'N/A'})<br>
+              <strong>Department:</strong> ${request.department || 'N/A'}<br>
+              <strong>Submitted:</strong> ${Utils.formatDate(request.submittedAt || request.submitted_at)}<br>
+              <strong>Last Updated:</strong> ${Utils.formatDate(request.updatedAt || request.updated_at)}<br>
+              <strong>Quantity:</strong> ${request.quantity || 1}<br>
+              <strong>Purpose:</strong> ${request.purpose || 'N/A'}<br>
+              <strong>Priority:</strong> <span class="priority-badge ${request.priority || 'normal'}">${(request.priority || 'normal').toUpperCase()}</span><br>
             ${assignedFaculty ? `<strong>Assigned Faculty:</strong> ${assignedFaculty.fullName || assignedFaculty.name}<br>` : ''}
               ${request.completedAt ? `<strong>Completed:</strong> ${Utils.formatDate(request.completedAt)}<br>` : ''}
             </div>
@@ -653,8 +773,8 @@ class AdminPortal {
     }
 
     container.innerHTML = `
-      <div class="users-table-wrapper">
-        <table class="users-table">
+      <div class="table-wrapper">
+        <table class="requests-table">
           <thead>
             <tr>
               <th>Name</th>
@@ -668,14 +788,14 @@ class AdminPortal {
           </thead>
           <tbody>
             ${users.map(user => `
-              <tr class="user-row user-role-${user.role}">
-                <td class="user-name"><strong>${user.fullName || 'N/A'}</strong></td>
-                <td class="user-email">${user.email || 'N/A'}</td>
-                <td><span class="role-badge role-${user.role}">${user.role === 'student' ? 'Student' : 'Faculty'}</span></td>
-                <td class="user-id">${user.studentIdNumber || '—'}</td>
-                <td class="user-course">${user.course || '—'}</td>
-                <td class="user-year">${user.year || '—'}</td>
-                <td class="user-dept">${user.departmentName || 'N/A'}</td>
+              <tr>
+                <td><strong>${user.fullName || 'N/A'}</strong></td>
+                <td>${user.email || 'N/A'}</td>
+                <td><span class="role-badge role-${user.role}">${user.role === 'student' ? 'Student' : user.role === 'faculty' ? 'Faculty' : 'Admin'}</span></td>
+                <td>${user.studentIdNumber || '—'}</td>
+                <td>${user.course || '—'}</td>
+                <td>${user.year || '—'}</td>
+                <td>${user.departmentName || 'N/A'}</td>
               </tr>
             `).join('')}
           </tbody>

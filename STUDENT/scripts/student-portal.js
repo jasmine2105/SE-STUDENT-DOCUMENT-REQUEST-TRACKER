@@ -574,9 +574,10 @@ class StudentPortal {
   }
 
   setupEventListeners() {
-    const newRequestBtn = document.getElementById('newRequestBtn');
-    if (newRequestBtn) {
-      newRequestBtn.addEventListener('click', () => this.showNewRequestModal());
+    // New Request button removed from content section - using header button only
+    const newRequestBtnHeader = document.getElementById('newRequestBtnHeader');
+    if (newRequestBtnHeader) {
+      newRequestBtnHeader.addEventListener('click', () => this.showNewRequestModal());
     }
 
     // Manage button removed - it was not useful
@@ -621,60 +622,26 @@ class StudentPortal {
     if (departmentFilter) departmentFilter.addEventListener('change', () => this.renderHistory());
     if (statusFilter) statusFilter.addEventListener('change', () => this.renderHistory());
 
-    // Profile dropdown
-    const userPill = document.getElementById('userPill');
-    const profileDropdown = document.getElementById('profileDropdownMenu');
-    if (userPill && profileDropdown) {
-      userPill.addEventListener('click', (e) => {
-        e.stopPropagation();
-        profileDropdown.classList.toggle('hidden');
-      });
-
-      // Close dropdown when clicking outside
-      document.addEventListener('click', (e) => {
-        if (!userPill.contains(e.target) && !profileDropdown.contains(e.target)) {
-          profileDropdown.classList.add('hidden');
-        }
-      });
-    }
-
-    // Profile dropdown links
-    const profileLink = document.getElementById('profileLink');
-    const notificationsLink = document.getElementById('notificationsLink');
-    const settingsLink = document.getElementById('settingsLink');
-    const logoutLink = document.getElementById('logoutLink');
-
-    if (profileLink) {
-      profileLink.addEventListener('click', (e) => {
+    // Profile and Settings from sidebar
+    const sidebarProfileLink = document.getElementById('sidebarProfileLink');
+    if (sidebarProfileLink) {
+      sidebarProfileLink.addEventListener('click', (e) => {
         e.preventDefault();
         this.showProfileModal();
-        if (profileDropdown) profileDropdown.classList.add('hidden');
+        // Update active state
+        document.querySelectorAll('.sidebar-link').forEach(link => link.classList.remove('active'));
+        sidebarProfileLink.classList.add('active');
       });
     }
 
-    if (notificationsLink) {
-      notificationsLink.addEventListener('click', (e) => {
-        e.preventDefault();
-        this.switchView('notifications');
-        if (profileDropdown) profileDropdown.classList.add('hidden');
-      });
-    }
-
-    if (settingsLink) {
-      settingsLink.addEventListener('click', (e) => {
+    const sidebarSettingsLink = document.getElementById('sidebarSettingsLink');
+    if (sidebarSettingsLink) {
+      sidebarSettingsLink.addEventListener('click', (e) => {
         e.preventDefault();
         this.showSettingsModal();
-        if (profileDropdown) profileDropdown.classList.add('hidden');
-      });
-    }
-
-    if (logoutLink) {
-      logoutLink.addEventListener('click', (e) => {
-        e.preventDefault();
-        if (confirm('Are you sure you want to logout?')) {
-          Utils.clearCurrentUser();
-        }
-        if (profileDropdown) profileDropdown.classList.add('hidden');
+        // Update active state
+        document.querySelectorAll('.sidebar-link').forEach(link => link.classList.remove('active'));
+        sidebarSettingsLink.classList.add('active');
       });
     }
 
@@ -684,11 +651,7 @@ class StudentPortal {
       floatingBtn.addEventListener('click', () => this.showNewRequestModal());
     }
 
-    // Header new request button
-    const newRequestBtnHeader = document.getElementById('newRequestBtnHeader');
-    if (newRequestBtnHeader) {
-      newRequestBtnHeader.addEventListener('click', () => this.showNewRequestModal());
-    }
+    // Header new request button - event listener already set up above
 
     const bell = document.getElementById('notificationBell');
     if (bell) {
@@ -1457,34 +1420,127 @@ class StudentPortal {
     }
   }
 
-  viewRequest(requestId) {
+  async viewRequest(requestId) {
     const request = this.requests.find((r) => r.id === requestId);
     if (!request) return;
 
     const statusClass = Utils.getStatusBadgeClass(request.status);
     const statusText = Utils.getStatusText(request.status);
 
-    const notesHTML = request.adminNotes && request.adminNotes.length > 0
-      ? request.adminNotes.map((note) => `
-          <div style="padding: 0.75rem; background: var(--bg-cream); border-radius: 6px; margin-bottom: 0.5rem;">
-            <div style="font-weight: 600; margin-bottom: 0.25rem;">${note.adminName}</div>
-            <div style="font-size: 0.9rem; opacity: 0.8;">${note.note}</div>
-            <div style="font-size: 0.8rem; opacity: 0.6; margin-top: 0.25rem;">${Utils.formatDate(note.timestamp)}</div>
-          </div>
-        `).join('')
-      : '<p style="opacity: 0.6;">No notes yet</p>';
+    // Load conversation messages
+    let conversationMessages = [];
+    try {
+      conversationMessages = await Utils.apiRequest(`/conversations/${requestId}`, {
+        timeout: 10000
+      });
+    } catch (error) {
+      console.error('Failed to load conversation:', error);
+    }
 
-    const approvalHTML = request.facultyApproval
-      ? `
-          <div style="padding: 0.75rem; background: ${request.facultyApproval.status === 'approved' ? '#D1FAE5' : '#FEE2E2'}; border-radius: 6px;">
-            <div style="font-weight: 600; margin-bottom: 0.25rem;">
-              ${request.facultyApproval.facultyName} - ${request.facultyApproval.status.toUpperCase()}
+    // Combine all messages (admin and student) from request and conversation
+    const adminNotesFromRequest = request.adminNotes && request.adminNotes.length > 0 
+      ? request.adminNotes.map(note => ({
+          role: 'admin',
+          name: note.adminName || 'Admin',
+          message: note.note,
+          timestamp: note.timestamp
+        }))
+      : [];
+    
+    // Get all conversation messages (admin and student)
+    const conversationMessagesFormatted = conversationMessages.map(msg => ({
+      role: msg.role,
+      name: msg.full_name || (msg.role === 'admin' ? 'Admin' : 'You'),
+      message: msg.message,
+      timestamp: msg.created_at
+    }));
+    
+    // Combine and sort by timestamp
+    const allMessages = [...adminNotesFromRequest, ...conversationMessagesFormatted]
+      .sort((a, b) => new Date(a.timestamp || a.created_at) - new Date(b.timestamp || b.created_at));
+
+    const notesHTML = allMessages.length > 0
+      ? allMessages.map((msg) => {
+          const isAdmin = msg.role === 'admin';
+          return `
+            <div style="display: flex; flex-direction: column; align-items: ${isAdmin ? 'flex-start' : 'flex-end'}; margin-bottom: 1rem;">
+              <div style="background: ${isAdmin ? 'var(--bg-cream)' : 'var(--recoletos-green)'}; border: 1px solid ${isAdmin ? 'var(--border-gray)' : 'var(--recoletos-green)'}; border-radius: 8px; padding: 0.875rem 1rem; max-width: 85%; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                ${isAdmin ? `
+                  <div style="font-weight: 600; margin-bottom: 0.5rem; color: var(--text-dark); font-size: 0.9rem;">${msg.name}</div>
+                  <div style="font-size: 0.9rem; color: var(--text-dark); line-height: 1.5; margin-bottom: 0.5rem;">${msg.message}</div>
+                  <div style="font-size: 0.75rem; color: var(--text-dark); opacity: 0.6;">${Utils.formatDate(msg.timestamp || msg.created_at)}</div>
+                ` : `
+                  <div style="font-size: 0.9rem; color: var(--white); line-height: 1.5; margin-bottom: 0.5rem;">${msg.message}</div>
+                  <div style="font-size: 0.75rem; color: var(--white); opacity: 0.9; text-align: right;">${Utils.formatDate(msg.timestamp || msg.created_at)}</div>
+                `}
+              </div>
             </div>
-            ${request.facultyApproval.comment ? `<div style="margin-top: 0.5rem;">${request.facultyApproval.comment}</div>` : ''}
-            <div style="font-size: 0.8rem; opacity: 0.6; margin-top: 0.25rem;">${Utils.formatDate(request.facultyApproval.timestamp)}</div>
+          `;
+        }).join('')
+      : '<p style="opacity: 0.6; padding: 1rem; text-align: center; font-style: italic; background: var(--bg-cream); border-radius: 8px; border: 1px solid var(--border-gray);">No messages yet. Start the conversation!</p>';
+
+    // Determine progress stage based on status
+    const getProgressStage = (status) => {
+      switch(status) {
+        case 'pending':
+        case 'in_progress':
+          return 2; // Admin Processing
+        case 'pending_faculty':
+          return 3; // Faculty Approval
+        case 'approved':
+        case 'completed':
+          return 4; // Ready for Pickup
+        case 'declined':
+          return 1; // Stay at Submitted if declined
+        default:
+          return 1; // Submitted
+      }
+    };
+
+    const currentStage = getProgressStage(request.status);
+    const stages = [
+      { id: 1, label: 'Submitted', icon: 'fa-check-circle' },
+      { id: 2, label: 'Admin Processing', icon: 'fa-cog' },
+      { id: 3, label: 'Faculty Approval', icon: 'fa-user-check' },
+      { id: 4, label: 'Ready for Pickup', icon: 'fa-check-circle' }
+    ];
+
+    const progressHTML = `
+      <div style="background: var(--bg-cream); padding: 1.5rem; border-radius: 12px; border: 1px solid var(--border-gray); margin-bottom: 2rem;">
+        <h3 style="color: var(--recoletos-green); margin-bottom: 1.5rem; font-size: 1.1rem; font-weight: 600;">Request Progress</h3>
+        <div style="position: relative;">
+          <!-- Progress Bar Line -->
+          <div style="position: absolute; top: 20px; left: 0; right: 0; height: 3px; background: var(--border-gray); z-index: 1;"></div>
+          <div style="position: absolute; top: 20px; left: 0; height: 3px; background: var(--recoletos-green); z-index: 2; width: ${((currentStage - 1) / (stages.length - 1)) * 100}%; transition: width 0.3s ease;"></div>
+          
+          <!-- Stage Indicators -->
+          <div style="display: flex; justify-content: space-between; position: relative; z-index: 3;">
+            ${stages.map((stage, index) => {
+              const isCompleted = stage.id < currentStage;
+              const isActive = stage.id === currentStage;
+              const isFuture = stage.id > currentStage;
+              
+              return `
+                <div style="display: flex; flex-direction: column; align-items: center; flex: 1;">
+                  <div style="width: 40px; height: 40px; border-radius: 50%; background: ${isCompleted ? 'var(--recoletos-green)' : isActive ? 'var(--recoletos-green)' : 'var(--white)'}; border: 3px solid ${isCompleted || isActive ? 'var(--recoletos-green)' : 'var(--border-gray)'}; display: flex; align-items: center; justify-content: center; margin-bottom: 0.5rem; box-shadow: ${isActive ? '0 0 0 4px rgba(0, 102, 51, 0.1)' : 'none'};">
+                    ${isCompleted ? `
+                      <i class="fas fa-check" style="color: var(--white); font-size: 1rem;"></i>
+                    ` : isActive ? `
+                      <i class="fas ${stage.icon}" style="color: var(--white); font-size: 1rem;"></i>
+                    ` : `
+                      <i class="fas ${stage.icon}" style="color: var(--text-dark); opacity: 0.4; font-size: 1rem;"></i>
+                    `}
+                  </div>
+                  <span style="font-size: 0.85rem; font-weight: ${isActive ? '600' : '500'}; color: ${isCompleted || isActive ? 'var(--recoletos-green)' : 'var(--text-dark)'}; opacity: ${isFuture ? '0.4' : '1'}; text-align: center; max-width: 120px;">
+                    ${stage.label}
+                  </span>
+                </div>
+              `;
+            }).join('')}
           </div>
-        `
-      : '<p style="opacity: 0.6;">Awaiting approval</p>';
+        </div>
+      </div>
+    `;
 
     const modalHTML = `
       <div class="modal-overlay active" id="viewRequestModal">
@@ -1493,55 +1549,158 @@ class StudentPortal {
             <h2>Request Details</h2>
             <button class="close-modal" onclick="document.getElementById('viewRequestModal').remove()">&times;</button>
           </div>
-          <div>
-            <div style="margin-bottom: 1.5rem;">
-              <h3 style="color: var(--recoletos-green); margin-bottom: 0.5rem;">${request.documentType}</h3>
-              <div class="status-badge ${statusClass}" style="margin-bottom: 1rem;">${statusText}</div>
+          <div class="request-modal-body">
+            ${progressHTML}
+            <div class="request-modal-content">
+            <!-- First Column: Document Details -->
+            <div class="request-modal-column">
+              <h3>Document Details</h3>
+
+              <div class="document-details-horizontal">
+                <div class="detail-label">Document Type:</div>
+                <div class="detail-value">${request.documentType || request.documentValue || 'N/A'}</div>
+                
+                <div class="detail-label">Department:</div>
+                <div class="detail-value">${request.department || this.studentDepartmentName}</div>
+                
+                <div class="detail-label">Submitted:</div>
+                <div class="detail-value">${Utils.formatDate(request.submittedAt)}</div>
+                
+                <div class="detail-label">Last Updated:</div>
+                <div class="detail-value">${Utils.formatDate(request.updatedAt)}</div>
+                
+                <div class="detail-label">Quantity:</div>
+                <div class="detail-value">${request.quantity || 1}</div>
+                
+                <div class="detail-label">Purpose:</div>
+                <div class="detail-value">${request.purpose || 'None'}</div>
+              </div>
+
+              ${request.attachments && request.attachments.length ? `
+              <div>
+                <h4 style="color: var(--recoletos-green); margin-bottom: 0.75rem; font-size: 1.1rem;">
+                  <i class="fas fa-paperclip"></i> Attachments
+                </h4>
+                <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(120px,1fr)); gap:0.75rem;">
+                  ${request.attachments.map((att) => `
+                    <a href="${att.url}" target="_blank" rel="noopener noreferrer" style="display:block;">
+                      <img src="${att.url}" alt="${att.name}" style="width:100%; height:110px; object-fit:cover; border-radius:8px; border:1px solid var(--border-gray);" />
+                    </a>
+                  `).join('')}
+                </div>
+              </div>
+              ` : ''}
             </div>
 
-            <div style="margin-bottom: 1.5rem;">
-              <strong>Department:</strong> ${request.department || this.studentDepartmentName}<br>
-              <strong>Submitted:</strong> ${Utils.formatDate(request.submittedAt)}<br>
-              <strong>Last Updated:</strong> ${Utils.formatDate(request.updatedAt)}<br>
-              <strong>Quantity:</strong> ${request.quantity}<br>
-              <strong>Purpose:</strong> ${request.purpose}<br>
-              ${request.crossDepartment ? `<strong>Cross Department Details:</strong> ${request.crossDepartmentDetails || 'N/A'}<br>` : ''}
-            </div>
+            <!-- Second Column: Notes & Communication -->
+            <div class="request-modal-column">
+              <h3>Notes & Communication</h3>
+              
+              <div>
+                <!-- Chat Messages Display -->
+                <div style="margin-bottom: 1.5rem; max-height: 350px; overflow-y: auto; padding: 0.5rem; background: var(--white); border-radius: 8px; border: 1px solid var(--border-gray);">
+                  ${notesHTML}
+                </div>
 
-            ${request.attachments && request.attachments.length ? `
-            <div style="margin-bottom: 1.5rem;">
-              <h4 style="color: var(--recoletos-green); margin-bottom: 0.5rem;">Attachments</h4>
-              <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(120px,1fr)); gap:0.75rem;">
-                ${request.attachments.map((att) => `
-                  <a href="${att.url}" target="_blank" rel="noopener noreferrer" style="display:block;">
-                    <img src="${att.url}" alt="${att.name}" style="width:100%; height:110px; object-fit:cover; border-radius:8px; border:1px solid var(--border-gray);" />
-                  </a>
-                `).join('')}
+                <!-- Student Input Section -->
+                <div style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border-gray);">
+                  <textarea 
+                    id="studentNoteInput" 
+                    placeholder="Add a note for the admin"
+                    style="width: 100%; min-height: 100px; padding: 0.75rem; border: 1px solid var(--border-gray); border-radius: 8px; font-size: 0.9rem; font-family: inherit; resize: vertical; background: var(--white); margin-bottom: 0.75rem;"
+                  ></textarea>
+                  <div style="display: flex; justify-content: flex-end;">
+                    <button 
+                      id="sendNoteBtn" 
+                      onclick="studentPortal.sendNote(${requestId})"
+                      style="padding: 0.75rem 1.5rem; background: var(--recoletos-green); color: var(--white); border: none; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 0.9rem; transition: background 0.2s ease; display: flex; align-items: center; gap: 0.5rem;"
+                      onmouseover="this.style.background='#003318'"
+                      onmouseout="this.style.background='var(--recoletos-green)'"
+                    >
+                      <i class="fas fa-paper-plane" style="font-size: 0.85rem;"></i> Send Note
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
-            ` : ''}
-
-            <div style="margin-bottom: 1.5rem;">
-              <h4 style="color: var(--recoletos-green); margin-bottom: 0.5rem;">Admin Notes</h4>
-              ${notesHTML}
             </div>
-
-            ${request.facultyApproval !== null || request.status === 'pending_faculty' ? `
-              <div style="margin-bottom: 1.5rem;">
-                <h4 style="color: var(--recoletos-green); margin-bottom: 0.5rem;">Faculty Approval</h4>
-                ${approvalHTML}
-              </div>
-            ` : ''}
           </div>
         </div>
       </div>
     `;
 
+    // Remove any existing modal first
+    const existingModal = document.getElementById('viewRequestModal');
+    if (existingModal) existingModal.remove();
+
     document.body.insertAdjacentHTML('beforeend', modalHTML);
     const modal = document.getElementById('viewRequestModal');
+    
+    // Auto-scroll chat messages to bottom
+    const chatContainer = modal.querySelector('[style*="max-height: 350px"]');
+    if (chatContainer) {
+      chatContainer.scrollTop = chatContainer.scrollHeight;
+    }
+    
+    // Close on overlay click
     modal.addEventListener('click', (e) => {
-      if (e.target === modal) modal.remove();
+      if (e.target === modal) {
+        modal.remove();
+      }
     });
+
+    // Close on close button click
+    const closeBtn = modal.querySelector('.close-modal');
+    if (closeBtn) {
+      closeBtn.addEventListener('click', () => {
+        modal.remove();
+      });
+    }
+
+    // Close on Escape key
+    const handleEscape = (e) => {
+      if (e.key === 'Escape' && modal) {
+        modal.remove();
+        document.removeEventListener('keydown', handleEscape);
+      }
+    };
+    document.addEventListener('keydown', handleEscape);
+  }
+
+  async sendNote(requestId) {
+    const noteInput = document.getElementById('studentNoteInput');
+    const sendBtn = document.getElementById('sendNoteBtn');
+    
+    if (!noteInput || !sendBtn) return;
+
+    const message = noteInput.value.trim();
+    if (!message) {
+      Utils.showToast('Please enter a message', 'warning');
+      return;
+    }
+
+    // Disable button while sending
+    sendBtn.disabled = true;
+    sendBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
+
+    try {
+      await Utils.apiRequest(`/conversations/${requestId}`, {
+        method: 'POST',
+        body: { message },
+        timeout: 10000
+      });
+
+      Utils.showToast('Note sent successfully!', 'success');
+      noteInput.value = '';
+
+      // Reload the request view to show the new note
+      this.viewRequest(requestId);
+    } catch (error) {
+      console.error('Failed to send note:', error);
+      Utils.showToast('Failed to send note. Please try again.', 'error');
+      sendBtn.disabled = false;
+      sendBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Send Note';
+    }
   }
 
   showProfileModal() {

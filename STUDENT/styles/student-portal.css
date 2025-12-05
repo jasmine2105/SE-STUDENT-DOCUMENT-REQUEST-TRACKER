@@ -35,6 +35,12 @@ body {
   padding: 1.5rem;
   gap: 2rem;
   box-shadow: 2px 0 15px rgba(0, 0, 0, 0.1);
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 100vh;
+  overflow-y: auto;
+  z-index: 1000;
 }
 
 .sidebar-header {
@@ -97,6 +103,12 @@ body {
 
 .sidebar-footer {
   margin-top: auto;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  position: sticky;
+  bottom: 0;
+  background: linear-gradient(180deg, var(--recoletos-green), #003d21);
+  padding-bottom: 1rem;
 }
 
 .btn-logout {
@@ -109,6 +121,10 @@ body {
   cursor: pointer;
   font-weight: 500;
   transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
 }
 
 .btn-logout:hover {
@@ -121,6 +137,8 @@ body {
   flex-direction: column;
   width: 100%;
   max-width: 100%;
+  margin-left: 270px;
+  padding-top: 100px; /* Account for fixed header */
 }
 
 .portal-header {
@@ -130,6 +148,12 @@ body {
   padding: 1.5rem 2rem;
   background: var(--white);
   border-bottom: 1px solid var(--border-gray);
+  position: fixed;
+  top: 0;
+  left: 270px;
+  right: 0;
+  z-index: 999;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
 .header-left h1 {
@@ -160,13 +184,13 @@ body {
 }
 
 .btn-new-request-header {
-  padding: 0.625rem 1.25rem;
+  padding: 0.75rem 1.5rem;
   background: linear-gradient(135deg, var(--recoletos-green), #003318);
   color: var(--white);
   border: none;
   border-radius: 8px;
   font-weight: 600;
-  font-size: 0.95rem;
+  font-size: 1rem;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -194,16 +218,15 @@ body {
   padding: 0.5rem 1rem;
   border-radius: 999px;
   font-weight: 600;
-  cursor: pointer;
+  cursor: default;
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  transition: all 0.2s ease;
 }
 
-.user-pill:hover {
-  background: #003318;
-  box-shadow: 0 2px 8px rgba(0, 66, 37, 0.2);
+.user-profile-display {
+  display: flex;
+  align-items: center;
 }
 
 .user-pill i:first-child {
@@ -281,7 +304,7 @@ body {
 
 .bell-icon {
   font-size: 1.2rem;
-  color: var(--recoletos-green);
+  color: var(--recoletos-gold);
 }
 
 .notification-count {
@@ -725,12 +748,63 @@ body {
 .request-modal {
   background-color: var(--white);
   border-radius: 16px;
-  padding: 2rem;
-  max-width: 600px;
-  width: 90%;
+  padding: 2.5rem;
+  max-width: 1200px;
+  width: 95%;
   max-height: 90vh;
   overflow-y: auto;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+.request-modal-body {
+  padding: 0;
+}
+
+.request-modal-content {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2.5rem;
+  align-items: start;
+}
+
+.request-modal-column {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  background: var(--bg-cream);
+  padding: 1.5rem;
+  border-radius: 12px;
+  border: 1px solid var(--border-gray);
+}
+
+.request-modal-column h3 {
+  color: var(--recoletos-green);
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid var(--border-gray);
+}
+
+.document-details-horizontal {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.75rem 1.5rem;
+  padding: 1.25rem;
+  background: var(--bg-cream);
+  border-radius: 12px;
+  border: 1px solid var(--border-gray);
+}
+
+.document-details-horizontal .detail-label {
+  font-weight: 600;
+  color: var(--text-dark);
+  opacity: 0.8;
+}
+
+.document-details-horizontal .detail-value {
+  color: var(--text-dark);
+  font-weight: 500;
 }
 
 .modal-header {

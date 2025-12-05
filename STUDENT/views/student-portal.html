@@ -61,12 +61,26 @@
                 </div>
             </div>
             <nav class="sidebar-nav">
-                <button class="sidebar-link active" data-view="dashboard">Dashboard</button>
-                <button class="sidebar-link" data-view="history">Request History</button>
-                <button class="sidebar-link" data-view="notifications">Notifications</button>
+                <button class="sidebar-link active" data-view="dashboard">
+                    <i class="fas fa-home"></i> Dashboard
+                </button>
+                <button class="sidebar-link" data-view="history">
+                    <i class="fas fa-history"></i> Request History
+                </button>
+                <button class="sidebar-link" data-view="notifications">
+                    <i class="fas fa-bell"></i> Notifications
+                </button>
+                <button class="sidebar-link" id="sidebarProfileLink">
+                    <i class="fas fa-user"></i> My Profile
+                </button>
+                <button class="sidebar-link" id="sidebarSettingsLink">
+                    <i class="fas fa-cog"></i> Settings
+                </button>
             </nav>
             <div class="sidebar-footer">
-                <button class="btn-logout" id="logoutBtn">Logout</button>
+                <button class="btn-logout" id="logoutBtn">
+                    <i class="fas fa-sign-out-alt"></i> Logout
+                </button>
             </div>
         </aside>
 
@@ -79,9 +93,6 @@
                     <p class="welcome-subtitle">Track Your Documents Here</p>
                 </div>
                 <div class="header-right">
-                    <button class="btn-new-request-header" id="newRequestBtnHeader">
-                        <i class="fas fa-plus"></i> New Request
-                    </button>
                     <div class="notification-bell" id="notificationBell">
                         <i class="fas fa-bell bell-icon"></i>
                         <span class="notification-count hidden" id="notificationCount">0</span>
@@ -93,26 +104,13 @@
                             <div class="notification-list" id="notificationList"></div>
                         </div>
                     </div>
-                    <div class="user-profile-dropdown" id="userProfileDropdown">
+                    <button class="btn-new-request-header" id="newRequestBtnHeader">
+                        <i class="fas fa-plus"></i> New Request
+                    </button>
+                    <div class="user-profile-display" id="userProfileDisplay">
                         <div class="user-pill" id="userPill">
                             <i class="fas fa-user-circle"></i>
                             <span class="user-name" id="userName">Loading...</span>
-                            <i class="fas fa-chevron-down"></i>
-                        </div>
-                        <div class="profile-dropdown-menu hidden" id="profileDropdownMenu">
-                            <a href="#" class="dropdown-item" id="profileLink">
-                                <i class="fas fa-user"></i> My Profile
-                            </a>
-                            <a href="#" class="dropdown-item" id="notificationsLink">
-                                <i class="fas fa-bell"></i> Notifications
-                            </a>
-                            <a href="#" class="dropdown-item" id="settingsLink">
-                                <i class="fas fa-cog"></i> Settings
-                            </a>
-                            <div class="dropdown-divider"></div>
-                            <a href="#" class="dropdown-item" id="logoutLink">
-                                <i class="fas fa-sign-out-alt"></i> Logout
-                            </a>
                         </div>
                     </div>
                 </div>
@@ -187,9 +185,6 @@
                             <i class="fas fa-history section-icon"></i>
                             <h2>Recent Requests</h2>
                         </div>
-                        <button class="btn-new-request" id="newRequestBtn">
-                            <i class="fas fa-plus"></i> New Request
-                        </button>
                     </div>
                     <div id="recentRequests">
                         <div class="empty-state">
