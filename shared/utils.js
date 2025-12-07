@@ -1,5 +1,10 @@
-// API Base URL
-const API_BASE = window.location.origin + '/api';
+// API Base URL - ensure it's clean and doesn't have trailing slashes or quotes
+const getApiBase = () => {
+  const origin = window.location.origin || 'http://localhost:3000';
+  const base = origin.replace(/\/+$/, '') + '/api';
+  return base;
+};
+const API_BASE = getApiBase();
 
 // Utility Functions
 const Utils = {
@@ -120,6 +125,26 @@ const Utils = {
     let timeoutId = null;
     
     try {
+      // Clean and validate endpoint - remove any quotes or whitespace
+      if (typeof endpoint !== 'string') {
+        console.error('❌ Invalid endpoint type:', typeof endpoint, endpoint);
+        throw new Error('Endpoint must be a string');
+      }
+      
+      // Log original endpoint for debugging
+      const originalEndpoint = endpoint;
+      
+      // Remove quotes, trim whitespace, and ensure it starts with /
+      endpoint = endpoint.trim().replace(/^["']|["']$/g, '').trim();
+      if (!endpoint.startsWith('/')) {
+        endpoint = '/' + endpoint;
+      }
+      
+      // Debug log if endpoint was modified
+      if (originalEndpoint !== endpoint) {
+        console.warn('⚠️ Endpoint was cleaned:', { original: originalEndpoint, cleaned: endpoint });
+      }
+      
       const headers = {
         'Content-Type': 'application/json',
         ...options.headers
@@ -136,7 +161,28 @@ const Utils = {
         fetchOptions.body = JSON.stringify(fetchOptions.body);
       }
 
-      console.log('🌐 Making API request to:', `${API_BASE}${endpoint}`, 'Method:', options.method || 'GET');
+      // Construct full URL and ensure it's clean
+      let fullUrl = API_BASE + endpoint;
+      
+      // Final cleanup - remove any quotes that might have been added anywhere
+      fullUrl = fullUrl.replace(/["']/g, '').trim();
+      
+      // Verify URL is valid
+      try {
+        new URL(fullUrl); // This will throw if URL is invalid
+      } catch (e) {
+        console.error('❌ Invalid URL constructed:', fullUrl);
+        console.error('❌ Components:', { API_BASE, endpoint, originalEndpoint });
+        throw new Error(`Invalid API URL: ${fullUrl}`);
+      }
+      
+      console.log('🌐 Making API request to:', fullUrl, 'Method:', options.method || 'GET');
+      console.log('🌐 Endpoint details:', { 
+        original: originalEndpoint, 
+        cleaned: endpoint, 
+        apiBase: API_BASE,
+        fullUrl: fullUrl 
+      });
       
       // Add timeout wrapper for fetch
       timeoutId = setTimeout(() => {
@@ -145,7 +191,7 @@ const Utils = {
       
       fetchOptions.signal = controller.signal;
       
-      const response = await fetch(`${API_BASE}${endpoint}`, fetchOptions);
+      const response = await fetch(fullUrl, fetchOptions);
       
       // Clear timeout if request completed successfully
       if (timeoutId) {
@@ -230,13 +276,28 @@ const Utils = {
 
   // Require authentication (redirect if not logged in)
   requireAuth() {
-    const authenticated = this.isAuthenticated();
+    // Add a small delay to ensure localStorage is accessible (for page transitions)
+    const user = this.getCurrentUser();
+    const token = this.getAuthToken();
+    
+    console.log('🔐 requireAuth check:', {
+      hasUser: !!user,
+      hasToken: !!token,
+      userRole: user?.role
+    });
+    
+    const authenticated = user !== null && !!token;
     
     if (!authenticated) {
       console.log('❌ NOT authenticated - will redirect to /');
-      window.location.href = '/';
+      console.log('❌ User:', user);
+      console.log('❌ Token:', token ? 'Present' : 'Missing');
+      // Use replace to prevent back button issues
+      window.location.replace('/');
       return false;
     }
+    
+    console.log('✅ Authentication verified');
     return true;
   }
 };

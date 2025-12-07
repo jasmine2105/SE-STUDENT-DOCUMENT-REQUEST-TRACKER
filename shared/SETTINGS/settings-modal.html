@@ -1,0 +1,197 @@
+<!-- Settings Modal HTML Template -->
+<div id="settingsModal" class="settings-modal-overlay hidden">
+    <div class="settings-modal-container">
+        <div class="settings-modal-header">
+            <h2><i class="fas fa-cog"></i> Settings</h2>
+            <button class="settings-close-btn" id="settingsCloseBtn" title="Close">&times;</button>
+        </div>
+        
+        <div class="settings-modal-body">
+            <!-- Tabs Navigation -->
+            <div class="settings-tabs">
+                <button class="settings-tab active" data-tab="account">
+                    <i class="fas fa-user"></i> Account Info
+                </button>
+                <button class="settings-tab" data-tab="security">
+                    <i class="fas fa-lock"></i> Security
+                </button>
+                <button class="settings-tab" data-tab="notifications">
+                    <i class="fas fa-bell"></i> Notifications
+                </button>
+                <button class="settings-tab" data-tab="appearance">
+                    <i class="fas fa-palette"></i> Appearance
+                </button>
+            </div>
+
+            <!-- Tab Content -->
+            <div class="settings-tab-content">
+                <!-- Account Info Tab -->
+                <div class="settings-tab-panel active" id="tabAccount">
+                    <div class="settings-section">
+                        <h3><i class="fas fa-envelope"></i> Email Address</h3>
+                        <div class="settings-input-group">
+                            <input type="email" id="settingsEmail" class="settings-input" placeholder="Enter email address" />
+                            <button class="btn-toggle-password" id="toggleEmailVisibility" style="display: none;"></button>
+                        </div>
+                    </div>
+
+                    <div class="settings-section">
+                        <h3><i class="fas fa-phone"></i> Contact Number</h3>
+                        <div class="settings-input-group">
+                            <input type="tel" id="settingsContact" class="settings-input" placeholder="Enter contact number" />
+                        </div>
+                    </div>
+
+                    <div class="settings-section">
+                        <h3><i class="fas fa-image"></i> Profile Picture</h3>
+                        <div class="settings-photo-upload">
+                            <div class="settings-photo-preview" id="settingsPhotoPreview">
+                                <i class="fas fa-user"></i>
+                            </div>
+                            <button class="btn-upload-photo" id="uploadPhotoBtn">
+                                <i class="fas fa-upload"></i> Upload Photo
+                            </button>
+                            <input type="file" id="photoFileInput" accept="image/*" style="display: none;" />
+                        </div>
+                    </div>
+
+                    <div class="settings-section">
+                        <h3><i class="fas fa-envelope-open"></i> Alternate Email (Optional)</h3>
+                        <div class="settings-input-group">
+                            <input type="email" id="settingsAlternateEmail" class="settings-input" placeholder="Enter alternate email" />
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Security Tab -->
+                <div class="settings-tab-panel" id="tabSecurity">
+                    <div class="settings-section">
+                        <h3><i class="fas fa-key"></i> Change Password</h3>
+                        
+                        <div class="settings-password-group">
+                            <label>Current Password</label>
+                            <div class="settings-input-group">
+                                <input type="password" id="currentPassword" class="settings-input" placeholder="Enter current password" />
+                                <button class="btn-toggle-password" id="toggleCurrentPassword" type="button">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="settings-password-group">
+                            <label>New Password</label>
+                            <div class="settings-input-group">
+                                <input type="password" id="newPassword" class="settings-input" placeholder="Enter new password" />
+                                <button class="btn-toggle-password" id="toggleNewPassword" type="button">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                            </div>
+                            <div class="password-strength-meter" id="passwordStrengthMeter">
+                                <div class="password-strength-bar"></div>
+                            </div>
+                            <small class="password-strength-text" id="passwordStrengthText">Password strength: Weak</small>
+                        </div>
+
+                        <div class="settings-password-group">
+                            <label>Confirm New Password</label>
+                            <div class="settings-input-group">
+                                <input type="password" id="confirmNewPassword" class="settings-input" placeholder="Confirm new password" />
+                                <button class="btn-toggle-password" id="toggleConfirmPassword" type="button">
+                                    <i class="fas fa-eye"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="settings-section">
+                        <h3><i class="fas fa-shield-alt"></i> Two-Factor Authentication</h3>
+                        <div class="settings-toggle-group">
+                            <label class="settings-toggle-label">
+                                <span>Enable 2FA</span>
+                                <input type="checkbox" id="enable2FA" class="settings-toggle" />
+                                <span class="settings-toggle-slider"></span>
+                            </label>
+                            <small>Add an extra layer of security to your account</small>
+                        </div>
+                    </div>
+
+                    <div class="settings-section">
+                        <h3><i class="fas fa-desktop"></i> Active Sessions</h3>
+                        <button class="btn-review-sessions" id="reviewSessionsBtn">
+                            <i class="fas fa-list"></i> Review Active Sessions
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Notifications Tab -->
+                <div class="settings-tab-panel" id="tabNotifications">
+                    <div class="settings-section">
+                        <h3><i class="fas fa-bell"></i> Notification Preferences</h3>
+                        
+                        <div class="settings-toggle-group">
+                            <label class="settings-toggle-label">
+                                <span>Email Notifications</span>
+                                <input type="checkbox" id="emailNotifications" class="settings-toggle" checked />
+                                <span class="settings-toggle-slider"></span>
+                            </label>
+                            <small>Receive notifications via email</small>
+                        </div>
+
+                        <div class="settings-toggle-group">
+                            <label class="settings-toggle-label">
+                                <span>SMS Notifications</span>
+                                <input type="checkbox" id="smsNotifications" class="settings-toggle" />
+                                <span class="settings-toggle-slider"></span>
+                            </label>
+                            <small>Receive notifications via SMS</small>
+                        </div>
+
+                        <div class="settings-toggle-group">
+                            <label class="settings-toggle-label">
+                                <span>App Notifications</span>
+                                <input type="checkbox" id="appNotifications" class="settings-toggle" checked />
+                                <span class="settings-toggle-slider"></span>
+                            </label>
+                            <small>Receive in-app notifications</small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Appearance Tab -->
+                <div class="settings-tab-panel" id="tabAppearance">
+                    <div class="settings-section">
+                        <h3><i class="fas fa-moon"></i> Theme</h3>
+                        <div class="settings-select-group">
+                            <label>Theme</label>
+                            <select id="themeSelect" class="settings-select">
+                                <option value="light">Light</option>
+                                <option value="dark">Dark</option>
+                                <option value="auto">Auto</option>
+                            </select>
+                            <small>Choose your preferred color theme</small>
+                        </div>
+                    </div>
+
+                    <div class="settings-section">
+                        <h3><i class="fas fa-paint-brush"></i> Accent Color</h3>
+                        <div class="settings-color-group">
+                            <label>Accent Color</label>
+                            <div class="settings-color-picker">
+                                <input type="color" id="accentColor" class="settings-color-input" value="#004225" />
+                                <span class="settings-color-preview" id="accentColorPreview"></span>
+                            </div>
+                            <small>Customize the accent color (optional)</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sticky Save Button -->
+            <div class="settings-save-footer">
+                <button class="btn-save-changes" id="saveChangesBtn">
+                    <i class="fas fa-save"></i> Save Changes
+                </button>
+            </div>
+        </div>
+    </div>
+</div>

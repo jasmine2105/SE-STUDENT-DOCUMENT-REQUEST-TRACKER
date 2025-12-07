@@ -1,0 +1,145 @@
+<!-- Profile Modal HTML Template -->
+<div id="profileModal" class="profile-modal-overlay hidden">
+    <div class="profile-modal-container">
+        <div class="profile-modal-header">
+            <h2><i class="fas fa-user"></i> My Profile</h2>
+            <button class="profile-close-btn" id="profileCloseBtn" title="Close">&times;</button>
+        </div>
+        
+        <div class="profile-modal-body">
+            <!-- Profile Header Section -->
+            <div class="profile-header-card">
+                <div class="profile-photo-wrapper">
+                    <div class="profile-photo" id="profilePhoto">
+                        <i class="fas fa-user"></i>
+                    </div>
+                    <button class="profile-photo-edit" id="profilePhotoEdit" title="Update Photo">
+                        <i class="fas fa-camera"></i>
+                    </button>
+                </div>
+                <div class="profile-header-info">
+                    <h3 id="profileHeaderName">Loading...</h3>
+                    <p class="profile-student-number" id="profileHeaderIdNumber">-</p>
+                    <p class="profile-course-year" id="profileHeaderCourseYear">-</p>
+                    <p class="profile-email" id="profileHeaderEmail">-</p>
+                </div>
+                <div class="profile-header-actions">
+                    <button class="btn-edit-profile" id="profileEditBtn">
+                        <i class="fas fa-edit"></i> Edit Profile
+                    </button>
+                    <button class="btn-settings-profile" id="profileSettingsBtn">
+                        <i class="fas fa-cog"></i> Settings
+                    </button>
+                </div>
+            </div>
+
+            <!-- Personal Information Section -->
+            <div class="profile-section-card">
+                <h4 class="profile-section-title">
+                    <i class="fas fa-id-card"></i> Personal Information
+                </h4>
+                <div class="profile-info-grid">
+                    <div class="profile-info-column">
+                        <div class="profile-info-item">
+                            <span class="profile-info-label">Full Name</span>
+                            <span class="profile-info-value" id="profileFullName">-</span>
+                        </div>
+                        <div class="profile-info-item">
+                            <span class="profile-info-label">ID Number</span>
+                            <span class="profile-info-value" id="profileIdNumber">-</span>
+                        </div>
+                        <div class="profile-info-item">
+                            <span class="profile-info-label">Email</span>
+                            <span class="profile-info-value" id="profileEmail">-</span>
+                        </div>
+                        <div class="profile-info-item">
+                            <span class="profile-info-label">Contact Number</span>
+                            <span class="profile-info-value" id="profileContact">-</span>
+                        </div>
+                    </div>
+                    <div class="profile-info-column">
+                        <div class="profile-info-item">
+                            <span class="profile-info-label">Birthdate</span>
+                            <span class="profile-info-value" id="profileBirthdate">-</span>
+                        </div>
+                        <div class="profile-info-item">
+                            <span class="profile-info-label">Address</span>
+                            <span class="profile-info-value" id="profileAddress">-</span>
+                        </div>
+                        <div class="profile-info-item">
+                            <span class="profile-info-label">Gender</span>
+                            <span class="profile-info-value" id="profileGender">-</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Academic Information Section -->
+            <div class="profile-section-card">
+                <h4 class="profile-section-title">
+                    <i class="fas fa-graduation-cap"></i> Academic Information
+                </h4>
+                <div class="profile-academic-grid">
+                    <div class="profile-academic-item">
+                        <span class="profile-academic-label">Department</span>
+                        <span class="profile-academic-value" id="profileDepartment">-</span>
+                    </div>
+                    <div class="profile-academic-item">
+                        <span class="profile-academic-label">Program</span>
+                        <span class="profile-academic-value" id="profileProgram">-</span>
+                    </div>
+                    <div class="profile-academic-item">
+                        <span class="profile-academic-label">Year Level</span>
+                        <span class="profile-academic-value" id="profileYearLevel">-</span>
+                    </div>
+                    <div class="profile-academic-item">
+                        <span class="profile-academic-label">Status</span>
+                        <span class="profile-academic-value" id="profileStatus">-</span>
+                    </div>
+                    <div class="profile-academic-item">
+                        <span class="profile-academic-label">Advisor</span>
+                        <span class="profile-academic-value" id="profileAdvisor">-</span>
+                    </div>
+                    <div class="profile-academic-item">
+                        <span class="profile-academic-label">Academic Standing</span>
+                        <span class="profile-academic-value" id="profileAcademicStanding">-</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Document Records Section -->
+            <div class="profile-section-card">
+                <h4 class="profile-section-title">
+                    <i class="fas fa-file-alt"></i> Document Records
+                </h4>
+                <div class="profile-records-grid">
+                    <div class="profile-record-card">
+                        <div class="profile-record-value" id="profileTotalRequests">0</div>
+                        <div class="profile-record-label">Total Requests</div>
+                    </div>
+                    <div class="profile-record-card">
+                        <div class="profile-record-value" id="profilePendingRequests">0</div>
+                        <div class="profile-record-label">Pending</div>
+                    </div>
+                    <div class="profile-record-card">
+                        <div class="profile-record-value" id="profileApprovedRequests">0</div>
+                        <div class="profile-record-label">Approved</div>
+                    </div>
+                    <div class="profile-record-card">
+                        <div class="profile-record-value" id="profileRejectedRequests">0</div>
+                        <div class="profile-record-label">Rejected</div>
+                    </div>
+                </div>
+                <div class="profile-records-actions">
+                    <button class="btn-view-history" id="profileViewHistoryBtn">
+                        <i class="fas fa-history"></i> View Document History
+                    </button>
+                </div>
+                <!-- Last 5 Requests Preview -->
+                <div class="profile-recent-requests" id="profileRecentRequests">
+                    <!-- Will be populated by JavaScript -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

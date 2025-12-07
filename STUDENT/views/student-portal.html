@@ -10,6 +10,8 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="../../shared/styles-home.css">
     <link rel="stylesheet" href="../styles/student-portal.css">
+    <link rel="stylesheet" href="../../shared/PROFILE/profile-modal.css">
+    <link rel="stylesheet" href="../../shared/SETTINGS/settings-modal.css">
     <style>
       
         .btn-new-request {
@@ -70,10 +72,10 @@
                 <button class="sidebar-link" data-view="notifications">
                     <i class="fas fa-bell"></i> Notifications
                 </button>
-                <button class="sidebar-link" id="sidebarProfileLink">
+                <button class="sidebar-link" data-view="profile">
                     <i class="fas fa-user"></i> My Profile
                 </button>
-                <button class="sidebar-link" id="sidebarSettingsLink">
+                <button class="sidebar-link" data-view="settings">
                     <i class="fas fa-cog"></i> Settings
                 </button>
             </nav>
@@ -220,9 +222,28 @@
                         </div>
                     </div>
                     <div id="historyRequests">
-                        <div class="empty-state">
-                            <div class="empty-state-icon">📄</div>
-                            <h3>No requests found</h3>
+                        <div class="table-wrapper">
+                            <table class="requests-table">
+                                <thead>
+                                    <tr>
+                                        <th>Department</th>
+                                        <th>Type of Document</th>
+                                        <th>Time and Date</th>
+                                        <th>Status</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td colspan="5" style="text-align: center; padding: 2rem;">
+                                            <div class="empty-state">
+                                                <div class="empty-state-icon">📄</div>
+                                                <h3>No requests found</h3>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                 </div>
@@ -248,195 +269,36 @@
                     </div>
                 </div>
             </section>
-        </div>
-    </div>
 
-    <!-- My Profile Modal -->
-    <div id="profileModal" class="modal-overlay hidden">
-        <div class="request-modal profile-modal">
-            <div class="modal-header">
-                <h2><i class="fas fa-user"></i> My Profile</h2>
-                <button class="close-modal" id="closeProfileModal" title="Close">&times;</button>
-            </div>
-            <div class="modal-body">
-                <div class="profile-content">
-                    <!-- Profile Header with Photo -->
-                    <div class="profile-header-section">
-                        <div class="profile-photo-container">
-                            <div class="profile-photo" id="profilePhoto">
-                                <i class="fas fa-user"></i>
-                            </div>
-                            <button class="btn-update-photo" id="updatePhotoBtn" title="Update Photo">
-                                <i class="fas fa-camera"></i>
-                            </button>
-                        </div>
-                        <h3 id="profileName">Loading...</h3>
-                        <p class="profile-role">Student</p>
-                    </div>
-
-                    <!-- Action Buttons -->
-                    <div class="profile-actions">
-                        <button class="btn-profile-action" id="editProfileBtn">
-                            <i class="fas fa-edit"></i> Edit Profile
-                        </button>
-                        <button class="btn-profile-action" id="viewRequestHistoryBtn">
-                            <i class="fas fa-history"></i> View Request History
-                        </button>
-                    </div>
-
-                    <!-- Personal Information Section -->
-                    <div class="profile-info-section">
-                        <div class="section-divider"></div>
-                        <h4 class="section-title">
-                            <i class="fas fa-id-card"></i> Personal Information
-                        </h4>
-                        <div class="info-list">
-                            <div class="info-row">
-                                <span class="info-label">Full Name:</span>
-                                <span class="info-value" id="profileFullName">-</span>
-                            </div>
-                            <div class="info-row">
-                                <span class="info-label">ID Number:</span>
-                                <span class="info-value" id="profileIdNumber">-</span>
-                            </div>
-                            <div class="info-row">
-                                <span class="info-label">Email:</span>
-                                <span class="info-value" id="profileEmail">-</span>
-                            </div>
-                            <div class="info-row">
-                                <span class="info-label">Contact Number:</span>
-                                <span class="info-value" id="profileContact">-</span>
-                            </div>
+            <!-- Profile View -->
+            <section class="main-container hidden" id="profileView">
+                <div class="content-section">
+                    <div class="section-header">
+                        <div class="section-title-wrapper">
+                            <i class="fas fa-user section-icon"></i>
+                            <h2>My Profile</h2>
                         </div>
                     </div>
-
-                    <!-- Academic Information Section -->
-                    <div class="profile-info-section">
-                        <div class="section-divider"></div>
-                        <h4 class="section-title">
-                            <i class="fas fa-graduation-cap"></i> Academic Information
-                        </h4>
-                        <div class="info-list">
-                            <div class="info-row">
-                                <span class="info-label">Department:</span>
-                                <span class="info-value" id="profileDepartment">-</span>
-                            </div>
-                            <div class="info-row">
-                                <span class="info-label">Course:</span>
-                                <span class="info-value" id="profileCourse">-</span>
-                            </div>
-                            <div class="info-row">
-                                <span class="info-label">Year Level:</span>
-                                <span class="info-value" id="profileYearLevel">-</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Document Records Section -->
-                    <div class="profile-info-section">
-                        <div class="section-divider"></div>
-                        <h4 class="section-title">
-                            <i class="fas fa-file-alt"></i> Document Records
-                        </h4>
-                        <div class="records-summary">
-                            <div class="record-stat">
-                                <div class="record-value" id="profileTotalRequests">0</div>
-                                <div class="record-label">Total Requests</div>
-                            </div>
-                            <div class="record-stat">
-                                <div class="record-value" id="profilePendingRequests">0</div>
-                                <div class="record-label">Pending</div>
-                            </div>
-                            <div class="record-stat">
-                                <div class="record-value" id="profileCompletedRequests">0</div>
-                                <div class="record-label">Completed</div>
-                            </div>
-                        </div>
+                    <div id="profileContent">
+                        <!-- Profile content will be rendered here -->
                     </div>
                 </div>
-            </div>
-        </div>
-    </div>
+            </section>
 
-    <!-- Settings Modal -->
-    <div id="settingsModal" class="modal-overlay hidden">
-        <div class="request-modal settings-modal">
-            <div class="modal-header">
-                <h2><i class="fas fa-cog"></i> Settings</h2>
-                <button class="close-modal" id="closeSettingsModal" title="Close">&times;</button>
-            </div>
-            <div class="modal-body">
-                <div class="settings-content">
-                    <div class="settings-section">
-                        <h3><i class="fas fa-user-edit"></i> Account Settings</h3>
-                        <div class="settings-item">
-                            <label>Email Address</label>
-                            <div class="settings-input-group">
-                                <input type="email" id="settingsEmail" class="form-input" />
-                                <button class="btn-secondary" id="updateEmailBtn">
-                                    <i class="fas fa-save"></i> Update
-                                </button>
-                            </div>
-                        </div>
-                        <div class="settings-item">
-                            <label>Contact Number</label>
-                            <div class="settings-input-group">
-                                <input type="tel" id="settingsContact" class="form-input" />
-                                <button class="btn-secondary" id="updateContactBtn">
-                                    <i class="fas fa-save"></i> Update
-                                </button>
-                            </div>
+            <!-- Settings View -->
+            <section class="main-container hidden" id="settingsView">
+                <div class="content-section">
+                    <div class="section-header">
+                        <div class="section-title-wrapper">
+                            <i class="fas fa-cog section-icon"></i>
+                            <h2>Settings</h2>
                         </div>
                     </div>
-
-                    <div class="settings-section">
-                        <h3><i class="fas fa-lock"></i> Password</h3>
-                        <div class="settings-item">
-                            <label>Current Password</label>
-                            <input type="password" id="currentPassword" class="form-input" />
-                        </div>
-                        <div class="settings-item">
-                            <label>New Password</label>
-                            <input type="password" id="newPassword" class="form-input" />
-                        </div>
-                        <div class="settings-item">
-                            <label>Confirm New Password</label>
-                            <input type="password" id="confirmNewPassword" class="form-input" />
-                        </div>
-                        <button class="btn-primary" id="updatePasswordBtn" style="width: 100%; margin-top: 0.5rem;">
-                            <i class="fas fa-key"></i> Update Password
-                        </button>
-                    </div>
-
-                    <div class="settings-section">
-                        <h3><i class="fas fa-bell"></i> Notifications</h3>
-                        <div class="settings-item">
-                            <label class="checkbox-label">
-                                <input type="checkbox" id="emailNotifications" checked />
-                                <span>Email Notifications</span>
-                            </label>
-                        </div>
-                        <div class="settings-item">
-                            <label class="checkbox-label">
-                                <input type="checkbox" id="smsNotifications" />
-                                <span>SMS Notifications</span>
-                            </label>
-                        </div>
-                    </div>
-
-                    <div class="settings-section">
-                        <h3><i class="fas fa-palette"></i> Appearance</h3>
-                        <div class="settings-item">
-                            <label>Theme</label>
-                            <select id="themeSelect" class="form-select">
-                                <option value="light">Light</option>
-                                <option value="dark">Dark</option>
-                                <option value="auto">Auto</option>
-                            </select>
-                        </div>
+                    <div id="settingsContent">
+                        <!-- Settings content will be rendered here -->
                     </div>
                 </div>
-            </div>
+            </section>
         </div>
     </div>
 

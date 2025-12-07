@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { initPool } = require('../config/db');
 const authMiddleware = require('../middleware/auth');
+const { createNotification } = require('../services/notifications');
 
 // GET /:requestId - Get conversation for a request
 router.get('/:requestId', authMiddleware(true), async (req, res) => {
@@ -58,6 +59,29 @@ router.post('/:requestId', authMiddleware(true), async (req, res) => {
        VALUES (?, ?, ?, ?)`,
             [requestId, userId, message, messageIsInternal]
         );
+
+        // Create notification for student if message is from faculty/admin
+        if (userRole === 'faculty' || userRole === 'admin') {
+            // Get student ID from request
+            const [requestRows] = await pool.query(
+                'SELECT student_id FROM requests WHERE id = ?',
+                [requestId]
+            );
+            
+            if (requestRows.length > 0) {
+                const studentId = requestRows[0].student_id;
+                const senderName = req.user.fullName || req.user.name || (userRole === 'faculty' ? 'Faculty' : 'Admin');
+                
+                await createNotification({
+                    userId: studentId,
+                    role: userRole,
+                    type: 'comment',
+                    title: 'New Comment on Your Request',
+                    message: `${senderName} sent a comment: ${message}`,
+                    requestId: requestId
+                });
+            }
+        }
 
         res.status(201).json({ message: 'Message sent successfully' });
     } catch (error) {

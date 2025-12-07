@@ -17,6 +17,10 @@ class StudentPortal {
     this.currentPage = 1;
     this.itemsPerPage = 10;
 
+    // Initialize modals
+    this.profileModal = null;
+    this.settingsModal = null;
+
     window.studentPortal = this;
     this.init();
   }
@@ -52,6 +56,7 @@ class StudentPortal {
       await this.loadDepartmentsFromApi();
       this.loadUserInfo();
       this.setupEventListeners();
+      this.initializeModals();
 
       try {
         console.log('📥 Loading requests...');
@@ -62,8 +67,17 @@ class StudentPortal {
         Utils.showToast('Failed to load requests, but you can still submit new ones', 'warning');
       }
 
-      console.log('⏭️ Skipping notifications for now (will be fixed)');
-      this.notifications = [];
+      // Load notifications
+      try {
+        await this.loadNotifications();
+        // Set up polling for new notifications every 30 seconds
+        setInterval(() => {
+          this.loadNotifications().catch(err => console.error('Failed to refresh notifications:', err));
+        }, 30000);
+      } catch (error) {
+        console.error('Failed to load notifications:', error);
+        this.notifications = [];
+      }
 
       this.updateStats();
       this.renderDashboard();
@@ -75,6 +89,10 @@ class StudentPortal {
       console.error('❌ Failed to initialize StudentPortal:', error);
       Utils.showToast('Failed to initialize portal. Some features may not work.', 'error');
     }
+  }
+
+  initializeModals() {
+    // Modals are no longer used - Profile and Settings are now views
   }
 
   async loadDepartmentsFromApi() {
@@ -507,22 +525,82 @@ class StudentPortal {
 
     if (!filtered.length) {
       container.innerHTML = `
-        <div class="empty-state">
-          <div class="empty-state-icon">📄</div>
-          <h3>No requests found</h3>
+        <div class="table-wrapper">
+          <table class="requests-table">
+            <thead>
+              <tr>
+                <th>Department</th>
+                <th>Type of Document</th>
+                <th>Time and Date</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td colspan="5" style="text-align: center; padding: 2rem;">
+                  <div class="empty-state">
+                    <div class="empty-state-icon">📄</div>
+                    <h3>No requests found</h3>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
       `;
       return;
     }
 
-    // Render history as admin-style request cards for consistent spacing/alignment
-    const cards = filtered
-      .sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt))
-      .map((request) => this.buildRequestRow(request, false))
-      .join('');
+    // Render as table
+    const rows = filtered
+      .sort((a, b) => new Date(b.submittedAt || b.createdAt) - new Date(a.submittedAt || a.createdAt))
+      .map((request) => {
+        const statusClass = Utils.getStatusBadgeClass(request.status);
+        const statusText = Utils.getStatusText(request.status);
+        const statusIcon = this.getStatusIcon(request.status);
+        const dateTime = Utils.formatDate(request.submittedAt || request.createdAt);
+        const department = request.department || this.studentDepartmentName;
+        const documentType = request.documentType || request.documentValue || 'Document';
 
-    // Insert cards directly into the container to match Admin's layout
-    container.innerHTML = cards;
+        return `
+          <tr>
+            <td>${department}</td>
+            <td>${documentType}</td>
+            <td>${dateTime}</td>
+            <td>
+              <span class="status-badge ${statusClass}">
+                <i class="fas ${statusIcon}"></i>
+                ${statusText}
+              </span>
+            </td>
+            <td>
+              <button class="btn-secondary" onclick="studentPortal.viewRequest(${request.id})">
+                <i class="fas fa-eye"></i> View
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+
+    container.innerHTML = `
+      <div class="table-wrapper">
+        <table class="requests-table">
+          <thead>
+            <tr>
+              <th>Department</th>
+              <th>Type of Document</th>
+              <th>Time and Date</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows}
+          </tbody>
+        </table>
+      </div>
+    `;
   }
 
   buildRequestRow(request, compact = false) {
@@ -622,28 +700,7 @@ class StudentPortal {
     if (departmentFilter) departmentFilter.addEventListener('change', () => this.renderHistory());
     if (statusFilter) statusFilter.addEventListener('change', () => this.renderHistory());
 
-    // Profile and Settings from sidebar
-    const sidebarProfileLink = document.getElementById('sidebarProfileLink');
-    if (sidebarProfileLink) {
-      sidebarProfileLink.addEventListener('click', (e) => {
-        e.preventDefault();
-        this.showProfileModal();
-        // Update active state
-        document.querySelectorAll('.sidebar-link').forEach(link => link.classList.remove('active'));
-        sidebarProfileLink.classList.add('active');
-      });
-    }
-
-    const sidebarSettingsLink = document.getElementById('sidebarSettingsLink');
-    if (sidebarSettingsLink) {
-      sidebarSettingsLink.addEventListener('click', (e) => {
-        e.preventDefault();
-        this.showSettingsModal();
-        // Update active state
-        document.querySelectorAll('.sidebar-link').forEach(link => link.classList.remove('active'));
-        sidebarSettingsLink.classList.add('active');
-      });
-    }
+    // Profile and Settings are now handled by switchView via data-view attribute
 
     // Floating button
     const floatingBtn = document.getElementById('floatingNewRequestBtn');
@@ -1038,7 +1095,9 @@ class StudentPortal {
     const views = {
       dashboard: document.getElementById('dashboardView'),
       history: document.getElementById('historyView'),
-      notifications: document.getElementById('notificationsView')
+      notifications: document.getElementById('notificationsView'),
+      profile: document.getElementById('profileView'),
+      settings: document.getElementById('settingsView')
     };
 
     Object.entries(views).forEach(([key, el]) => {
@@ -1049,6 +1108,13 @@ class StudentPortal {
         el.classList.add('hidden');
       }
     });
+
+    // Render view-specific content
+    if (view === 'profile') {
+      this.renderProfile();
+    } else if (view === 'settings') {
+      this.renderSettings();
+    }
   }
 
   handleFileSelect(files) {
@@ -1353,20 +1419,45 @@ class StudentPortal {
   }
 
   async loadNotifications() {
-    console.log('⏭️ Notifications disabled temporarily');
-    this.notifications = [];
-    return [];
+    try {
+      const notifications = await Utils.apiRequest('/notifications', {
+        timeout: 10000
+      });
+      
+      // Filter notifications for current user
+      this.notifications = notifications.filter(notif => {
+        // Include notifications for this student
+        const userId = notif.user_id || notif.userId;
+        return Number(userId) === Number(this.currentUser.id);
+      });
+
+      // Sort by date (newest first)
+      this.notifications.sort((a, b) => {
+        const dateA = new Date(a.created_at || a.createdAt || 0);
+        const dateB = new Date(b.created_at || b.createdAt || 0);
+        return dateB - dateA;
+      });
+      
+      this.renderNotifications();
+      return this.notifications;
+    } catch (error) {
+      console.error('Failed to load notifications:', error);
+      this.notifications = [];
+      return [];
+    }
   }
 
   async markAllNotificationsRead() {
-    const unread = this.notifications.filter((notif) => !notif.read);
+    const unread = this.notifications.filter((notif) => !(notif.read_flag || notif.read || notif.read_at));
     for (const notification of unread) {
       try {
         await Utils.apiRequest(`/notifications/${notification.id}`, {
           method: 'PATCH',
-          body: { read: true }
+          body: { read: true, read_flag: true }
         });
         notification.read = true;
+        notification.read_flag = true;
+        notification.read_at = new Date().toISOString();
       } catch (error) {
         console.error(`Failed to mark notification ${notification.id} as read:`, error);
       }
@@ -1393,30 +1484,76 @@ class StudentPortal {
     const fullList = document.getElementById('notificationsFullList');
     const countBadge = document.getElementById('notificationCount');
 
-    const unreadCount = this.notifications.filter((n) => !n.read).length;
+    const unreadCount = this.notifications.filter((n) => !(n.read_flag || n.read || n.read_at)).length;
     if (countBadge) {
       countBadge.textContent = unreadCount;
       countBadge.classList.toggle('hidden', unreadCount === 0);
     }
 
-    const buildNotificationItem = (notif) => `
-      <div class="notification-item ${notif.read ? '' : 'unread'}">
-        <h4>${notif.title}</h4>
-        <p>${notif.message}</p>
-        <time>${Utils.formatRelativeTime(notif.createdAt)}</time>
-      </div>
-    `;
+    const buildNotificationItem = (notif, isDropdown = false) => {
+      const isRead = notif.read_flag || notif.read || notif.read_at;
+      const title = notif.title || notif.subject || 'Notification';
+      const message = notif.message || notif.content || notif.body || '';
+      const createdAt = notif.created_at || notif.createdAt || notif.timestamp;
+      const type = notif.type || 'general';
+      const requestId = notif.request_id || notif.requestId;
+      
+      // Handle feedback/comments from faculty/admin
+      let notificationContent = message;
+      if (type === 'comment' || type === 'feedback' || message.includes('sent a comment')) {
+        // Message already formatted by server
+        notificationContent = message;
+      }
+
+      const clickHandler = isDropdown ? '' : `onclick="studentPortal.handleNotificationClick(${notif.id}, ${requestId || 'null'})"`;
+      
+      return `
+        <div class="notification-item ${isRead ? '' : 'unread'}" ${clickHandler} style="cursor: ${isDropdown ? 'default' : 'pointer'};">
+          <div class="notification-header">
+            <h4>${title}</h4>
+            ${!isRead ? '<span class="notification-dot"></span>' : ''}
+          </div>
+          <p>${notificationContent}</p>
+          <time>${Utils.formatRelativeTime(createdAt)}</time>
+        </div>
+      `;
+    };
 
     if (dropdownList) {
       dropdownList.innerHTML = this.notifications.length
-        ? this.notifications.slice(0, 5).map(buildNotificationItem).join('')
-        : '<p style="text-align:center; opacity:0.6;">No notifications</p>';
+        ? this.notifications.slice(0, 5).map(n => buildNotificationItem(n, true)).join('')
+        : '<p style="text-align:center; opacity:0.6; padding: 1rem;">No notifications</p>';
     }
 
     if (fullList) {
       fullList.innerHTML = this.notifications.length
-        ? `<div class="notification-center">${this.notifications.map(buildNotificationItem).join('')}</div>`
-        : '<div class="empty-state"><div class="empty-state-icon">🔔</div><h3>No notifications yet</h3></div>';
+        ? `<div class="notification-center">${this.notifications.map(n => buildNotificationItem(n, false)).join('')}</div>`
+        : '<div class="empty-state"><div class="empty-state-icon">🔔</div><h3>No notifications yet</h3><p>You will receive notifications when faculty or admin send feedback on your requests.</p></div>';
+    }
+  }
+
+  async handleNotificationClick(notificationId, requestId) {
+    // Mark as read
+    try {
+      await Utils.apiRequest(`/notifications/${notificationId}`, {
+        method: 'PATCH',
+        body: { read: true, read_flag: true }
+      });
+      
+      const notification = this.notifications.find(n => n.id === notificationId);
+      if (notification) {
+        notification.read = true;
+        notification.read_flag = true;
+        notification.read_at = new Date().toISOString();
+      }
+      this.renderNotifications();
+
+      // If notification is related to a request, open it
+      if (requestId && requestId !== 'null') {
+        this.viewRequest(Number(requestId));
+      }
+    } catch (error) {
+      console.error('Failed to mark notification as read:', error);
     }
   }
 
@@ -1703,11 +1840,10 @@ class StudentPortal {
     }
   }
 
-  showProfileModal() {
-    const modal = document.getElementById('profileModal');
-    if (!modal) return;
+  renderProfile() {
+    const container = document.getElementById('profileContent');
+    if (!container) return;
 
-    // Helper function to format value or show "Not Provided"
     const formatValue = (value) => {
       if (!value || value === '-' || (typeof value === 'string' && value.trim() === '')) {
         return 'Not Provided';
@@ -1715,154 +1851,337 @@ class StudentPortal {
       return value;
     };
 
-    // Populate profile data
     const displayName = this.currentUser.fullName || this.currentUser.name || 'Student';
-    document.getElementById('profileName').textContent = displayName;
-    document.getElementById('profileFullName').textContent = formatValue(displayName);
-    document.getElementById('profileIdNumber').textContent = formatValue(this.currentUser.idNumber);
-    document.getElementById('profileEmail').textContent = formatValue(this.currentUser.email);
-    document.getElementById('profileContact').textContent = formatValue(this.currentUser.contactNumber);
-    document.getElementById('profileDepartment').textContent = formatValue(this.studentDepartmentName);
-    document.getElementById('profileCourse').textContent = formatValue(this.currentUser.course);
-    document.getElementById('profileYearLevel').textContent = formatValue(this.currentUser.yearLevel);
+    const deptName = this.studentDepartmentName;
+    const courseYear = `${formatValue(this.currentUser.course)} • ${formatValue(this.currentUser.yearLevel)}`;
 
-    // Update records summary
+    // Calculate stats
     const total = this.requests.length;
     const pending = this.requests.filter((r) => ['pending', 'pending_faculty', 'in_progress'].includes(r.status)).length;
-    const completed = this.requests.filter((r) => r.status === 'completed').length;
-    document.getElementById('profileTotalRequests').textContent = total;
-    document.getElementById('profilePendingRequests').textContent = pending;
-    document.getElementById('profileCompletedRequests').textContent = completed;
+    const approved = this.requests.filter((r) => r.status === 'approved' || r.status === 'completed').length;
+    const rejected = this.requests.filter((r) => r.status === 'declined').length;
 
-    // Show modal
-    modal.classList.remove('hidden');
-    modal.classList.add('active');
-    document.body.style.overflow = 'hidden';
+    container.innerHTML = `
+      <div class="profile-view-content">
+        <div class="profile-header-card">
+          <div class="profile-photo-wrapper">
+            <div class="profile-photo">
+              <i class="fas fa-user"></i>
+            </div>
+          </div>
+          <div class="profile-header-info">
+            <h3>${displayName}</h3>
+            <p class="profile-student-number">${formatValue(this.currentUser.idNumber)}</p>
+            <p class="profile-course-year">${courseYear}</p>
+            <p class="profile-email">${formatValue(this.currentUser.email)}</p>
+          </div>
+          <div class="profile-header-actions">
+            <button class="btn-edit-profile" onclick="studentPortal.switchView('settings')">
+              <i class="fas fa-edit"></i> Edit Profile
+            </button>
+            <button class="btn-settings-profile" onclick="studentPortal.switchView('settings')">
+              <i class="fas fa-cog"></i> Settings
+            </button>
+          </div>
+        </div>
 
-    // Ensure modal is displayed
-    modal.style.display = 'flex';
+        <div class="profile-section-card">
+          <h4 class="profile-section-title">
+            <i class="fas fa-id-card"></i> Personal Information
+          </h4>
+          <div class="profile-info-grid">
+            <div class="profile-info-column">
+              <div class="profile-info-item">
+                <span class="profile-info-label">Full Name</span>
+                <span class="profile-info-value">${formatValue(displayName)}</span>
+              </div>
+              <div class="profile-info-item">
+                <span class="profile-info-label">ID Number</span>
+                <span class="profile-info-value">${formatValue(this.currentUser.idNumber)}</span>
+              </div>
+              <div class="profile-info-item">
+                <span class="profile-info-label">Email</span>
+                <span class="profile-info-value">${formatValue(this.currentUser.email)}</span>
+              </div>
+              <div class="profile-info-item">
+                <span class="profile-info-label">Contact Number</span>
+                <span class="profile-info-value">${formatValue(this.currentUser.contactNumber)}</span>
+              </div>
+            </div>
+            <div class="profile-info-column">
+              <div class="profile-info-item">
+                <span class="profile-info-label">Birthdate</span>
+                <span class="profile-info-value">${formatValue(this.currentUser.birthdate)}</span>
+              </div>
+              <div class="profile-info-item">
+                <span class="profile-info-label">Address</span>
+                <span class="profile-info-value">${formatValue(this.currentUser.address)}</span>
+              </div>
+              <div class="profile-info-item">
+                <span class="profile-info-label">Gender</span>
+                <span class="profile-info-value">${formatValue(this.currentUser.gender)}</span>
+              </div>
+            </div>
+          </div>
+        </div>
 
-    // Close button
-    const closeBtn = document.getElementById('closeProfileModal');
-    if (closeBtn) {
-      closeBtn.onclick = () => this.hideProfileModal();
-    }
+        <div class="profile-section-card">
+          <h4 class="profile-section-title">
+            <i class="fas fa-graduation-cap"></i> Academic Information
+          </h4>
+          <div class="profile-academic-grid">
+            <div class="profile-academic-item">
+              <span class="profile-academic-label">Department</span>
+              <span class="profile-academic-value">${formatValue(deptName)}</span>
+            </div>
+            <div class="profile-academic-item">
+              <span class="profile-academic-label">Program</span>
+              <span class="profile-academic-value">${formatValue(this.currentUser.course)}</span>
+            </div>
+            <div class="profile-academic-item">
+              <span class="profile-academic-label">Year Level</span>
+              <span class="profile-academic-value">${formatValue(this.currentUser.yearLevel)}</span>
+            </div>
+            <div class="profile-academic-item">
+              <span class="profile-academic-label">Status</span>
+              <span class="profile-academic-value">${formatValue(this.currentUser.status || 'Active')}</span>
+            </div>
+            <div class="profile-academic-item">
+              <span class="profile-academic-label">Advisor</span>
+              <span class="profile-academic-value">${formatValue(this.currentUser.advisor)}</span>
+            </div>
+            <div class="profile-academic-item">
+              <span class="profile-academic-label">Academic Standing</span>
+              <span class="profile-academic-value">${formatValue(this.currentUser.academicStanding || 'Good Standing')}</span>
+            </div>
+          </div>
+        </div>
 
-    // Edit Profile button
-    const editProfileBtn = document.getElementById('editProfileBtn');
-    if (editProfileBtn) {
-      editProfileBtn.onclick = () => {
-        this.hideProfileModal();
-        this.showSettingsModal();
-      };
-    }
-
-    // Update Photo button
-    const updatePhotoBtn = document.getElementById('updatePhotoBtn');
-    if (updatePhotoBtn) {
-      updatePhotoBtn.onclick = () => {
-        Utils.showToast('Photo upload feature coming soon!', 'info');
-      };
-    }
-
-    // View Request History button
-    const viewRequestHistoryBtn = document.getElementById('viewRequestHistoryBtn');
-    if (viewRequestHistoryBtn) {
-      viewRequestHistoryBtn.onclick = () => {
-        this.hideProfileModal();
-        this.switchView('history');
-      };
-    }
-
-    // Close on overlay click
-    modal.onclick = (e) => {
-      if (e.target === modal) this.hideProfileModal();
-    };
+        <div class="profile-section-card">
+          <h4 class="profile-section-title">
+            <i class="fas fa-file-alt"></i> Document Records
+          </h4>
+          <div class="profile-records-grid">
+            <div class="profile-record-card">
+              <div class="profile-record-value">${total}</div>
+              <div class="profile-record-label">Total Requests</div>
+            </div>
+            <div class="profile-record-card">
+              <div class="profile-record-value">${pending}</div>
+              <div class="profile-record-label">Pending</div>
+            </div>
+            <div class="profile-record-card">
+              <div class="profile-record-value">${approved}</div>
+              <div class="profile-record-label">Approved</div>
+            </div>
+            <div class="profile-record-card">
+              <div class="profile-record-value">${rejected}</div>
+              <div class="profile-record-label">Rejected</div>
+            </div>
+          </div>
+          <div class="profile-records-actions">
+            <button class="btn-view-history" onclick="studentPortal.switchView('history')">
+              <i class="fas fa-history"></i> View Document History
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
   }
 
-  hideProfileModal() {
-    const modal = document.getElementById('profileModal');
-    if (modal) {
-      modal.classList.add('hidden');
-      modal.classList.remove('active');
-      modal.style.display = 'none';
-    }
-    document.body.style.overflow = '';
+  renderSettings() {
+    const container = document.getElementById('settingsContent');
+    if (!container) return;
+
+    container.innerHTML = `
+      <div class="settings-view-content">
+        <div class="settings-tabs">
+          <button class="settings-tab active" data-tab="account" onclick="studentPortal.switchSettingsTab('account')">
+            <i class="fas fa-user"></i> Account Info
+          </button>
+          <button class="settings-tab" data-tab="security" onclick="studentPortal.switchSettingsTab('security')">
+            <i class="fas fa-lock"></i> Security
+          </button>
+          <button class="settings-tab" data-tab="notifications" onclick="studentPortal.switchSettingsTab('notifications')">
+            <i class="fas fa-bell"></i> Notifications
+          </button>
+          <button class="settings-tab" data-tab="appearance" onclick="studentPortal.switchSettingsTab('appearance')">
+            <i class="fas fa-palette"></i> Appearance
+          </button>
+        </div>
+
+        <div class="settings-tab-content">
+          <div class="settings-tab-panel active" id="settingsTabAccount">
+            <div class="settings-section">
+              <h3><i class="fas fa-envelope"></i> Email Address</h3>
+              <div class="settings-input-group">
+                <input type="email" id="settingsEmail" class="settings-input" value="${this.currentUser.email || ''}" />
+              </div>
+            </div>
+            <div class="settings-section">
+              <h3><i class="fas fa-phone"></i> Contact Number</h3>
+              <div class="settings-input-group">
+                <input type="tel" id="settingsContact" class="settings-input" value="${this.currentUser.contactNumber || ''}" />
+              </div>
+            </div>
+          </div>
+
+          <div class="settings-tab-panel" id="settingsTabSecurity">
+            <div class="settings-section">
+              <h3><i class="fas fa-key"></i> Change Password</h3>
+              <div class="settings-password-group">
+                <label>Current Password</label>
+                <div class="settings-input-group">
+                  <input type="password" id="currentPassword" class="settings-input" placeholder="Enter current password" />
+                  <button class="btn-toggle-password" onclick="studentPortal.togglePasswordVisibility('currentPassword', this)">
+                    <i class="fas fa-eye"></i>
+                  </button>
+                </div>
+              </div>
+              <div class="settings-password-group">
+                <label>New Password</label>
+                <div class="settings-input-group">
+                  <input type="password" id="newPassword" class="settings-input" placeholder="Enter new password" />
+                  <button class="btn-toggle-password" onclick="studentPortal.togglePasswordVisibility('newPassword', this)">
+                    <i class="fas fa-eye"></i>
+                  </button>
+                </div>
+              </div>
+              <div class="settings-password-group">
+                <label>Confirm New Password</label>
+                <div class="settings-input-group">
+                  <input type="password" id="confirmNewPassword" class="settings-input" placeholder="Confirm new password" />
+                  <button class="btn-toggle-password" onclick="studentPortal.togglePasswordVisibility('confirmNewPassword', this)">
+                    <i class="fas fa-eye"></i>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="settings-tab-panel" id="settingsTabNotifications">
+            <div class="settings-section">
+              <h3><i class="fas fa-bell"></i> Notification Preferences</h3>
+              <div class="settings-toggle-group">
+                <label class="settings-toggle-label">
+                  <span>Email Notifications</span>
+                  <input type="checkbox" id="emailNotifications" class="settings-toggle" ${this.currentUser.emailNotifications !== false ? 'checked' : ''} />
+                  <span class="settings-toggle-slider"></span>
+                </label>
+                <small>Receive notifications via email</small>
+              </div>
+              <div class="settings-toggle-group">
+                <label class="settings-toggle-label">
+                  <span>SMS Notifications</span>
+                  <input type="checkbox" id="smsNotifications" class="settings-toggle" ${this.currentUser.smsNotifications === true ? 'checked' : ''} />
+                  <span class="settings-toggle-slider"></span>
+                </label>
+                <small>Receive notifications via SMS</small>
+              </div>
+            </div>
+          </div>
+
+          <div class="settings-tab-panel" id="settingsTabAppearance">
+            <div class="settings-section">
+              <h3><i class="fas fa-moon"></i> Theme</h3>
+              <div class="settings-select-group">
+                <label>Theme</label>
+                <select id="themeSelect" class="settings-select">
+                  <option value="light" ${(this.currentUser.theme || 'light') === 'light' ? 'selected' : ''}>Light</option>
+                  <option value="dark" ${this.currentUser.theme === 'dark' ? 'selected' : ''}>Dark</option>
+                  <option value="auto" ${this.currentUser.theme === 'auto' ? 'selected' : ''}>Auto</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-save-footer">
+          <button class="btn-save-changes" onclick="studentPortal.saveSettings()">
+            <i class="fas fa-save"></i> Save Changes
+          </button>
+        </div>
+      </div>
+    `;
   }
 
-  showSettingsModal() {
-    const modal = document.getElementById('settingsModal');
-    if (!modal) return;
-
-    // Populate current settings
-    document.getElementById('settingsEmail').value = this.currentUser.email || '';
-    document.getElementById('settingsContact').value = this.currentUser.contactNumber || '';
-    document.getElementById('emailNotifications').checked = this.currentUser.emailNotifications !== false;
-    document.getElementById('smsNotifications').checked = this.currentUser.smsNotifications === true;
-
-    // Show modal
-    modal.classList.remove('hidden');
-    modal.classList.add('active');
-    document.body.style.overflow = 'hidden';
-
-    // Ensure modal is displayed
-    modal.style.display = 'flex';
-
-    // Close button
-    const closeBtn = document.getElementById('closeSettingsModal');
-    if (closeBtn) {
-      closeBtn.onclick = () => this.hideSettingsModal();
-    }
-
-    // Update email button
-    const updateEmailBtn = document.getElementById('updateEmailBtn');
-    if (updateEmailBtn) {
-      updateEmailBtn.onclick = () => this.updateEmail();
-    }
-
-    // Update contact button
-    const updateContactBtn = document.getElementById('updateContactBtn');
-    if (updateContactBtn) {
-      updateContactBtn.onclick = () => this.updateContact();
-    }
-
-    // Update password button
-    const updatePasswordBtn = document.getElementById('updatePasswordBtn');
-    if (updatePasswordBtn) {
-      updatePasswordBtn.onclick = () => this.updatePassword();
-    }
-
-    // Notification checkboxes
-    const emailNotif = document.getElementById('emailNotifications');
-    const smsNotif = document.getElementById('smsNotifications');
-    if (emailNotif) {
-      emailNotif.onchange = () => this.saveNotificationSettings();
-    }
-    if (smsNotif) {
-      smsNotif.onchange = () => this.saveNotificationSettings();
-    }
-
-    // Theme select
-    const themeSelect = document.getElementById('themeSelect');
-    if (themeSelect) {
-      themeSelect.value = this.currentUser.theme || 'light';
-      themeSelect.onchange = () => this.updateTheme();
-    }
-
-    // Close on overlay click
-    modal.onclick = (e) => {
-      if (e.target === modal) this.hideSettingsModal();
-    };
+  switchSettingsTab(tabName) {
+    document.querySelectorAll('.settings-tab').forEach(tab => {
+      tab.classList.toggle('active', tab.dataset.tab === tabName);
+    });
+    document.querySelectorAll('.settings-tab-panel').forEach(panel => {
+      panel.classList.toggle('active', panel.id === `settingsTab${tabName.charAt(0).toUpperCase() + tabName.slice(1)}`);
+    });
   }
 
-  hideSettingsModal() {
-    const modal = document.getElementById('settingsModal');
-    if (modal) {
-      modal.classList.add('hidden');
-      modal.classList.remove('active');
-      modal.style.display = 'none';
+  togglePasswordVisibility(inputId, button) {
+    const input = document.getElementById(inputId);
+    const icon = button.querySelector('i');
+    if (input.type === 'password') {
+      input.type = 'text';
+      icon.classList.remove('fa-eye');
+      icon.classList.add('fa-eye-slash');
+    } else {
+      input.type = 'password';
+      icon.classList.remove('fa-eye-slash');
+      icon.classList.add('fa-eye');
     }
-    document.body.style.overflow = '';
+  }
+
+  async saveSettings() {
+    const email = document.getElementById('settingsEmail').value.trim();
+    const contact = document.getElementById('settingsContact').value.trim();
+    const currentPassword = document.getElementById('currentPassword').value;
+    const newPassword = document.getElementById('newPassword').value;
+    const confirmPassword = document.getElementById('confirmNewPassword').value;
+    const emailNotifications = document.getElementById('emailNotifications').checked;
+    const smsNotifications = document.getElementById('smsNotifications').checked;
+    const theme = document.getElementById('themeSelect').value;
+
+    try {
+      const updates = {};
+      if (email && email !== this.currentUser.email) updates.email = email;
+      if (contact !== (this.currentUser.contactNumber || '')) updates.contactNumber = contact;
+      updates.emailNotifications = emailNotifications;
+      updates.smsNotifications = smsNotifications;
+      updates.theme = theme;
+
+      if (newPassword) {
+        if (!currentPassword) {
+          Utils.showToast('Please enter your current password', 'error');
+          return;
+        }
+        if (newPassword !== confirmPassword) {
+          Utils.showToast('New passwords do not match', 'error');
+          return;
+        }
+        if (newPassword.length < 3) {
+          Utils.showToast('Password must be at least 3 characters', 'error');
+          return;
+        }
+        await Utils.apiRequest('/auth/update-password', {
+          method: 'PUT',
+          body: { currentPassword, newPassword }
+        });
+        document.getElementById('currentPassword').value = '';
+        document.getElementById('newPassword').value = '';
+        document.getElementById('confirmNewPassword').value = '';
+      }
+
+      if (Object.keys(updates).length > 0) {
+        await Utils.apiRequest('/auth/update-profile', {
+          method: 'PUT',
+          body: updates
+        });
+        Object.assign(this.currentUser, updates);
+        localStorage.setItem('currentUser', JSON.stringify(this.currentUser));
+      }
+
+      Utils.showToast('Settings saved successfully!', 'success');
+    } catch (error) {
+      console.error('Save settings error:', error);
+      Utils.showToast(error.message || 'Failed to save settings', 'error');
+    }
   }
 
   async updateEmail() {

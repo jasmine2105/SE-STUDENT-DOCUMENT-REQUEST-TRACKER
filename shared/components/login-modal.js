@@ -10,7 +10,7 @@ class LoginModal {
     await this.loadDepartments();
     this.createModal();
     this.attachEventListeners();
-    this.toggleView('login');
+    // Note: toggleView is not needed here since we have separate modals for login and signup
   }
 
   async loadDepartments() {
@@ -264,10 +264,31 @@ class LoginModal {
 
   attachEventListeners() {
     const loginForm = document.getElementById('loginForm');
+    if (!loginForm) {
+      console.error('❌ Login form not found!');
+      return;
+    }
+    
     loginForm.addEventListener('submit', (event) => {
       event.preventDefault();
+      console.log('📝 Login form submitted');
       this.handleLogin();
     });
+    
+    // Also add click handler to login button as backup
+    const loginBtn = document.getElementById('loginBtn');
+    if (loginBtn) {
+      loginBtn.addEventListener('click', (event) => {
+        event.preventDefault();
+        console.log('🔔 Login button clicked');
+        const form = document.getElementById('loginForm');
+        if (form) {
+          form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+        } else {
+          this.handleLogin();
+        }
+      });
+    }
 
     const signupForm = document.getElementById('signupForm');
     if (signupForm) {
@@ -879,13 +900,14 @@ class LoginModal {
     console.log('🔄 Toggling view:', view, { isSignup: this.isSignup });
     const toggleLink = document.getElementById('toggleSignup');
 
+    // Check if elements exist before accessing them (for separate modal structure)
     if (this.isSignup) {
-      loginForm.classList.add('hidden');
-      signupForm.classList.remove('hidden');
-      title.textContent = 'Create your account';
-      subtitle.textContent = 'Sign up with your ID number';
-      toggleHint.textContent = 'Already have an account?';
-      toggleLink.textContent = 'Sign in';
+      if (loginForm) loginForm.classList.add('hidden');
+      if (signupForm) signupForm.classList.remove('hidden');
+      if (title) title.textContent = 'Create your account';
+      if (subtitle) subtitle.textContent = 'Sign up with your ID number';
+      if (toggleHint) toggleHint.textContent = 'Already have an account?';
+      if (toggleLink) toggleLink.textContent = 'Sign in';
       // Ensure any prefilled ID is processed so the Create Account button
       // becomes enabled immediately if the ID is valid. Use a timeout to
       // allow the DOM to finish updating before running the handler.
@@ -898,21 +920,34 @@ class LoginModal {
         }, 200);
       }, 0);
     } else {
-      signupForm.classList.add('hidden');
-      loginForm.classList.remove('hidden');
-      title.textContent = 'Welcome back';
-      subtitle.textContent = 'Sign in to your account';
-      toggleHint.textContent = "Don't have an account?";
-      toggleLink.textContent = 'Sign up';
+      if (signupForm) signupForm.classList.add('hidden');
+      if (loginForm) loginForm.classList.remove('hidden');
+      if (title) title.textContent = 'Welcome back';
+      if (subtitle) subtitle.textContent = 'Sign in to your account';
+      if (toggleHint) toggleHint.textContent = "Don't have an account?";
+      if (toggleLink) toggleLink.textContent = 'Sign up';
     }
   }
 
   async handleLogin() {
-    const idNumber = document.getElementById('idNumber').value.trim();
-    const password = document.getElementById('password').value;
+    console.log('🚀 handleLogin() called');
+    
+    const idNumberInput = document.getElementById('idNumber');
+    const passwordInput = document.getElementById('password');
     const loginBtn = document.getElementById('loginBtn');
     const idError = document.getElementById('idNumberError');
     const passwordError = document.getElementById('passwordError');
+
+    if (!idNumberInput || !passwordInput) {
+      console.error('❌ Login form inputs not found!');
+      Utils.showToast('Login form error. Please refresh the page.', 'error');
+      return;
+    }
+
+    const idNumber = idNumberInput.value.trim();
+    const password = passwordInput.value;
+
+    console.log('📝 Form values:', { idNumber: idNumber ? '***' : 'empty', hasPassword: !!password });
 
     idError.textContent = '';
     passwordError.textContent = '';
@@ -920,11 +955,13 @@ class LoginModal {
     passwordError.classList.remove('show');
 
     if (!idNumber) {
+      console.warn('⚠️ ID number is empty');
       idError.textContent = 'ID number is required';
       idError.classList.add('show');
       return;
     }
     if (!password) {
+      console.warn('⚠️ Password is empty');
       passwordError.textContent = 'Password is required';
       passwordError.classList.add('show');
       return;
@@ -934,35 +971,113 @@ class LoginModal {
     loginBtn.textContent = 'Signing in...';
 
     try {
+      console.log('🔐 Attempting login for ID:', idNumber);
+      
       const response = await Utils.apiRequest('/auth/login', {
         method: 'POST',
         body: { idNumber, password }
       });
 
-      const { user, token } = response;
-      if (!user || !token) throw new Error('Invalid response from server');
+      console.log('📥 Login response received:', response);
 
-      // Store user data and token
+      if (!response) {
+        throw new Error('No response from server');
+      }
+
+      const { user, token } = response;
+      
+      if (!user) {
+        console.error('❌ No user in response:', response);
+        throw new Error('Invalid response: missing user data');
+      }
+      
+      if (!token) {
+        console.error('❌ No token in response:', response);
+        throw new Error('Invalid response: missing authentication token');
+      }
+
+      console.log('✅ Login successful, user role:', user.role);
+      console.log('✅ User data:', user);
+      console.log('✅ Token received:', token ? 'Yes' : 'No');
+
+      // Store user data and token FIRST
       Utils.setCurrentUser(user, token);
+      
+      // Small delay to ensure localStorage is written (though it's synchronous)
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // Verify storage immediately
+      const storedUser = Utils.getCurrentUser();
+      const storedToken = Utils.getAuthToken();
+      console.log('✅ Verification - Stored user:', storedUser ? 'Yes' : 'No');
+      console.log('✅ Verification - Stored token:', storedToken ? 'Yes' : 'No');
+      console.log('✅ Stored user role:', storedUser?.role);
+      
+      if (!storedUser || !storedToken) {
+        console.error('❌ Failed to store authentication data');
+        throw new Error('Failed to store authentication data');
+      }
+
       Utils.showToast(`Welcome, ${user.fullName || user.name || 'User'}!`, 'success');
 
+      // Hide modal immediately
+      this.hide();
+      
+      // Auto-redirect based on user role from database
+      // Use absolute path from root to ensure it works
+      const redirectMap = {
+        student: '/STUDENT/views/student-portal.html',
+        faculty: '/FACULTY/views/faculty-portal.html',
+        admin: '/ADMIN/views/admin-portal.html'
+      };
+      
+      const redirectPath = redirectMap[user.role] || '/index.html';
+      const fullUrl = window.location.origin + redirectPath;
+      
+      console.log('🔄 Redirecting to:', redirectPath);
+      console.log('🔄 Full URL:', fullUrl);
+      console.log('🔄 Current URL:', window.location.href);
+      
+      // Use a small delay to ensure toast is shown, then redirect
       setTimeout(() => {
-        this.hide();
-        
-        // Auto-redirect based on user role from database
-        const redirectMap = {
-          student: '/STUDENT/views/student-portal.html',
-          faculty: '/FACULTY/views/faculty-portal.html',
-          admin: '/ADMIN/views/admin-portal.html'
-        };
-        
-        window.location.href = redirectMap[user.role] || '/';
-      }, 500);
+        // Use window.location.replace to prevent back button issues
+        window.location.replace(redirectPath);
+      }, 300);
     } catch (error) {
-      console.error('Login failed:', error);
-      Utils.showToast('Login failed. Please check your credentials.', 'error');
-      passwordError.textContent = 'Invalid credentials.';
+      console.error('❌ Login failed:', error);
+      console.error('❌ Error details:', {
+        message: error.message,
+        name: error.name,
+        stack: error.stack
+      });
+      
+      // Parse error message if it's JSON
+      let errorMessage = 'Login failed. Please check your credentials.';
+      try {
+        const parsed = JSON.parse(error.message);
+        if (parsed && parsed.message) {
+          errorMessage = parsed.message;
+        } else if (parsed && parsed.error) {
+          errorMessage = parsed.error;
+        }
+      } catch (e) {
+        // Not JSON, use raw message
+        if (error.message) {
+          errorMessage = error.message;
+        }
+      }
+      
+      // Show user-friendly error
+      Utils.showToast(errorMessage, 'error');
+      passwordError.textContent = errorMessage;
       passwordError.classList.add('show');
+      
+      // Also log troubleshooting info
+      console.error('💡 TROUBLESHOOTING:');
+      console.error('   1. Check if server is running: npm start');
+      console.error('   2. Verify ID number and password are correct');
+      console.error('   3. Check browser console for network errors');
+      console.error('   4. Verify database connection');
     } finally {
       loginBtn.disabled = false;
       loginBtn.textContent = 'Sign In';
