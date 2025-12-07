@@ -282,6 +282,7 @@ router.post('/', authMiddleware(), async (req, res) => {
 
   console.log('📨 Request body received:', {
     departmentId,
+    departmentIdType: typeof departmentId,
     documentValue,
     documentType,
     quantity,
@@ -290,6 +291,7 @@ router.post('/', authMiddleware(), async (req, res) => {
 
   const departmentNumeric = parseInt(departmentId, 10);
   if (Number.isNaN(departmentNumeric) || !documentValue) {
+    console.error('❌ Invalid department ID:', departmentId, 'parsed as:', departmentNumeric);
     return res.status(400).json({ message: 'Department and document type required' });
   }
 
@@ -318,6 +320,17 @@ router.post('/', authMiddleware(), async (req, res) => {
     // Get connection directly
     conn = await getConnection();
     console.log('✅ Database connection established');
+    
+    // Verify the department exists and log it
+    console.log('🔍 Verifying department ID:', departmentNumeric);
+    const [deptRows] = await conn.query('SELECT id, code, name FROM departments WHERE id = ?', [departmentNumeric]);
+    if (deptRows.length === 0) {
+      clearTimeout(requestTimeout);
+      conn.release();
+      console.error('❌ Department ID not found in database:', departmentNumeric);
+      return res.status(400).json({ message: 'Invalid department ID' });
+    }
+    console.log('✅ Verified department:', { id: deptRows[0].id, code: deptRows[0].code, name: deptRows[0].name });
     
     console.log('🔍 Querying student info...');
     const [studentRows] = await conn.query('SELECT full_name, id_number FROM users WHERE id = ?', [req.user.id]);

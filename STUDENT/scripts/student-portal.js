@@ -1220,12 +1220,14 @@ class StudentPortal {
       }
     }
 
-    const formData = new FormData(form);
-    const departmentCode = formData.get('department');
+    // Get department code directly from the select element to ensure accuracy
+    const departmentSelect = document.getElementById('department');
+    const departmentCode = departmentSelect ? departmentSelect.value : formData.get('department');
     const documentValue = formData.get('documentType');
 
-    console.log('📝 Form submission - Department Code:', departmentCode);
-    console.log('📝 Available departments:', this.departments);
+    console.log('📝 Form submission - Department Code from select:', departmentCode);
+    console.log('📝 Available departments count:', this.departments.length);
+    console.log('📝 Available departments:', this.departments.map(d => ({ code: d.code, id: d.id, name: d.name })));
     console.log('📝 Document Value:', documentValue);
 
     if (!departmentCode || !documentValue) {
@@ -1237,63 +1239,77 @@ class StudentPortal {
     const selectedOption = documentSelect?.options[documentSelect.selectedIndex];
     const requiresFaculty = selectedOption ? selectedOption.getAttribute('data-requires-faculty') === 'true' : true;
 
-    // Find department by code (case-insensitive)
-    let department = this.departments.find(dept => {
-      const deptCode = (dept.code || '').toString().toUpperCase();
-      return deptCode === departmentCode.toUpperCase();
-    });
-    
-    if (!department) {
-      // Try finding by name if code doesn't match
-      department = this.departments.find(dept =>
-        dept.name && dept.name.toLowerCase().includes(departmentCode.toLowerCase())
-      );
-    }
-
-    // If still not found, try to load departments again and retry
-    if (!department && this.departments.length === 0) {
-      console.warn('Departments array is empty, attempting to reload...');
+    // Ensure departments are loaded
+    if (this.departments.length === 0) {
+      console.warn('⚠️ Departments array is empty, loading now...');
       try {
         await this.loadDepartmentsFromApi();
-        department = this.departments.find(dept => {
-          const deptCode = (dept.code || '').toString().toUpperCase();
-          return deptCode === departmentCode.toUpperCase();
-        });
+        console.log('✅ Departments loaded, count:', this.departments.length);
       } catch (error) {
-        console.error('Failed to reload departments:', error);
+        console.error('❌ Failed to load departments:', error);
+        Utils.showToast('Failed to load departments. Please refresh the page and try again.', 'error');
+        return;
       }
     }
 
-    // If still not found, try to fetch department directly from API
+    // Find department by code (case-insensitive, exact match)
+    const normalizedCode = departmentCode.toString().toUpperCase().trim();
+    let department = this.departments.find(dept => {
+      const deptCode = (dept.code || '').toString().toUpperCase().trim();
+      const match = deptCode === normalizedCode;
+      if (match) {
+        console.log('✅ Matched department:', { code: dept.code, id: dept.id, name: dept.name });
+      }
+      return match;
+    });
+    
+    // If still not found, try fetching all departments from API
     if (!department) {
-      console.warn('Department not found in local array, fetching from API...');
+      console.warn('⚠️ Department not found in local array, fetching from API...');
       try {
         const allDepts = await Utils.apiRequest('/api/departments');
-        if (Array.isArray(allDepts)) {
-          department = allDepts.find(dept => {
-            const deptCode = (dept.code || '').toString().toUpperCase();
-            return deptCode === departmentCode.toUpperCase();
+        console.log('📥 Fetched departments from API:', allDepts.length);
+        if (Array.isArray(allDepts) && allDepts.length > 0) {
+          // Filter to allowed departments
+          const allowedCodes = ['SCS', 'SBM', 'SDPC', 'SASO', 'SSD', 'CLINIC', 'SCHOLARSHIP', 'LIBRARY', 'CMO'];
+          const filteredDepts = allDepts.filter(dept => {
+            const code = (dept.code || '').toString().toUpperCase();
+            return allowedCodes.includes(code);
           });
-          // If found, add it to local array for future use
-          if (department) {
-            this.departments.push({
-              ...department,
-              id: typeof department.id === 'number' ? department.id : parseInt(department.id, 10) || department.id
-            });
-          }
+          
+          // Update local array
+          this.departments = filteredDepts.map(dept => ({
+            ...dept,
+            id: typeof dept.id === 'number' ? dept.id : parseInt(dept.id, 10) || dept.id
+          }));
+          
+          // Try to find again
+          department = this.departments.find(dept => {
+            const deptCode = (dept.code || '').toString().toUpperCase().trim();
+            return deptCode === normalizedCode;
+          });
         }
       } catch (error) {
-        console.error('Failed to fetch department from API:', error);
+        console.error('❌ Failed to fetch departments from API:', error);
       }
     }
 
     if (!department) {
-      console.error('Department not found:', departmentCode, 'Available departments:', this.departments);
-      Utils.showToast('Invalid department selected. Please refresh the page and try again.', 'error');
+      console.error('❌ Department not found:', {
+        searchedCode: normalizedCode,
+        availableCodes: this.departments.map(d => d.code),
+        allDepartments: this.departments
+      });
+      Utils.showToast(`Department "${departmentCode}" not found. Please refresh the page and try again.`, 'error');
       return;
     }
     
-    console.log('✅ Found department:', department.code, 'ID:', department.id);
+    console.log('✅ Found department:', {
+      code: department.code,
+      id: department.id,
+      name: department.name,
+      searchedCode: normalizedCode
+    });
 
     // Ensure departmentId is a number
     let departmentId = department.id;
@@ -1309,6 +1325,18 @@ class StudentPortal {
     const quantity = parseInt(formData.get('quantity'), 10) || 1;
     if (isNaN(quantity) || quantity < 1 || quantity > 10) {
       Utils.showToast('Number of copies must be between 1 and 10.', 'warning');
+      return;
+    }
+
+    // Final verification: ensure the department ID matches the selected code
+    if (department.id !== departmentId) {
+      console.error('❌ Department ID mismatch!', {
+        selectedCode: departmentCode,
+        foundDepartment: department,
+        calculatedId: departmentId,
+        departmentIdFromObject: department.id
+      });
+      Utils.showToast('Department ID mismatch. Please refresh the page and try again.', 'error');
       return;
     }
 
@@ -1328,6 +1356,8 @@ class StudentPortal {
       departmentCode: departmentCode,
       departmentName: department.name,
       departmentId: departmentId,
+      departmentIdFromObject: department.id,
+      studentDepartmentId: this.studentDepartmentId,
       attachments: '[...]' 
     });
 
