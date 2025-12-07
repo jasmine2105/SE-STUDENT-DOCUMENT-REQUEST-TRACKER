@@ -176,13 +176,10 @@ const Utils = {
         throw new Error(`Invalid API URL: ${fullUrl}`);
       }
       
-      console.log('🌐 Making API request to:', fullUrl, 'Method:', options.method || 'GET');
-      console.log('🌐 Endpoint details:', { 
-        original: originalEndpoint, 
-        cleaned: endpoint, 
-        apiBase: API_BASE,
-        fullUrl: fullUrl 
-      });
+      // Reduced logging - only log important requests
+      if (endpoint.includes('/requests') || endpoint.includes('/auth')) {
+        console.log('🌐 API:', options.method || 'GET', endpoint);
+      }
       
       // Add timeout wrapper for fetch
       timeoutId = setTimeout(() => {
@@ -200,8 +197,20 @@ const Utils = {
       }
 
       if (!response.ok) {
+        // Only clear auth if it's actually an authentication error (401)
+        // BUT: Don't clear if we're on a portal page (student/faculty/admin) - 
+        // let the portal handle the redirect itself to avoid redirect loops
         if (response.status === 401) {
-          this.clearCurrentUser();
+          const isPortalPage = window.location.pathname.includes('/STUDENT/') || 
+                               window.location.pathname.includes('/FACULTY/') || 
+                               window.location.pathname.includes('/ADMIN/');
+          
+          if (!isPortalPage) {
+            console.warn('⚠️ Received 401 - authentication failed, clearing session');
+            this.clearCurrentUser();
+          } else {
+            console.warn('⚠️ Received 401 on portal page - portal will handle redirect');
+          }
         }
         const errorText = await response.text();
         throw new Error(errorText || `API Error: ${response.status}`);

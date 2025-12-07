@@ -30,26 +30,6 @@
     </style>
 </head>
 <body>
-    <script>
-        console.log('🔍 === STUDENT PORTAL DEBUG ===');
-        console.log('🔍 Current user:', localStorage.getItem('currentUser'));
-        console.log('🔍 Auth token:', localStorage.getItem('authToken'));
-        console.log('🔍 Has currentUser:', localStorage.getItem('currentUser') !== null);
-        console.log('🔍 Has authToken:', !!localStorage.getItem('authToken'));
-        console.log('🔍 isAuthenticated:', localStorage.getItem('currentUser') !== null && !!localStorage.getItem('authToken'));
-        
-     
-        try {
-            const user = localStorage.getItem('currentUser');
-            if (user) {
-                const parsed = JSON.parse(user);
-                console.log('🔍 Parsed user object:', parsed);
-                console.log('🔍 User role:', parsed.role);
-            }
-        } catch (e) {
-            console.error('🔍 Error parsing user:', e);
-        }
-    </script>
     
     <div class="portal-layout">
         <!-- Sidebar -->
@@ -312,44 +292,6 @@
             
             <div class="modal-body">
                 <form id="documentRequestForm" class="request-form">
-                    <!-- Personal Information Section -->
-                    <div class="form-section">
-                        <h3>Personal Information</h3>
-
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label for="fullName">Full Name *</label>
-                                <input type="text" id="fullName" name="fullName" required class="form-input">
-                            </div>
-                            <div class="form-group">
-                                <label for="idNumber">ID Number *</label>
-                                <input type="text" id="idNumber" name="idNumber" required class="form-input">
-                            </div>
-                        </div>
-
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label for="course">Course *</label>
-                                <input type="text" id="course" name="course" required class="form-input">
-                            </div>
-                            <div class="form-group">
-                                <label for="yearLevel">Year Level *</label>
-                                <input type="text" id="yearLevel" name="yearLevel" required class="form-input">
-                            </div>
-                        </div>
-
-                        <div class="form-row">
-                            <div class="form-group">
-                                <label for="studentEmail">Email *</label>
-                                <input type="email" id="studentEmail" name="studentEmail" required class="form-input">
-                            </div>
-                            <div class="form-group">
-                                <label for="contactNumber">Contact Number</label>
-                                <input type="tel" id="contactNumber" name="contactNumber" class="form-input" placeholder="Enter your contact number">
-                            </div>
-                        </div>
-                    </div>
-
                     <!-- Document Information Section -->
                     <div class="form-section">
                         <h3>Document Information</h3>

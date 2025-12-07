@@ -12,6 +12,7 @@ try {
 }
 const jwt = require('jsonwebtoken');
 const { initPool } = require('../config/db');
+const authMiddleware = require('../middleware/auth');
 
 // JWT_SECRET: Use .env value if set, otherwise fallback to default
 // NOTE: In production, JWT_SECRET should ALWAYS be set in .env for security
@@ -404,6 +405,153 @@ router.post('/login', async (req, res) => {
     res.status(500).json({ 
       error: 'Login failed',
       message: 'An error occurred during login. Please try again.' 
+    });
+  }
+});
+
+// Update profile endpoint
+router.put('/update-profile', authMiddleware(), async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { fullName, email, contactNumber, birthdate, address, gender } = req.body;
+
+    if (!fullName || !email) {
+      return res.status(400).json({ 
+        error: 'Missing required fields',
+        message: 'Full name and email are required.' 
+      });
+    }
+
+    const pool = await initPool();
+    
+    // Ensure optional columns exist (add them if they don't)
+    const columnsToAdd = [
+      { name: 'contact_number', definition: 'VARCHAR(32) NULL' },
+      { name: 'birthdate', definition: 'DATE NULL' },
+      { name: 'address', definition: 'TEXT NULL' },
+      { name: 'gender', definition: 'VARCHAR(32) NULL' }
+    ];
+    
+    for (const column of columnsToAdd) {
+      try {
+        await pool.query(`ALTER TABLE users ADD COLUMN ${column.name} ${column.definition}`);
+        console.log(`✅ Added column to users table: ${column.name}`);
+      } catch (e) {
+        if (e.message.includes('Duplicate column name')) {
+          // Column already exists, that's fine
+        } else {
+          console.warn(`⚠️ Could not add ${column.name} column:`, e.message);
+        }
+      }
+    }
+    
+    // Check which columns exist in the database
+    const [columns] = await pool.query(`
+      SELECT COLUMN_NAME 
+      FROM INFORMATION_SCHEMA.COLUMNS 
+      WHERE TABLE_SCHEMA = DATABASE() 
+      AND TABLE_NAME = 'users'
+      AND COLUMN_NAME IN ('contact_number', 'birthdate', 'address', 'gender')
+    `);
+    const existingColumns = columns.map(col => col.COLUMN_NAME);
+    
+    // Build update query dynamically
+    const updates = [];
+    const params = [];
+
+    if (fullName) {
+      updates.push('full_name = ?');
+      params.push(fullName);
+    }
+    if (email) {
+      updates.push('email = ?');
+      params.push(email);
+    }
+    if (contactNumber !== undefined && existingColumns.includes('contact_number')) {
+      updates.push('contact_number = ?');
+      params.push(contactNumber || null);
+    }
+    if (birthdate !== undefined && existingColumns.includes('birthdate')) {
+      updates.push('birthdate = ?');
+      params.push(birthdate || null);
+    }
+    if (address !== undefined && existingColumns.includes('address')) {
+      updates.push('address = ?');
+      params.push(address || null);
+    }
+    if (gender !== undefined && existingColumns.includes('gender')) {
+      updates.push('gender = ?');
+      params.push(gender || null);
+    }
+
+    if (updates.length === 0) {
+      return res.status(400).json({ 
+        error: 'No updates provided',
+        message: 'Please provide at least one field to update.' 
+      });
+    }
+
+    params.push(userId);
+    const query = `UPDATE users SET ${updates.join(', ')} WHERE id = ?`;
+    
+    await pool.query(query, params);
+
+    // Fetch updated user data
+    let selectQuery = `
+      SELECT 
+        u.id, 
+        u.role, 
+        u.id_number AS idNumber, 
+        u.full_name AS fullName, 
+        u.email, 
+        u.department_id AS departmentId,
+        d.name as department,
+        d.code as departmentCode,
+        u.course,
+        u.year_level AS yearLevel,
+        u.position
+    `;
+    
+    // Add optional columns if they exist
+    if (existingColumns.includes('contact_number')) {
+      selectQuery += ', u.contact_number AS contactNumber';
+    }
+    if (existingColumns.includes('birthdate')) {
+      selectQuery += ', u.birthdate';
+    }
+    if (existingColumns.includes('address')) {
+      selectQuery += ', u.address';
+    }
+    if (existingColumns.includes('gender')) {
+      selectQuery += ', u.gender';
+    }
+    
+    selectQuery += `
+      FROM users u
+      LEFT JOIN departments d ON u.department_id = d.id
+      WHERE u.id = ?
+    `;
+    
+    const [updatedUsers] = await pool.query(selectQuery, [userId]);
+
+    if (updatedUsers.length === 0) {
+      return res.status(404).json({ 
+        error: 'User not found',
+        message: 'User not found after update.' 
+      });
+    }
+
+    const updatedUser = updatedUsers[0];
+
+    res.json({ 
+      message: 'Profile updated successfully',
+      user: updatedUser
+    });
+  } catch (error) {
+    console.error('❌ Update profile error:', error);
+    res.status(500).json({ 
+      error: 'Update failed',
+      message: error.message || 'An error occurred while updating your profile.' 
     });
   }
 });

@@ -796,6 +796,8 @@ body {
 }
 
 .btn-edit-profile,
+.btn-save-profile,
+.btn-cancel-profile,
 .btn-settings-profile {
   padding: 0.625rem 1.25rem;
   border: none;
@@ -818,6 +820,28 @@ body {
   background: #003318;
   transform: translateY(-1px);
   box-shadow: 0 4px 8px rgba(0, 66, 37, 0.2);
+}
+
+.btn-save-profile {
+  background: var(--recoletos-green, #004225);
+  color: var(--white, #FFFFFF);
+}
+
+.btn-save-profile:hover {
+  background: #003318;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 66, 37, 0.2);
+}
+
+.btn-cancel-profile {
+  background: var(--white, #FFFFFF);
+  color: var(--text-dark, #1A1A1A);
+  border: 1px solid var(--border-gray, #E5E7EB);
+}
+
+.btn-cancel-profile:hover {
+  background: #F5F5F5;
+  border-color: #D1D5DB;
 }
 
 .btn-settings-profile {
@@ -880,6 +904,31 @@ body {
   font-size: 0.95rem;
   font-weight: 500;
   color: var(--text-dark, #1A1A1A);
+}
+
+.profile-edit-input,
+.profile-edit-textarea {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border-gray, #E5E7EB);
+  border-radius: 6px;
+  font-size: 0.95rem;
+  font-family: inherit;
+  color: var(--text-dark, #1A1A1A);
+  background: var(--white, #FFFFFF);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.profile-edit-input:focus,
+.profile-edit-textarea:focus {
+  outline: none;
+  border-color: var(--recoletos-green, #004225);
+  box-shadow: 0 0 0 3px rgba(0, 66, 37, 0.1);
+}
+
+.profile-edit-textarea {
+  min-height: 80px;
+  resize: vertical;
 }
 
 .profile-academic-grid {

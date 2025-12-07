@@ -36,6 +36,9 @@ function mapRequestRow(row) {
     studentId: row.student_id,
     studentName: row.student_name,
     studentIdNumber: row.student_id_number,
+    studentCourse: row.student_course || null,
+    studentYearLevel: row.student_year_level || null,
+    studentEmail: row.student_email || null,
     departmentId: row.department_id,
     department: row.department_name,
     documentType: row.document_label || row.document_value,
@@ -82,10 +85,12 @@ router.get('/', authMiddleware(), async (req, res) => {
     console.log('✅ Database connection obtained');
 
     let query = `
-      SELECT r.*, d.name AS department_name, dd.label AS document_label
+      SELECT r.*, d.name AS department_name, dd.label AS document_label,
+             u.course AS student_course, u.year_level AS student_year_level, u.email AS student_email
       FROM requests r
       LEFT JOIN departments d ON d.id = r.department_id
-      LEFT JOIN department_documents dd ON dd.value = r.document_value
+      LEFT JOIN department_documents dd ON dd.value = r.document_value AND dd.department_id = r.department_id
+      LEFT JOIN users u ON u.id = r.student_id
     `;
 
     const params = [];
@@ -213,10 +218,12 @@ router.get('/:id', authMiddleware(), async (req, res) => {
   try {
     const conn = await getConnection();
     const [rows] = await conn.query(`
-      SELECT r.*, d.name AS department_name, dd.label AS document_label
+      SELECT r.*, d.name AS department_name, dd.label AS document_label,
+             u.course AS student_course, u.year_level AS student_year_level, u.email AS student_email
       FROM requests r
       LEFT JOIN departments d ON d.id = r.department_id
-      LEFT JOIN department_documents dd ON dd.value = r.document_value
+      LEFT JOIN department_documents dd ON dd.value = r.document_value AND dd.department_id = r.department_id
+      LEFT JOIN users u ON u.id = r.student_id
       WHERE r.id = ?
     `, [req.params.id]);
     conn.release();
@@ -323,12 +330,86 @@ router.post('/', authMiddleware(), async (req, res) => {
     const student = studentRows[0];
     console.log('✅ Student found:', student.full_name);
 
+    console.log('📝 Ensuring required columns exist in requests table...');
+    // Ensure required columns exist (add them if they don't)
+    // MySQL doesn't support IF NOT EXISTS for ALTER TABLE ADD COLUMN, so we catch duplicate errors
+    const columnsToAdd = [
+      { name: 'student_name', definition: 'VARCHAR(255) NOT NULL DEFAULT \'\'' },
+      { name: 'student_id_number', definition: 'VARCHAR(32) NOT NULL DEFAULT \'\'' },
+      { name: 'requires_faculty', definition: 'BOOLEAN DEFAULT FALSE' }
+    ];
+    
+    for (const column of columnsToAdd) {
+      try {
+        await conn.query(`ALTER TABLE requests ADD COLUMN ${column.name} ${column.definition}`);
+        console.log(`✅ Added column: ${column.name}`);
+      } catch (e) {
+        if (e.message.includes('Duplicate column name')) {
+          console.log(`ℹ️ Column ${column.name} already exists`);
+        } else {
+          console.warn(`⚠️ Could not add ${column.name} column:`, e.message);
+        }
+      }
+    }
+
+    // Check if document_id column exists and handle it
+    let documentId = null;
+    try {
+      // Try to get document_id from department_documents table
+      const [docRows] = await conn.query(
+        'SELECT id FROM department_documents WHERE value = ? AND department_id = ?',
+        [documentValue, departmentNumeric]
+      );
+      if (docRows && docRows.length > 0) {
+        documentId = docRows[0].id;
+        console.log('✅ Found document_id:', documentId);
+      }
+    } catch (e) {
+      console.warn('⚠️ Could not look up document_id:', e.message);
+    }
+
+    // Check if document_id column exists in requests table
+    let hasDocumentIdColumn = false;
+    try {
+      const [columnCheck] = await conn.query(`
+        SELECT COLUMN_NAME 
+        FROM INFORMATION_SCHEMA.COLUMNS 
+        WHERE TABLE_SCHEMA = DATABASE() 
+        AND TABLE_NAME = 'requests' 
+        AND COLUMN_NAME = 'document_id'
+      `);
+      hasDocumentIdColumn = columnCheck.length > 0;
+      if (hasDocumentIdColumn && !documentId) {
+        // Column exists but we don't have a value - make it nullable
+        try {
+          await conn.query(`ALTER TABLE requests MODIFY COLUMN document_id INT NULL`);
+          console.log('✅ Made document_id column nullable');
+        } catch (e) {
+          if (!e.message.includes('Duplicate') && !e.message.includes('already')) {
+            console.warn('⚠️ Could not modify document_id column:', e.message);
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('⚠️ Could not check for document_id column:', e.message);
+    }
+
     console.log('📝 Inserting request into database...');
-    const [result] = await conn.query(
-      `INSERT INTO requests (student_id, student_name, student_id_number, department_id, document_value, document_label, status, quantity, purpose, cross_department, cross_department_details, attachments, requires_faculty) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [req.user.id, student.full_name, student.id_number, departmentNumeric, documentValue, documentType, initialStatus, quantity || 1, purpose || null, !!crossDepartment, crossDepartmentDetails || null, JSON.stringify(attachments), !!requiresFaculty]
-    );
+    let insertQuery, insertParams;
+    
+    if (hasDocumentIdColumn) {
+      // Include document_id in INSERT
+      insertQuery = `INSERT INTO requests (student_id, student_name, student_id_number, department_id, document_id, document_value, document_label, status, quantity, purpose, cross_department, cross_department_details, attachments, requires_faculty) 
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+      insertParams = [req.user.id, student.full_name, student.id_number, departmentNumeric, documentId, documentValue, documentType, initialStatus, quantity || 1, purpose || null, !!crossDepartment, crossDepartmentDetails || null, JSON.stringify(attachments), !!requiresFaculty];
+    } else {
+      // Don't include document_id
+      insertQuery = `INSERT INTO requests (student_id, student_name, student_id_number, department_id, document_value, document_label, status, quantity, purpose, cross_department, cross_department_details, attachments, requires_faculty) 
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
+      insertParams = [req.user.id, student.full_name, student.id_number, departmentNumeric, documentValue, documentType, initialStatus, quantity || 1, purpose || null, !!crossDepartment, crossDepartmentDetails || null, JSON.stringify(attachments), !!requiresFaculty];
+    }
+    
+    const [result] = await conn.query(insertQuery, insertParams);
 
     const requestId = result.insertId;
     console.log('✅ Request inserted with ID:', requestId);
@@ -340,10 +421,12 @@ router.post('/', authMiddleware(), async (req, res) => {
 
     console.log('🔍 Fetching created request...');
     const [createdRows] = await conn.query(
-      `SELECT r.*, d.name AS department_name, dd.label AS document_label 
+      `SELECT r.*, d.name AS department_name, dd.label AS document_label,
+              u.course AS student_course, u.year_level AS student_year_level, u.email AS student_email
        FROM requests r 
        LEFT JOIN departments d ON d.id = r.department_id 
-       LEFT JOIN department_documents dd ON dd.value = r.document_value 
+       LEFT JOIN department_documents dd ON dd.value = r.document_value AND dd.department_id = r.department_id
+       LEFT JOIN users u ON u.id = r.student_id
        WHERE r.id = ?`,
       [requestId]
     );
@@ -404,10 +487,12 @@ router.put('/:id', authMiddleware(), async (req, res) => {
 
     // Get current request
     const [requestRows] = await conn.query(
-      `SELECT r.*, d.name AS department_name, dd.label AS document_label
+      `SELECT r.*, d.name AS department_name, dd.label AS document_label,
+              u.course AS student_course, u.year_level AS student_year_level, u.email AS student_email
        FROM requests r
        LEFT JOIN departments d ON d.id = r.department_id
-       LEFT JOIN department_documents dd ON dd.value = r.document_value
+       LEFT JOIN department_documents dd ON dd.value = r.document_value AND dd.department_id = r.department_id
+       LEFT JOIN users u ON u.id = r.student_id
        WHERE r.id = ?`,
       [id]
     );
@@ -461,10 +546,12 @@ router.put('/:id', authMiddleware(), async (req, res) => {
 
     // Get updated request
     const [updatedRows] = await conn.query(
-      `SELECT r.*, d.name AS department_name, dd.label AS document_label
+      `SELECT r.*, d.name AS department_name, dd.label AS document_label,
+              u.course AS student_course, u.year_level AS student_year_level, u.email AS student_email
        FROM requests r
        LEFT JOIN departments d ON d.id = r.department_id
-       LEFT JOIN department_documents dd ON dd.value = r.document_value
+       LEFT JOIN department_documents dd ON dd.value = r.document_value AND dd.department_id = r.department_id
+       LEFT JOIN users u ON u.id = r.student_id
        WHERE r.id = ?`,
       [id]
     );

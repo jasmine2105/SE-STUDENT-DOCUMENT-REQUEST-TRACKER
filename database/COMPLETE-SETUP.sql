@@ -43,6 +43,9 @@ CREATE TABLE IF NOT EXISTS users (
   year_level VARCHAR(64),
   position VARCHAR(255),
   contact_number VARCHAR(32),
+  birthdate DATE NULL,
+  address TEXT NULL,
+  gender VARCHAR(32) NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (department_id) REFERENCES departments(id)
 );
@@ -72,6 +75,7 @@ CREATE TABLE IF NOT EXISTS requests (
   student_name VARCHAR(255) NOT NULL,
   student_id_number VARCHAR(32) NOT NULL,
   department_id INT NOT NULL,
+  document_id INT NULL,
   document_value VARCHAR(255) NOT NULL,
   document_label VARCHAR(255),
   status ENUM('pending','pending_faculty','in_progress','approved','completed','declined') DEFAULT 'pending',
@@ -90,7 +94,22 @@ CREATE TABLE IF NOT EXISTS requests (
   completed_at TIMESTAMP NULL,
   FOREIGN KEY (student_id) REFERENCES users(id),
   FOREIGN KEY (department_id) REFERENCES departments(id),
-  FOREIGN KEY (faculty_id) REFERENCES faculty(id)
+  FOREIGN KEY (faculty_id) REFERENCES faculty(id),
+  FOREIGN KEY (document_id) REFERENCES department_documents(id)
+);
+
+-- =======================
+-- REQUEST_CONVERSATIONS TABLE
+-- =======================
+CREATE TABLE IF NOT EXISTS request_conversations (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  request_id INT NOT NULL,
+  user_id INT NOT NULL,
+  message TEXT NOT NULL,
+  is_internal BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (request_id) REFERENCES requests(id) ON DELETE CASCADE,
+  FOREIGN KEY (user_id) REFERENCES users(id)
 );
 
 -- =======================
@@ -173,6 +192,22 @@ VALUES
 ON DUPLICATE KEY UPDATE 
   label = VALUES(label), 
   requires_faculty = VALUES(requires_faculty);
+
+-- ====================================================
+-- FIX EXISTING REQUESTS TABLE (Add missing columns)
+-- ====================================================
+-- If you get "Duplicate column name" errors, the columns already exist - that's fine, ignore them
+-- Note: MySQL doesn't support IF NOT EXISTS for ALTER TABLE, so duplicate errors are expected if columns exist
+
+-- Try to add columns (will fail silently if they already exist - that's OK)
+-- You can safely ignore "Duplicate column name" errors when running this script
+
+-- ALTER TABLE requests ADD COLUMN document_value VARCHAR(255) NOT NULL DEFAULT '';
+-- ALTER TABLE requests ADD COLUMN document_label VARCHAR(255);
+-- ALTER TABLE requests ADD COLUMN document_id INT NULL;
+-- ALTER TABLE requests ADD COLUMN student_name VARCHAR(255) NOT NULL DEFAULT '';
+-- ALTER TABLE requests ADD COLUMN student_id_number VARCHAR(32) NOT NULL DEFAULT '';
+-- ALTER TABLE requests ADD COLUMN requires_faculty BOOLEAN DEFAULT FALSE;
 
 -- ====================================================
 -- VERIFICATION

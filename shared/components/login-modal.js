@@ -996,25 +996,17 @@ class LoginModal {
         throw new Error('Invalid response: missing authentication token');
       }
 
-      console.log('✅ Login successful, user role:', user.role);
-      console.log('✅ User data:', user);
-      console.log('✅ Token received:', token ? 'Yes' : 'No');
-
-      // Store user data and token FIRST
+      // Store user data and token
       Utils.setCurrentUser(user, token);
       
-      // Small delay to ensure localStorage is written (though it's synchronous)
+      // Small delay to ensure localStorage is written
       await new Promise(resolve => setTimeout(resolve, 100));
       
-      // Verify storage immediately
+      // Verify storage
       const storedUser = Utils.getCurrentUser();
       const storedToken = Utils.getAuthToken();
-      console.log('✅ Verification - Stored user:', storedUser ? 'Yes' : 'No');
-      console.log('✅ Verification - Stored token:', storedToken ? 'Yes' : 'No');
-      console.log('✅ Stored user role:', storedUser?.role);
       
       if (!storedUser || !storedToken) {
-        console.error('❌ Failed to store authentication data');
         throw new Error('Failed to store authentication data');
       }
 
@@ -1032,17 +1024,11 @@ class LoginModal {
       };
       
       const redirectPath = redirectMap[user.role] || '/index.html';
-      const fullUrl = window.location.origin + redirectPath;
       
-      console.log('🔄 Redirecting to:', redirectPath);
-      console.log('🔄 Full URL:', fullUrl);
-      console.log('🔄 Current URL:', window.location.href);
-      
-      // Use a small delay to ensure toast is shown, then redirect
+      // Use a small delay to ensure toast is shown and localStorage is written, then redirect
       setTimeout(() => {
-        // Use window.location.replace to prevent back button issues
-        window.location.replace(redirectPath);
-      }, 300);
+        window.location.href = redirectPath;
+      }, 500);
     } catch (error) {
       console.error('❌ Login failed:', error);
       console.error('❌ Error details:', {

@@ -1,4 +1,3 @@
-console.log('🎯 student-portal.js file loaded successfully!');
 
 // Student Portal JavaScript
 class StudentPortal {
@@ -42,40 +41,76 @@ class StudentPortal {
   }
 
   async init() {
-    console.log('🚀 StudentPortal init started');
+    // Wait a bit for localStorage to be ready (in case of page transition)
+    await new Promise(resolve => setTimeout(resolve, 100));
 
-    if (!Utils.requireAuth()) return;
-
-    if (this.currentUser.role !== 'student') {
-      Utils.showToast('Access denied. Student portal only.', 'error');
-      Utils.clearCurrentUser();
-      return;
+    // Check authentication
+    const user = Utils.getCurrentUser();
+    const token = Utils.getAuthToken();
+    
+    if (!user || !token) {
+      // Give it one more chance - sometimes localStorage needs a moment
+      await new Promise(resolve => setTimeout(resolve, 200));
+      const retryUser = Utils.getCurrentUser();
+      const retryToken = Utils.getAuthToken();
+      
+      if (!retryUser || !retryToken) {
+        window.location.href = '/';
+        return;
+      } else {
+        this.currentUser = retryUser;
+      }
+    } else {
+      // Verify user is a student
+      if (user.role !== 'student') {
+        Utils.showToast('Access denied. Student portal only.', 'error');
+        setTimeout(() => {
+          window.location.href = '/';
+        }, 2000);
+        return;
+      }
+      
+      // Set currentUser for compatibility
+      this.currentUser = user;
     }
 
     try {
-      await this.loadDepartmentsFromApi();
+      // Load departments - don't let errors stop initialization
+      try {
+        await this.loadDepartmentsFromApi();
+      } catch (error) {
+        console.error('❌ Failed to load departments:', error);
+        // Use fallback - don't break the portal
+        this.departments = [];
+      }
+      
       this.loadUserInfo();
       this.setupEventListeners();
       this.initializeModals();
 
       try {
-        console.log('📥 Loading requests...');
         await this.loadRequests();
-        console.log('✅ Requests loaded successfully');
       } catch (error) {
         console.error('❌ Failed to load requests:', error);
-        Utils.showToast('Failed to load requests, but you can still submit new ones', 'warning');
+        // Don't show error toast if it's a database error - user can still use the portal
+        if (!error.message || (!error.message.includes('Table') && !error.message.includes('database'))) {
+          Utils.showToast('Failed to load requests, but you can still submit new ones', 'warning');
+        }
+        // Initialize with empty requests array
+        this.requests = [];
       }
 
-      // Load notifications
+      // Load notifications (silently fail if auth issues)
       try {
         await this.loadNotifications();
-        // Set up polling for new notifications every 30 seconds
+        // Set up polling for new notifications every 60 seconds (less frequent)
         setInterval(() => {
-          this.loadNotifications().catch(err => console.error('Failed to refresh notifications:', err));
-        }, 30000);
+          this.loadNotifications().catch(() => {
+            // Silently fail - don't spam console
+          });
+        }, 60000);
       } catch (error) {
-        console.error('Failed to load notifications:', error);
+        // Silently handle notification errors - not critical
         this.notifications = [];
       }
 
@@ -84,10 +119,26 @@ class StudentPortal {
       this.renderHistory();
       this.renderNotifications();
 
-      console.log('✅ StudentPortal initialized successfully');
+      // Portal initialized successfully
     } catch (error) {
       console.error('❌ Failed to initialize StudentPortal:', error);
-      Utils.showToast('Failed to initialize portal. Some features may not work.', 'error');
+      console.error('❌ Error details:', {
+        message: error.message,
+        stack: error.stack
+      });
+      
+      // DON'T redirect on errors - let the user stay on the page
+      // Only show a warning toast, but don't break the portal
+      Utils.showToast('Some features may not work, but you can still use the portal.', 'warning');
+      
+      // Make sure we still render what we can
+      try {
+        this.updateStats();
+        this.renderDashboard();
+        this.renderHistory();
+      } catch (renderError) {
+        console.error('❌ Failed to render portal:', renderError);
+      }
     }
   }
 
@@ -120,24 +171,18 @@ class StudentPortal {
         code: dept.id || dept.code || `DEPT-${index + 1}`
       }));
     }
-    console.log('Loaded departments:', this.departments);
   }
 
   async loadDocumentTypes(departmentCode) {
-    console.log('📚 loadDocumentTypes called for:', departmentCode);
-    
     if (this.documentTypes[departmentCode]) {
-      console.log('✅ Using cached document types for:', departmentCode);
       return this.documentTypes[departmentCode];
     }
 
-    // First, get fallback config ready (we'll use this immediately)
+    // Get fallback config
     const fallbackDept = window.RecoletosConfig?.findDepartmentByName?.(departmentCode);
     const fallbackDocs = fallbackDept?.documents || [];
-    console.log('📋 Fallback docs available:', fallbackDocs.length);
 
-    // If we have fallback docs, format them now and RETURN THEM IMMEDIATELY.
-    // This removes any waiting time for students while the database/API is down.
+    // If we have fallback docs, use them immediately
     let formattedFallback = [];
     if (fallbackDocs.length > 0) {
       formattedFallback = fallbackDocs.map(doc => ({
@@ -147,43 +192,27 @@ class StudentPortal {
         requires_faculty: doc.requiresFaculty || false
       }));
 
-      console.log('⚡ Using fallback document types ONLY (skipping API) for department:', departmentCode);
       this.documentTypes[departmentCode] = formattedFallback;
       return formattedFallback;
     }
 
-    // If no fallback docs, try the API with a short timeout (5 seconds)
+    // Try the API with a short timeout
     try {
-      console.log('🌐 Making API request to /requests/document-types/' + departmentCode);
-      
-      // Use Utils.apiRequest with timeout option (no need for Promise.race)
       const data = await Utils.apiRequest(`/requests/document-types/${departmentCode}`, {
-        timeout: 5000 // 5 seconds timeout for document types
+        timeout: 5000
       });
-      
-      console.log('📥 API response received:', data);
       
       if (data && Array.isArray(data) && data.length > 0) {
         this.documentTypes[departmentCode] = data;
-        console.log('✅ Cached', data.length, 'document types from API');
         return data;
       } else {
-        // API returned empty array, use fallback
-        console.warn('⚠️ API returned no document types, using fallback config');
         if (formattedFallback.length > 0) {
           this.documentTypes[departmentCode] = formattedFallback;
-          console.log('✅ Using', formattedFallback.length, 'fallback document types');
           return formattedFallback;
         }
-        console.warn('⚠️ No fallback docs available, returning empty array');
         return [];
       }
     } catch (error) {
-      console.error('❌ Failed to load document types from API:', error);
-      console.error('❌ Error details:', error.message);
-
-      // No fallback docs available and API failed
-      console.error('❌ No fallback available, showing error toast');
       Utils.showToast('Failed to load document types. Please try again.', 'error');
       return [];
     }
@@ -213,27 +242,14 @@ class StudentPortal {
 
   async loadRequests() {
     try {
-      console.log('📥 Loading requests for user ID:', this.currentUser.id, 'Type:', typeof this.currentUser.id);
       const allRequests = await Utils.apiRequest('/requests', {
-        timeout: 30000 // 30 seconds timeout
+        timeout: 30000
       });
-      console.log('📥 Received', allRequests.length, 'requests from server');
       
-      // Server already filters by student_id, but double-check with type-safe comparison
+      // Server already filters by student_id, but double-check
       this.requests = allRequests.filter((r) => {
-        const matches = Number(r.studentId) === Number(this.currentUser.id);
-        if (!matches && allRequests.length > 0) {
-          console.warn('⚠️ Request mismatch:', { 
-            requestStudentId: r.studentId, 
-            requestStudentIdType: typeof r.studentId,
-            currentUserId: this.currentUser.id,
-            currentUserIdType: typeof this.currentUser.id
-          });
-        }
-        return matches;
+        return Number(r.studentId) === Number(this.currentUser.id);
       });
-      
-      console.log('✅ Filtered to', this.requests.length, 'requests for current user');
       this.updateStats();
       this.renderDashboard();
       this.renderHistory();
@@ -755,9 +771,8 @@ class StudentPortal {
       newForm.addEventListener('submit', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        console.log('📝 Form submit event triggered');
         this.submitNewRequest();
-      }, true); // Use capture phase
+      }, true);
 
       // Also add click handler to submit button as backup
       const submitBtn = document.getElementById('submitRequestBtn');
@@ -768,7 +783,6 @@ class StudentPortal {
         newBtn.addEventListener('click', (e) => {
           e.preventDefault();
           e.stopPropagation();
-          console.log('🔔 Submit button clicked');
           const form = document.getElementById('documentRequestForm');
           if (form) {
             this.submitNewRequest();
@@ -781,17 +795,11 @@ class StudentPortal {
     if (departmentSelect) {
       departmentSelect.addEventListener('change', async (e) => {
         const selectedValue = e.target.value;
-        const selectedText = e.target.options[e.target.selectedIndex]?.text || '';
-        console.log('🏢 Department changed:', { value: selectedValue, text: selectedText });
 
-        // Use the department code (value) to load document types
         if (selectedValue) {
           try {
-            console.log('🔄 Calling updateDocumentTypes from department change handler...');
             await this.updateDocumentTypes(selectedValue);
-            console.log('✅ updateDocumentTypes completed from department change handler');
           } catch (err) {
-            console.error('❌ Failed to update document types on department change:', err);
             // Even on error, make sure select is enabled
             const documentTypeSelect = document.getElementById('documentType');
             if (documentTypeSelect) {
@@ -802,7 +810,6 @@ class StudentPortal {
           }
         } else {
           // Reset document types if no department selected
-          console.log('⚠️ No department selected, resetting documentType');
           const documentTypeSelect = document.getElementById('documentType');
           if (documentTypeSelect) {
             documentTypeSelect.innerHTML = '<option value="">Select Department First</option>';
@@ -846,12 +853,8 @@ class StudentPortal {
       // After form reset, check if department has a value and load document types
       const departmentSelect = document.getElementById('department');
       if (departmentSelect && departmentSelect.value) {
-        console.log('🔄 Modal opened with department already selected:', departmentSelect.value);
-        // Use setTimeout to ensure DOM is ready
         setTimeout(() => {
-          this.updateDocumentTypes(departmentSelect.value).catch(err => {
-            console.error('❌ Error loading document types on modal open:', err);
-          });
+          this.updateDocumentTypes(departmentSelect.value).catch(() => {});
         }, 50);
       }
       // ensure attachment visibility/requirement is evaluated on open
@@ -899,14 +902,12 @@ class StudentPortal {
   }
 
   autoFillUserInfo() {
-    // No longer auto-filling personal info fields; user must enter them manually.
+    // Personal information is automatically retrieved from the logged-in user's account
+    // No need to fill or display personal info fields in the form
   }
 
   ensureSelectEnabled(documentTypeSelect, loadingElement) {
     if (!documentTypeSelect) return;
-    
-    // Always make the select clickable - NO MATTER WHAT
-    console.log('🔓 Ensuring documentType select is enabled');
     
     try {
       documentTypeSelect.disabled = false;
@@ -917,16 +918,12 @@ class StudentPortal {
       
       // Double-check it's actually enabled
       if (documentTypeSelect.disabled) {
-        console.warn('⚠️ Select still disabled after enabling, forcing again...');
         documentTypeSelect.disabled = false;
         documentTypeSelect.removeAttribute('disabled');
       }
       
       if (loadingElement) loadingElement.classList.add('hidden');
-      
-      console.log('✅ documentType select enabled. disabled attribute:', documentTypeSelect.hasAttribute('disabled'), 'disabled property:', documentTypeSelect.disabled);
     } catch (e) {
-      console.error('❌ Error enabling select:', e);
       // Last resort - try one more time
       setTimeout(() => {
         if (documentTypeSelect) {
@@ -939,29 +936,16 @@ class StudentPortal {
   }
 
   async updateDocumentTypes(departmentCode) {
-    console.log('🔄 updateDocumentTypes called with departmentCode:', departmentCode);
-    
-    // Cancel any pending request
-    if (this.currentDocumentTypeRequest) {
-      console.log('⚠️ Cancelling previous document type request');
-      // Note: We can't actually cancel fetch, but we can ignore its result
-    }
-    
     const documentTypeSelect = document.getElementById('documentType');
     const loadingElement = document.getElementById('documentTypeLoading');
 
-    if (!documentTypeSelect) {
-      console.error('❌ documentTypeSelect element not found!');
-      return;
-    }
+    if (!documentTypeSelect) return;
 
-    console.log('📝 Resetting documentType select...');
-    // Reset state before loading (but don't permanently disable)
+    // Reset state before loading
     documentTypeSelect.innerHTML = '<option value="">Select Document Type</option>';
-    documentTypeSelect.disabled = true; // Temporarily disable while loading
+    documentTypeSelect.disabled = true;
 
     if (!departmentCode) {
-      console.log('⚠️ No departmentCode provided, disabling select');
       documentTypeSelect.innerHTML = '<option value="">Select Department First</option>';
       documentTypeSelect.disabled = true;
       documentTypeSelect.style.pointerEvents = '';
@@ -972,31 +956,20 @@ class StudentPortal {
 
     if (loadingElement) {
       loadingElement.classList.remove('hidden');
-      console.log('⏳ Showing loading indicator');
     }
 
-    // Create a request identifier to track this specific request
     const requestId = Date.now();
     this.currentDocumentTypeRequest = requestId;
 
     try {
-      console.log('📡 Calling loadDocumentTypes for:', departmentCode);
-      const documentTypesPromise = this.loadDocumentTypes(departmentCode);
-      const documentTypes = await documentTypesPromise;
+      const documentTypes = await this.loadDocumentTypes(departmentCode);
       
-      // Check if this request is still current (user hasn't changed department)
       if (this.currentDocumentTypeRequest !== requestId) {
-        console.log('⚠️ Request outdated, ignoring result');
-        // Still ensure select is enabled even if request is outdated
         this.ensureSelectEnabled(documentTypeSelect, loadingElement);
         return;
       }
-      
-      console.log('✅ Loaded document types for department', departmentCode, ':', documentTypes);
 
       if (Array.isArray(documentTypes) && documentTypes.length > 0) {
-        // Normal happy-path: we have document types from API or config
-        console.log('✅ Populating', documentTypes.length, 'document types');
         documentTypeSelect.innerHTML =
           '<option value="">Select Document Type</option>' +
           documentTypes
@@ -1010,32 +983,21 @@ class StudentPortal {
             .join('') +
           '<option value="others">Others</option>';
       } else {
-        // Defensive fallback: still allow user interaction even if nothing came back
-        console.warn('⚠️ No document types returned for department', departmentCode);
         documentTypeSelect.innerHTML =
           '<option value="">No document types configured – please select "Others" and specify</option>' +
           '<option value="others">Others</option>';
       }
     } catch (error) {
-      // Check if this request is still current
       if (this.currentDocumentTypeRequest !== requestId) {
-        console.log('⚠️ Request outdated, ignoring error');
-        // Still ensure select is enabled even if request is outdated
         this.ensureSelectEnabled(documentTypeSelect, loadingElement);
         return;
       }
-      console.error('❌ Error populating document options:', error);
       documentTypeSelect.innerHTML = '<option value="">Error loading document types</option>';
     } finally {
-      // Always ensure select is enabled, even if request is outdated
-      // This prevents the select from staying disabled when requests are cancelled
       if (this.currentDocumentTypeRequest === requestId) {
-        // This is the current request - enable and clear request ID
         this.ensureSelectEnabled(documentTypeSelect, loadingElement);
         this.currentDocumentTypeRequest = null;
       } else {
-        // Request is outdated, but still ensure select is enabled
-        console.log('⚠️ Request outdated, but ensuring select is enabled anyway');
         this.ensureSelectEnabled(documentTypeSelect, loadingElement);
       }
     }
@@ -1240,16 +1202,9 @@ class StudentPortal {
   async submitNewRequest() {
     const form = document.getElementById('documentRequestForm');
     if (!form) return;
-    // Validate required personal info fields
-    const fullName = form.querySelector('[name="fullName"]').value.trim();
-    const idNumber = form.querySelector('[name="idNumber"]').value.trim();
-    const course = form.querySelector('[name="course"]').value.trim();
-    const yearLevel = form.querySelector('[name="yearLevel"]').value.trim();
-    const email = form.querySelector('[name="studentEmail"]').value.trim();
-    if (!fullName || !idNumber || !course || !yearLevel || !email) {
-      Utils.showToast('Please ensure your personal information is filled.', 'warning');
-      return;
-    }
+    
+    // Personal information is automatically retrieved from the logged-in user's account
+    // No need to validate or collect it from the form
 
     const formData = new FormData(form);
     const departmentCode = formData.get('department');
@@ -1302,7 +1257,6 @@ class StudentPortal {
       documentType: selectedOption ? selectedOption.text : documentValue,
       quantity: quantity,
       purpose: formData.get('purpose') || '',
-      contactNumber: formData.get('contactNumber') || '',
       additionalNotes: formData.get('additionalNotes') || '',
       crossDepartment: departmentId != this.studentDepartmentId,
       requiresFaculty: requiresFaculty
@@ -1426,7 +1380,6 @@ class StudentPortal {
       
       // Filter notifications for current user
       this.notifications = notifications.filter(notif => {
-        // Include notifications for this student
         const userId = notif.user_id || notif.userId;
         return Number(userId) === Number(this.currentUser.id);
       });
@@ -1441,7 +1394,7 @@ class StudentPortal {
       this.renderNotifications();
       return this.notifications;
     } catch (error) {
-      console.error('Failed to load notifications:', error);
+      // Silently fail - notifications are not critical
       this.notifications = [];
       return [];
     }
@@ -1689,28 +1642,55 @@ class StudentPortal {
           <div class="request-modal-body">
             ${progressHTML}
             <div class="request-modal-content">
-            <!-- First Column: Document Details -->
+            <!-- First Column: Student Information & Document Details -->
             <div class="request-modal-column">
-              <h3>Document Details</h3>
+              <!-- Student Information Section -->
+              <div style="margin-bottom: 2rem;">
+                <h3 style="color: var(--recoletos-green); margin-bottom: 1rem; font-size: 1.1rem; font-weight: 600;">
+                  <i class="fas fa-user"></i> Student Information
+                </h3>
+                <div class="document-details-horizontal" style="background: var(--bg-cream); padding: 1rem; border-radius: 8px; border: 1px solid var(--border-gray);">
+                  <div class="detail-label">Full Name:</div>
+                  <div class="detail-value">${request.studentName || this.currentUser.fullName || this.currentUser.name || 'N/A'}</div>
+                  
+                  <div class="detail-label">ID Number:</div>
+                  <div class="detail-value">${request.studentIdNumber || this.currentUser.idNumber || 'N/A'}</div>
+                  
+                  <div class="detail-label">Course:</div>
+                  <div class="detail-value">${request.studentCourse || this.currentUser.course || 'N/A'}</div>
+                  
+                  <div class="detail-label">Year Level:</div>
+                  <div class="detail-value">${request.studentYearLevel || this.currentUser.yearLevel || 'N/A'}</div>
+                  
+                  <div class="detail-label">Email:</div>
+                  <div class="detail-value">${request.studentEmail || this.currentUser.email || 'N/A'}</div>
+                </div>
+              </div>
 
-              <div class="document-details-horizontal">
-                <div class="detail-label">Document Type:</div>
-                <div class="detail-value">${request.documentType || request.documentValue || 'N/A'}</div>
-                
-                <div class="detail-label">Department:</div>
-                <div class="detail-value">${request.department || this.studentDepartmentName}</div>
-                
-                <div class="detail-label">Submitted:</div>
-                <div class="detail-value">${Utils.formatDate(request.submittedAt)}</div>
-                
-                <div class="detail-label">Last Updated:</div>
-                <div class="detail-value">${Utils.formatDate(request.updatedAt)}</div>
-                
-                <div class="detail-label">Quantity:</div>
-                <div class="detail-value">${request.quantity || 1}</div>
-                
-                <div class="detail-label">Purpose:</div>
-                <div class="detail-value">${request.purpose || 'None'}</div>
+              <!-- Document Details Section -->
+              <div>
+                <h3 style="color: var(--recoletos-green); margin-bottom: 1rem; font-size: 1.1rem; font-weight: 600;">
+                  <i class="fas fa-file-alt"></i> Document Details
+                </h3>
+                <div class="document-details-horizontal">
+                  <div class="detail-label">Document Type:</div>
+                  <div class="detail-value">${request.documentType || request.documentValue || 'N/A'}</div>
+                  
+                  <div class="detail-label">Department:</div>
+                  <div class="detail-value">${request.department || this.studentDepartmentName}</div>
+                  
+                  <div class="detail-label">Submitted:</div>
+                  <div class="detail-value">${Utils.formatDate(request.submittedAt)}</div>
+                  
+                  <div class="detail-label">Last Updated:</div>
+                  <div class="detail-value">${Utils.formatDate(request.updatedAt)}</div>
+                  
+                  <div class="detail-label">Quantity:</div>
+                  <div class="detail-value">${request.quantity || 1}</div>
+                  
+                  <div class="detail-label">Purpose:</div>
+                  <div class="detail-value">${request.purpose || 'None'}</div>
+                </div>
               </div>
 
               ${request.attachments && request.attachments.length ? `
@@ -1840,7 +1820,7 @@ class StudentPortal {
     }
   }
 
-  renderProfile() {
+  renderProfile(isEditMode = false) {
     const container = document.getElementById('profileContent');
     if (!container) return;
 
@@ -1855,11 +1835,8 @@ class StudentPortal {
     const deptName = this.studentDepartmentName;
     const courseYear = `${formatValue(this.currentUser.course)} • ${formatValue(this.currentUser.yearLevel)}`;
 
-    // Calculate stats
-    const total = this.requests.length;
-    const pending = this.requests.filter((r) => ['pending', 'pending_faculty', 'in_progress'].includes(r.status)).length;
-    const approved = this.requests.filter((r) => r.status === 'approved' || r.status === 'completed').length;
-    const rejected = this.requests.filter((r) => r.status === 'declined').length;
+    // Store edit mode state
+    this.profileEditMode = isEditMode;
 
     container.innerHTML = `
       <div class="profile-view-content">
@@ -1876,12 +1853,21 @@ class StudentPortal {
             <p class="profile-email">${formatValue(this.currentUser.email)}</p>
           </div>
           <div class="profile-header-actions">
-            <button class="btn-edit-profile" onclick="studentPortal.switchView('settings')">
-              <i class="fas fa-edit"></i> Edit Profile
-            </button>
-            <button class="btn-settings-profile" onclick="studentPortal.switchView('settings')">
-              <i class="fas fa-cog"></i> Settings
-            </button>
+            ${isEditMode ? `
+              <button class="btn-save-profile" onclick="studentPortal.saveProfile()">
+                <i class="fas fa-save"></i> Save Changes
+              </button>
+              <button class="btn-cancel-profile" onclick="studentPortal.renderProfile(false)">
+                <i class="fas fa-times"></i> Cancel
+              </button>
+            ` : `
+              <button class="btn-edit-profile" onclick="studentPortal.renderProfile(true)">
+                <i class="fas fa-edit"></i> Edit Profile
+              </button>
+              <button class="btn-settings-profile" onclick="studentPortal.switchView('settings')">
+                <i class="fas fa-cog"></i> Settings
+              </button>
+            `}
           </div>
         </div>
 
@@ -1893,33 +1879,64 @@ class StudentPortal {
             <div class="profile-info-column">
               <div class="profile-info-item">
                 <span class="profile-info-label">Full Name</span>
-                <span class="profile-info-value">${formatValue(displayName)}</span>
+                ${isEditMode ? `
+                  <input type="text" id="editFullName" class="profile-edit-input" value="${this.currentUser.fullName || this.currentUser.name || ''}" />
+                ` : `
+                  <span class="profile-info-value">${formatValue(displayName)}</span>
+                `}
               </div>
               <div class="profile-info-item">
                 <span class="profile-info-label">ID Number</span>
                 <span class="profile-info-value">${formatValue(this.currentUser.idNumber)}</span>
+                <small style="color: #666; font-size: 0.85rem; display: block; margin-top: 0.25rem;">ID Number cannot be changed</small>
               </div>
               <div class="profile-info-item">
                 <span class="profile-info-label">Email</span>
-                <span class="profile-info-value">${formatValue(this.currentUser.email)}</span>
+                ${isEditMode ? `
+                  <input type="email" id="editEmail" class="profile-edit-input" value="${this.currentUser.email || ''}" />
+                ` : `
+                  <span class="profile-info-value">${formatValue(this.currentUser.email)}</span>
+                `}
               </div>
               <div class="profile-info-item">
                 <span class="profile-info-label">Contact Number</span>
-                <span class="profile-info-value">${formatValue(this.currentUser.contactNumber)}</span>
+                ${isEditMode ? `
+                  <input type="tel" id="editContactNumber" class="profile-edit-input" value="${this.currentUser.contactNumber || ''}" placeholder="Enter contact number" />
+                ` : `
+                  <span class="profile-info-value">${formatValue(this.currentUser.contactNumber)}</span>
+                `}
               </div>
             </div>
             <div class="profile-info-column">
               <div class="profile-info-item">
                 <span class="profile-info-label">Birthdate</span>
-                <span class="profile-info-value">${formatValue(this.currentUser.birthdate)}</span>
+                ${isEditMode ? `
+                  <input type="date" id="editBirthdate" class="profile-edit-input" value="${this.currentUser.birthdate || ''}" />
+                ` : `
+                  <span class="profile-info-value">${formatValue(this.currentUser.birthdate)}</span>
+                `}
               </div>
               <div class="profile-info-item">
                 <span class="profile-info-label">Address</span>
-                <span class="profile-info-value">${formatValue(this.currentUser.address)}</span>
+                ${isEditMode ? `
+                  <textarea id="editAddress" class="profile-edit-textarea" placeholder="Enter address">${this.currentUser.address || ''}</textarea>
+                ` : `
+                  <span class="profile-info-value">${formatValue(this.currentUser.address)}</span>
+                `}
               </div>
               <div class="profile-info-item">
                 <span class="profile-info-label">Gender</span>
-                <span class="profile-info-value">${formatValue(this.currentUser.gender)}</span>
+                ${isEditMode ? `
+                  <select id="editGender" class="profile-edit-input">
+                    <option value="">Select Gender</option>
+                    <option value="Male" ${this.currentUser.gender === 'Male' ? 'selected' : ''}>Male</option>
+                    <option value="Female" ${this.currentUser.gender === 'Female' ? 'selected' : ''}>Female</option>
+                    <option value="Other" ${this.currentUser.gender === 'Other' ? 'selected' : ''}>Other</option>
+                    <option value="Prefer not to say" ${this.currentUser.gender === 'Prefer not to say' ? 'selected' : ''}>Prefer not to say</option>
+                  </select>
+                ` : `
+                  <span class="profile-info-value">${formatValue(this.currentUser.gender)}</span>
+                `}
               </div>
             </div>
           </div>
@@ -1933,14 +1950,17 @@ class StudentPortal {
             <div class="profile-academic-item">
               <span class="profile-academic-label">Department</span>
               <span class="profile-academic-value">${formatValue(deptName)}</span>
+              <small style="color: #666; font-size: 0.85rem; display: block; margin-top: 0.25rem;">Cannot be changed</small>
             </div>
             <div class="profile-academic-item">
               <span class="profile-academic-label">Program</span>
               <span class="profile-academic-value">${formatValue(this.currentUser.course)}</span>
+              <small style="color: #666; font-size: 0.85rem; display: block; margin-top: 0.25rem;">Cannot be changed</small>
             </div>
             <div class="profile-academic-item">
               <span class="profile-academic-label">Year Level</span>
               <span class="profile-academic-value">${formatValue(this.currentUser.yearLevel)}</span>
+              <small style="color: #666; font-size: 0.85rem; display: block; margin-top: 0.25rem;">Cannot be changed</small>
             </div>
             <div class="profile-academic-item">
               <span class="profile-academic-label">Status</span>
@@ -1956,37 +1976,58 @@ class StudentPortal {
             </div>
           </div>
         </div>
-
-        <div class="profile-section-card">
-          <h4 class="profile-section-title">
-            <i class="fas fa-file-alt"></i> Document Records
-          </h4>
-          <div class="profile-records-grid">
-            <div class="profile-record-card">
-              <div class="profile-record-value">${total}</div>
-              <div class="profile-record-label">Total Requests</div>
-            </div>
-            <div class="profile-record-card">
-              <div class="profile-record-value">${pending}</div>
-              <div class="profile-record-label">Pending</div>
-            </div>
-            <div class="profile-record-card">
-              <div class="profile-record-value">${approved}</div>
-              <div class="profile-record-label">Approved</div>
-            </div>
-            <div class="profile-record-card">
-              <div class="profile-record-value">${rejected}</div>
-              <div class="profile-record-label">Rejected</div>
-            </div>
-          </div>
-          <div class="profile-records-actions">
-            <button class="btn-view-history" onclick="studentPortal.switchView('history')">
-              <i class="fas fa-history"></i> View Document History
-            </button>
-          </div>
-        </div>
       </div>
     `;
+  }
+
+  async saveProfile() {
+    const fullName = document.getElementById('editFullName')?.value.trim() || '';
+    const email = document.getElementById('editEmail')?.value.trim() || '';
+    const contactNumber = document.getElementById('editContactNumber')?.value.trim() || '';
+    const birthdate = document.getElementById('editBirthdate')?.value || '';
+    const address = document.getElementById('editAddress')?.value.trim() || '';
+    const gender = document.getElementById('editGender')?.value || '';
+
+    if (!fullName) {
+      Utils.showToast('Full name is required', 'error');
+      return;
+    }
+
+    if (!email || !email.includes('@')) {
+      Utils.showToast('Please enter a valid email address', 'error');
+      return;
+    }
+
+    try {
+      const updates = {
+        fullName,
+        email,
+        contactNumber: contactNumber || null,
+        birthdate: birthdate || null,
+        address: address || null,
+        gender: gender || null
+      };
+
+      await Utils.apiRequest('/auth/update-profile', {
+        method: 'PUT',
+        body: updates
+      });
+
+      // Update local user data
+      Object.assign(this.currentUser, updates);
+      localStorage.setItem('currentUser', JSON.stringify(this.currentUser));
+
+      Utils.showToast('Profile updated successfully!', 'success');
+      
+      // Refresh profile view (exit edit mode)
+      this.renderProfile(false);
+      
+      // Update header display name
+      this.loadUserInfo();
+    } catch (error) {
+      console.error('Save profile error:', error);
+      Utils.showToast(error.message || 'Failed to update profile', 'error');
+    }
   }
 
   renderSettings() {
@@ -1996,10 +2037,7 @@ class StudentPortal {
     container.innerHTML = `
       <div class="settings-view-content">
         <div class="settings-tabs">
-          <button class="settings-tab active" data-tab="account" onclick="studentPortal.switchSettingsTab('account')">
-            <i class="fas fa-user"></i> Account Info
-          </button>
-          <button class="settings-tab" data-tab="security" onclick="studentPortal.switchSettingsTab('security')">
+          <button class="settings-tab active" data-tab="security" onclick="studentPortal.switchSettingsTab('security')">
             <i class="fas fa-lock"></i> Security
           </button>
           <button class="settings-tab" data-tab="notifications" onclick="studentPortal.switchSettingsTab('notifications')">
@@ -2011,22 +2049,7 @@ class StudentPortal {
         </div>
 
         <div class="settings-tab-content">
-          <div class="settings-tab-panel active" id="settingsTabAccount">
-            <div class="settings-section">
-              <h3><i class="fas fa-envelope"></i> Email Address</h3>
-              <div class="settings-input-group">
-                <input type="email" id="settingsEmail" class="settings-input" value="${this.currentUser.email || ''}" />
-              </div>
-            </div>
-            <div class="settings-section">
-              <h3><i class="fas fa-phone"></i> Contact Number</h3>
-              <div class="settings-input-group">
-                <input type="tel" id="settingsContact" class="settings-input" value="${this.currentUser.contactNumber || ''}" />
-              </div>
-            </div>
-          </div>
-
-          <div class="settings-tab-panel" id="settingsTabSecurity">
+          <div class="settings-tab-panel active" id="settingsTabSecurity">
             <div class="settings-section">
               <h3><i class="fas fa-key"></i> Change Password</h3>
               <div class="settings-password-group">
@@ -2129,19 +2152,15 @@ class StudentPortal {
   }
 
   async saveSettings() {
-    const email = document.getElementById('settingsEmail').value.trim();
-    const contact = document.getElementById('settingsContact').value.trim();
-    const currentPassword = document.getElementById('currentPassword').value;
-    const newPassword = document.getElementById('newPassword').value;
-    const confirmPassword = document.getElementById('confirmNewPassword').value;
-    const emailNotifications = document.getElementById('emailNotifications').checked;
-    const smsNotifications = document.getElementById('smsNotifications').checked;
-    const theme = document.getElementById('themeSelect').value;
+    const currentPassword = document.getElementById('currentPassword')?.value || '';
+    const newPassword = document.getElementById('newPassword')?.value || '';
+    const confirmPassword = document.getElementById('confirmNewPassword')?.value || '';
+    const emailNotifications = document.getElementById('emailNotifications')?.checked ?? true;
+    const smsNotifications = document.getElementById('smsNotifications')?.checked ?? false;
+    const theme = document.getElementById('themeSelect')?.value || 'light';
 
     try {
       const updates = {};
-      if (email && email !== this.currentUser.email) updates.email = email;
-      if (contact !== (this.currentUser.contactNumber || '')) updates.contactNumber = contact;
       updates.emailNotifications = emailNotifications;
       updates.smsNotifications = smsNotifications;
       updates.theme = theme;
