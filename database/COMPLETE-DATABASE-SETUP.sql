@@ -143,7 +143,8 @@ CREATE TABLE IF NOT EXISTS notifications (
 -- ====================================================
 
 -- Departments (Only 9 departments allowed)
-INSERT INTO departments (code, name) VALUES
+-- Using INSERT IGNORE to avoid errors if departments already exist, then UPDATE separately
+INSERT IGNORE INTO departments (code, name) VALUES
   ('SCS', 'School of Computer Studies (SCS)'),
   ('SBM', 'School of Business Management (SBM)'),
   ('SDPC', 'Student Development and Programs Center (SDPC)'),
@@ -152,15 +153,28 @@ INSERT INTO departments (code, name) VALUES
   ('CLINIC', 'Clinic'),
   ('SCHOLARSHIP', 'Scholarship Office'),
   ('LIBRARY', 'Library'),
-  ('CMO', 'Campus Management Office (CMO)')
-ON DUPLICATE KEY UPDATE name = VALUES(name);
+  ('CMO', 'Campus Management Office (CMO)');
+
+-- Update names in case they changed
+UPDATE departments SET name = 'School of Computer Studies (SCS)' WHERE code = 'SCS';
+UPDATE departments SET name = 'School of Business Management (SBM)' WHERE code = 'SBM';
+UPDATE departments SET name = 'Student Development and Programs Center (SDPC)' WHERE code = 'SDPC';
+UPDATE departments SET name = 'Student Affairs and Services Office (SASO)' WHERE code = 'SASO';
+UPDATE departments SET name = 'Security Services Department (SSD)' WHERE code = 'SSD';
+UPDATE departments SET name = 'Clinic' WHERE code = 'CLINIC';
+UPDATE departments SET name = 'Scholarship Office' WHERE code = 'SCHOLARSHIP';
+UPDATE departments SET name = 'Library' WHERE code = 'LIBRARY';
+UPDATE departments SET name = 'Campus Management Office (CMO)' WHERE code = 'CMO';
 
 -- Delete any existing "Transcript of Records" documents from all departments
+-- Temporarily disable safe update mode for this operation
+SET SQL_SAFE_UPDATES = 0;
 DELETE FROM department_documents 
 WHERE label LIKE '%Transcript of Records%' 
    OR value LIKE '%Transcript of Records%'
    OR label LIKE '%TOR%'
    OR value LIKE '%TOR%';
+SET SQL_SAFE_UPDATES = 1;
 
 -- Department Documents (strictly matching the specified list)
 INSERT INTO department_documents (department_id, label, value, requires_faculty)
@@ -204,9 +218,10 @@ VALUES
   
   -- CMO Documents: Utility Clearance
   ((SELECT id FROM departments WHERE code = 'CMO'), 'Utility Clearance', 'Utility Clearance', FALSE)
+AS new_values
 ON DUPLICATE KEY UPDATE 
-  label = VALUES(label), 
-  requires_faculty = VALUES(requires_faculty);
+  label = new_values.label, 
+  requires_faculty = new_values.requires_faculty;
 
 -- ====================================================
 -- USER DATASET
@@ -226,11 +241,12 @@ INSERT INTO users (role, id_number, full_name, email, password_hash, is_super_ad
   ('admin', '0001', 'Jasmine Omandam', 'jasmine.omandam@usjr.edu.ph', @defaultPassword, TRUE),
   ('admin', '0002', 'Martina Monica Calledo', 'martina.calledo@usjr.edu.ph', @defaultPassword, TRUE),
   ('admin', '0003', 'Patrick Duron', 'patrick.duron@usjr.edu.ph', @defaultPassword, TRUE)
+AS new_values
 ON DUPLICATE KEY UPDATE 
-  full_name = VALUES(full_name),
-  email = VALUES(email),
-  password_hash = VALUES(password_hash),
-  is_super_admin = VALUES(is_super_admin);
+  full_name = new_values.full_name,
+  email = new_values.email,
+  password_hash = new_values.password_hash,
+  is_super_admin = new_values.is_super_admin;
 
 -- ====================================================
 -- REGULAR ADMINS (1 per department - 3 digits each)
@@ -250,82 +266,91 @@ SET @adminPasswordSASO = '$2a$10$3oxb46cZ/n3JGlQNIxakcunQxuhi.ppxo3fNm.sbaHuCwQ1
 INSERT INTO users (role, id_number, full_name, email, password_hash, department_id, is_super_admin) VALUES
   ('admin', '111', 'SCS Administrator', 'admin.scs@usjr.edu.ph', @adminPasswordSCS, 
    (SELECT id FROM departments WHERE code = 'SCS' LIMIT 1), FALSE)
+AS new_values
 ON DUPLICATE KEY UPDATE 
-  full_name = VALUES(full_name),
-  email = VALUES(email),
-  password_hash = VALUES(password_hash);
+  full_name = new_values.full_name,
+  email = new_values.email,
+  password_hash = new_values.password_hash;
 
 -- SBM Admin: id 222, password 222
 INSERT INTO users (role, id_number, full_name, email, password_hash, department_id, is_super_admin) VALUES
   ('admin', '222', 'SBM Administrator', 'admin.sbm@usjr.edu.ph', @adminPasswordSBM, 
    (SELECT id FROM departments WHERE code = 'SBM' LIMIT 1), FALSE)
+AS new_values
 ON DUPLICATE KEY UPDATE 
-  full_name = VALUES(full_name),
-  email = VALUES(email),
-  password_hash = VALUES(password_hash);
+  full_name = new_values.full_name,
+  email = new_values.email,
+  password_hash = new_values.password_hash;
 
 -- SDPC Admin: id 333, password 111
 INSERT INTO users (role, id_number, full_name, email, password_hash, department_id, is_super_admin) VALUES
   ('admin', '333', 'SDPC Administrator', 'admin.sdpc@usjr.edu.ph', @adminPasswordSDPC, 
    (SELECT id FROM departments WHERE code = 'SDPC' LIMIT 1), FALSE)
+AS new_values
 ON DUPLICATE KEY UPDATE 
-  full_name = VALUES(full_name),
-  email = VALUES(email),
-  password_hash = VALUES(password_hash);
+  full_name = new_values.full_name,
+  email = new_values.email,
+  password_hash = new_values.password_hash;
 
 -- CLINIC Admin: id 444, password 111
 INSERT INTO users (role, id_number, full_name, email, password_hash, department_id, is_super_admin) VALUES
   ('admin', '444', 'Clinic Administrator', 'admin.clinic@usjr.edu.ph', @adminPasswordCLINIC, 
    (SELECT id FROM departments WHERE code = 'CLINIC' LIMIT 1), FALSE)
+AS new_values
 ON DUPLICATE KEY UPDATE 
-  full_name = VALUES(full_name),
-  email = VALUES(email),
-  password_hash = VALUES(password_hash);
+  full_name = new_values.full_name,
+  email = new_values.email,
+  password_hash = new_values.password_hash;
 
 -- SSD Admin: id 555, password 111
 INSERT INTO users (role, id_number, full_name, email, password_hash, department_id, is_super_admin) VALUES
   ('admin', '555', 'SSD Administrator', 'admin.ssd@usjr.edu.ph', @adminPasswordSSD, 
    (SELECT id FROM departments WHERE code = 'SSD' LIMIT 1), FALSE)
+AS new_values
 ON DUPLICATE KEY UPDATE 
-  full_name = VALUES(full_name),
-  email = VALUES(email),
-  password_hash = VALUES(password_hash);
+  full_name = new_values.full_name,
+  email = new_values.email,
+  password_hash = new_values.password_hash;
 
 -- SCHOLARSHIP Admin: id 666, password 111
 INSERT INTO users (role, id_number, full_name, email, password_hash, department_id, is_super_admin) VALUES
   ('admin', '666', 'Scholarship Administrator', 'admin.scholarship@usjr.edu.ph', @adminPasswordSCHOLARSHIP, 
    (SELECT id FROM departments WHERE code = 'SCHOLARSHIP' LIMIT 1), FALSE)
+AS new_values
 ON DUPLICATE KEY UPDATE 
-  full_name = VALUES(full_name),
-  email = VALUES(email),
-  password_hash = VALUES(password_hash);
+  full_name = new_values.full_name,
+  email = new_values.email,
+  password_hash = new_values.password_hash;
 
 -- LIBRARY Admin: id 777, password 111
 INSERT INTO users (role, id_number, full_name, email, password_hash, department_id, is_super_admin) VALUES
   ('admin', '777', 'Library Administrator', 'admin.library@usjr.edu.ph', @adminPasswordLIBRARY, 
    (SELECT id FROM departments WHERE code = 'LIBRARY' LIMIT 1), FALSE)
+AS new_values
 ON DUPLICATE KEY UPDATE 
-  full_name = VALUES(full_name),
-  email = VALUES(email),
-  password_hash = VALUES(password_hash);
+  full_name = new_values.full_name,
+  email = new_values.email,
+  password_hash = new_values.password_hash;
 
 -- CMO Admin: id 888, password 111
 INSERT INTO users (role, id_number, full_name, email, password_hash, department_id, is_super_admin) VALUES
   ('admin', '888', 'CMO Administrator', 'admin.cmo@usjr.edu.ph', @adminPasswordCMO, 
    (SELECT id FROM departments WHERE code = 'CMO' LIMIT 1), FALSE)
+AS new_values
 ON DUPLICATE KEY UPDATE 
-  full_name = VALUES(full_name),
-  email = VALUES(email),
-  password_hash = VALUES(password_hash);
+  full_name = new_values.full_name,
+  email = new_values.email,
+  password_hash = new_values.password_hash;
 
 -- SASO Admin: id 999, password 111
 INSERT INTO users (role, id_number, full_name, email, password_hash, department_id, is_super_admin) VALUES
   ('admin', '999', 'SASO Administrator', 'admin.saso@usjr.edu.ph', @adminPasswordSASO, 
    (SELECT id FROM departments WHERE code = 'SASO' LIMIT 1), FALSE)
+AS new_values
 ON DUPLICATE KEY UPDATE 
-  full_name = VALUES(full_name),
-  email = VALUES(email),
-  password_hash = VALUES(password_hash);
+  full_name = new_values.full_name,
+  email = new_values.email,
+  password_hash = new_values.password_hash;
 
 -- ====================================================
 -- FACULTY (2 per department - 5 digits each)
@@ -336,7 +361,8 @@ INSERT INTO users (role, id_number, full_name, email, password_hash, department_
    (SELECT id FROM departments WHERE code = 'SCS' LIMIT 1), 'Professor'),
   ('faculty', '10002', 'Prof. John Cruz', 'john.cruz@usjr.edu.ph', @defaultPassword, 
    (SELECT id FROM departments WHERE code = 'SCS' LIMIT 1), 'Associate Professor')
-ON DUPLICATE KEY UPDATE full_name = VALUES(full_name), email = VALUES(email);
+AS new_values
+ON DUPLICATE KEY UPDATE full_name = new_values.full_name, email = new_values.email;
 
 -- SBM Faculty
 INSERT INTO users (role, id_number, full_name, email, password_hash, department_id, position) VALUES
@@ -344,7 +370,8 @@ INSERT INTO users (role, id_number, full_name, email, password_hash, department_
    (SELECT id FROM departments WHERE code = 'SBM' LIMIT 1), 'Professor'),
   ('faculty', '20002', 'Prof. Michael Tan', 'michael.tan@usjr.edu.ph', @defaultPassword, 
    (SELECT id FROM departments WHERE code = 'SBM' LIMIT 1), 'Associate Professor')
-ON DUPLICATE KEY UPDATE full_name = VALUES(full_name), email = VALUES(email);
+AS new_values
+ON DUPLICATE KEY UPDATE full_name = new_values.full_name, email = new_values.email;
 
 -- SDPC Faculty
 INSERT INTO users (role, id_number, full_name, email, password_hash, department_id, position) VALUES
@@ -352,7 +379,8 @@ INSERT INTO users (role, id_number, full_name, email, password_hash, department_
    (SELECT id FROM departments WHERE code = 'SDPC' LIMIT 1), 'Director'),
   ('faculty', '40002', 'Prof. David Rodriguez', 'david.rodriguez@usjr.edu.ph', @defaultPassword, 
    (SELECT id FROM departments WHERE code = 'SDPC' LIMIT 1), 'Coordinator')
-ON DUPLICATE KEY UPDATE full_name = VALUES(full_name), email = VALUES(email);
+AS new_values
+ON DUPLICATE KEY UPDATE full_name = new_values.full_name, email = new_values.email;
 
 -- SASO Faculty
 INSERT INTO users (role, id_number, full_name, email, password_hash, department_id, position) VALUES
@@ -360,7 +388,8 @@ INSERT INTO users (role, id_number, full_name, email, password_hash, department_
    (SELECT id FROM departments WHERE code = 'SASO' LIMIT 1), 'Director'),
   ('faculty', '50002', 'Prof. Mark Fernandez', 'mark.fernandez@usjr.edu.ph', @defaultPassword, 
    (SELECT id FROM departments WHERE code = 'SASO' LIMIT 1), 'Coordinator')
-ON DUPLICATE KEY UPDATE full_name = VALUES(full_name), email = VALUES(email);
+AS new_values
+ON DUPLICATE KEY UPDATE full_name = new_values.full_name, email = new_values.email;
 
 -- SSD Faculty
 INSERT INTO users (role, id_number, full_name, email, password_hash, department_id, position) VALUES
@@ -368,7 +397,8 @@ INSERT INTO users (role, id_number, full_name, email, password_hash, department_
    (SELECT id FROM departments WHERE code = 'SSD' LIMIT 1), 'Director'),
   ('faculty', '60002', 'Prof. James Villanueva', 'james.villanueva@usjr.edu.ph', @defaultPassword, 
    (SELECT id FROM departments WHERE code = 'SSD' LIMIT 1), 'Coordinator')
-ON DUPLICATE KEY UPDATE full_name = VALUES(full_name), email = VALUES(email);
+AS new_values
+ON DUPLICATE KEY UPDATE full_name = new_values.full_name, email = new_values.email;
 
 -- CLINIC Faculty
 INSERT INTO users (role, id_number, full_name, email, password_hash, department_id, position) VALUES
@@ -376,7 +406,8 @@ INSERT INTO users (role, id_number, full_name, email, password_hash, department_
    (SELECT id FROM departments WHERE code = 'CLINIC' LIMIT 1), 'Medical Director'),
   ('faculty', '70002', 'Prof. Carlos Mendoza', 'carlos.mendoza@usjr.edu.ph', @defaultPassword, 
    (SELECT id FROM departments WHERE code = 'CLINIC' LIMIT 1), 'Nurse Supervisor')
-ON DUPLICATE KEY UPDATE full_name = VALUES(full_name), email = VALUES(email);
+AS new_values
+ON DUPLICATE KEY UPDATE full_name = new_values.full_name, email = new_values.email;
 
 -- SCHOLARSHIP Faculty
 INSERT INTO users (role, id_number, full_name, email, password_hash, department_id, position) VALUES
@@ -384,7 +415,8 @@ INSERT INTO users (role, id_number, full_name, email, password_hash, department_
    (SELECT id FROM departments WHERE code = 'SCHOLARSHIP' LIMIT 1), 'Director'),
   ('faculty', '80002', 'Prof. Anthony Rivera', 'anthony.rivera@usjr.edu.ph', @defaultPassword, 
    (SELECT id FROM departments WHERE code = 'SCHOLARSHIP' LIMIT 1), 'Coordinator')
-ON DUPLICATE KEY UPDATE full_name = VALUES(full_name), email = VALUES(email);
+AS new_values
+ON DUPLICATE KEY UPDATE full_name = new_values.full_name, email = new_values.email;
 
 -- LIBRARY Faculty
 INSERT INTO users (role, id_number, full_name, email, password_hash, department_id, position) VALUES
@@ -392,7 +424,8 @@ INSERT INTO users (role, id_number, full_name, email, password_hash, department_
    (SELECT id FROM departments WHERE code = 'LIBRARY' LIMIT 1), 'Librarian'),
   ('faculty', '90002', 'Prof. Daniel Castillo', 'daniel.castillo@usjr.edu.ph', @defaultPassword, 
    (SELECT id FROM departments WHERE code = 'LIBRARY' LIMIT 1), 'Assistant Librarian')
-ON DUPLICATE KEY UPDATE full_name = VALUES(full_name), email = VALUES(email);
+AS new_values
+ON DUPLICATE KEY UPDATE full_name = new_values.full_name, email = new_values.email;
 
 -- CMO Faculty
 INSERT INTO users (role, id_number, full_name, email, password_hash, department_id, position) VALUES
@@ -400,7 +433,8 @@ INSERT INTO users (role, id_number, full_name, email, password_hash, department_
    (SELECT id FROM departments WHERE code = 'CMO' LIMIT 1), 'Director'),
   ('faculty', '00002', 'Prof. Richard Ocampo', 'richard.ocampo@usjr.edu.ph', @defaultPassword, 
    (SELECT id FROM departments WHERE code = 'CMO' LIMIT 1), 'Coordinator')
-ON DUPLICATE KEY UPDATE full_name = VALUES(full_name), email = VALUES(email);
+AS new_values
+ON DUPLICATE KEY UPDATE full_name = new_values.full_name, email = new_values.email;
 
 -- ====================================================
 -- STUDENTS (3 per department - 10 digits each)
@@ -413,7 +447,8 @@ INSERT INTO users (role, id_number, full_name, email, password_hash, department_
    (SELECT id FROM departments WHERE code = 'SCS' LIMIT 1), 'BS Information Technology', '2nd Year'),
   ('student', '2021001003', 'Carlos Reyes', 'carlos.reyes@student.usjr.edu.ph', @defaultPassword, 
    (SELECT id FROM departments WHERE code = 'SCS' LIMIT 1), 'BS Entertainment and Multimedia Computing', '4th Year')
-ON DUPLICATE KEY UPDATE full_name = VALUES(full_name), email = VALUES(email);
+AS new_values
+ON DUPLICATE KEY UPDATE full_name = new_values.full_name, email = new_values.email;
 
 -- SBM Students
 INSERT INTO users (role, id_number, full_name, email, password_hash, department_id, course, year_level) VALUES
@@ -423,7 +458,8 @@ INSERT INTO users (role, id_number, full_name, email, password_hash, department_
    (SELECT id FROM departments WHERE code = 'SBM' LIMIT 1), 'BS Business Administration', '2nd Year'),
   ('student', '2022002003', 'Sofia Lopez', 'sofia.lopez@student.usjr.edu.ph', @defaultPassword, 
    (SELECT id FROM departments WHERE code = 'SBM' LIMIT 1), 'BS Marketing Management', '4th Year')
-ON DUPLICATE KEY UPDATE full_name = VALUES(full_name), email = VALUES(email);
+AS new_values
+ON DUPLICATE KEY UPDATE full_name = new_values.full_name, email = new_values.email;
 
 -- SDPC Students
 INSERT INTO users (role, id_number, full_name, email, password_hash, department_id, course, year_level) VALUES
@@ -433,7 +469,8 @@ INSERT INTO users (role, id_number, full_name, email, password_hash, department_
    (SELECT id FROM departments WHERE code = 'SDPC' LIMIT 1), 'BS Information Technology', '2nd Year'),
   ('student', '2024004003', 'Carmen Mendoza', 'carmen.mendoza@student.usjr.edu.ph', @defaultPassword, 
    (SELECT id FROM departments WHERE code = 'SDPC' LIMIT 1), 'BS Business Administration', '4th Year')
-ON DUPLICATE KEY UPDATE full_name = VALUES(full_name), email = VALUES(email);
+AS new_values
+ON DUPLICATE KEY UPDATE full_name = new_values.full_name, email = new_values.email;
 
 -- SASO Students
 INSERT INTO users (role, id_number, full_name, email, password_hash, department_id, course, year_level) VALUES
@@ -443,7 +480,8 @@ INSERT INTO users (role, id_number, full_name, email, password_hash, department_
    (SELECT id FROM departments WHERE code = 'SASO' LIMIT 1), 'BS Accountancy', '2nd Year'),
   ('student', '2025005003', 'Roberto Morales', 'roberto.morales@student.usjr.edu.ph', @defaultPassword, 
    (SELECT id FROM departments WHERE code = 'SASO' LIMIT 1), 'AB Communication', '4th Year')
-ON DUPLICATE KEY UPDATE full_name = VALUES(full_name), email = VALUES(email);
+AS new_values
+ON DUPLICATE KEY UPDATE full_name = new_values.full_name, email = new_values.email;
 
 -- SSD Students
 INSERT INTO users (role, id_number, full_name, email, password_hash, department_id, course, year_level) VALUES
@@ -453,7 +491,8 @@ INSERT INTO users (role, id_number, full_name, email, password_hash, department_
    (SELECT id FROM departments WHERE code = 'SSD' LIMIT 1), 'BS Information Technology', '2nd Year'),
   ('student', '2026006003', 'Valentina Ocampo', 'valentina.ocampo@student.usjr.edu.ph', @defaultPassword, 
    (SELECT id FROM departments WHERE code = 'SSD' LIMIT 1), 'BS Business Administration', '4th Year')
-ON DUPLICATE KEY UPDATE full_name = VALUES(full_name), email = VALUES(email);
+AS new_values
+ON DUPLICATE KEY UPDATE full_name = new_values.full_name, email = new_values.email;
 
 -- CLINIC Students
 INSERT INTO users (role, id_number, full_name, email, password_hash, department_id, course, year_level) VALUES
@@ -463,7 +502,8 @@ INSERT INTO users (role, id_number, full_name, email, password_hash, department_
    (SELECT id FROM departments WHERE code = 'CLINIC' LIMIT 1), 'BS Information Technology', '2nd Year'),
   ('student', '2027007003', 'Sebastian Ortega', 'sebastian.ortega@student.usjr.edu.ph', @defaultPassword, 
    (SELECT id FROM departments WHERE code = 'CLINIC' LIMIT 1), 'BS Accountancy', '4th Year')
-ON DUPLICATE KEY UPDATE full_name = VALUES(full_name), email = VALUES(email);
+AS new_values
+ON DUPLICATE KEY UPDATE full_name = new_values.full_name, email = new_values.email;
 
 -- SCHOLARSHIP Students
 INSERT INTO users (role, id_number, full_name, email, password_hash, department_id, course, year_level) VALUES
@@ -473,7 +513,8 @@ INSERT INTO users (role, id_number, full_name, email, password_hash, department_
    (SELECT id FROM departments WHERE code = 'SCHOLARSHIP' LIMIT 1), 'BS Information Technology', '2nd Year'),
   ('student', '2028008003', 'Sofia Castro', 'sofia.castro@student.usjr.edu.ph', @defaultPassword, 
    (SELECT id FROM departments WHERE code = 'SCHOLARSHIP' LIMIT 1), 'BS Business Administration', '4th Year')
-ON DUPLICATE KEY UPDATE full_name = VALUES(full_name), email = VALUES(email);
+AS new_values
+ON DUPLICATE KEY UPDATE full_name = new_values.full_name, email = new_values.email;
 
 -- LIBRARY Students
 INSERT INTO users (role, id_number, full_name, email, password_hash, department_id, course, year_level) VALUES
@@ -483,7 +524,8 @@ INSERT INTO users (role, id_number, full_name, email, password_hash, department_
    (SELECT id FROM departments WHERE code = 'LIBRARY' LIMIT 1), 'BS Information Technology', '2nd Year'),
   ('student', '2029009003', 'Lucas Pena', 'lucas.pena@student.usjr.edu.ph', @defaultPassword, 
    (SELECT id FROM departments WHERE code = 'LIBRARY' LIMIT 1), 'BS Accountancy', '4th Year')
-ON DUPLICATE KEY UPDATE full_name = VALUES(full_name), email = VALUES(email);
+AS new_values
+ON DUPLICATE KEY UPDATE full_name = new_values.full_name, email = new_values.email;
 
 -- CMO Students
 INSERT INTO users (role, id_number, full_name, email, password_hash, department_id, course, year_level) VALUES
@@ -493,7 +535,8 @@ INSERT INTO users (role, id_number, full_name, email, password_hash, department_
    (SELECT id FROM departments WHERE code = 'CMO' LIMIT 1), 'BS Information Technology', '2nd Year'),
   ('student', '2020000003', 'Olivia Rios', 'olivia.rios@student.usjr.edu.ph', @defaultPassword, 
    (SELECT id FROM departments WHERE code = 'CMO' LIMIT 1), 'BS Business Administration', '4th Year')
-ON DUPLICATE KEY UPDATE full_name = VALUES(full_name), email = VALUES(email);
+AS new_values
+ON DUPLICATE KEY UPDATE full_name = new_values.full_name, email = new_values.email;
 
 -- ====================================================
 -- VERIFICATION
