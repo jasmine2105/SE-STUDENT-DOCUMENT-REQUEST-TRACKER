@@ -344,7 +344,7 @@ class SuperAdminPortal {
 
   async loadDepartments() {
     try {
-      this.departments = await Utils.apiRequest('/api/departments');
+      this.departments = await Utils.apiRequest('/departments');
       this.renderDepartments();
     } catch (error) {
       console.error('Failed to load departments:', error);
@@ -513,7 +513,7 @@ class SuperAdminPortal {
 
   async loadDepartmentsForSelect() {
     try {
-      const depts = await Utils.apiRequest('/api/departments');
+      const depts = await Utils.apiRequest('/departments');
       const select = document.getElementById('newUserDepartment');
       if (select) {
         select.innerHTML = '<option value="">Select department</option>' +
