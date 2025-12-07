@@ -137,8 +137,41 @@ class SuperAdminPortal {
     // Search and filters
     const usersSearch = document.getElementById('usersSearch');
     const usersRoleFilter = document.getElementById('usersRoleFilter');
+    const usersDeptFilter = document.getElementById('usersDeptFilter');
     if (usersSearch) usersSearch.addEventListener('input', () => this.filterUsers());
     if (usersRoleFilter) usersRoleFilter.addEventListener('change', () => this.filterUsers());
+    if (usersDeptFilter) usersDeptFilter.addEventListener('change', () => this.filterUsers());
+
+    // Import CSV button
+    const btnImportUsers = document.getElementById('btnImportUsers');
+    if (btnImportUsers) {
+      btnImportUsers.addEventListener('click', () => {
+        const fileInput = document.createElement('input');
+        fileInput.type = 'file';
+        fileInput.accept = '.csv';
+        fileInput.onchange = (e) => {
+          const file = e.target.files[0];
+          if (file) {
+            this.handleCSVImport(file);
+          }
+        };
+        fileInput.click();
+      });
+    }
+
+    // Requests filters
+    const requestsStatusFilter = document.getElementById('requestsStatusFilter');
+    const requestsDeptFilter = document.getElementById('requestsDeptFilter');
+    const requestsSearch = document.getElementById('requestsSearch');
+    if (requestsStatusFilter) requestsStatusFilter.addEventListener('change', () => this.filterRequests());
+    if (requestsDeptFilter) requestsDeptFilter.addEventListener('change', () => this.filterRequests());
+    if (requestsSearch) requestsSearch.addEventListener('input', () => this.filterRequests());
+
+    // Logs filters
+    const logsUserFilter = document.getElementById('logsUserFilter');
+    const logsActivityFilter = document.getElementById('logsActivityFilter');
+    if (logsUserFilter) logsUserFilter.addEventListener('change', () => this.filterLogs());
+    if (logsActivityFilter) logsActivityFilter.addEventListener('change', () => this.filterLogs());
   }
 
   showView(viewName) {
@@ -231,10 +264,10 @@ class SuperAdminPortal {
               <strong>${dept.name}</strong>
               <div style="font-size: 0.9rem; opacity: 0.7;">${dept.requestCount || 0} requests</div>
             </div>
-            <div style="text-align: right;">
-              <div style="font-size: 1.5rem; font-weight: 700; color: var(--super-admin-purple);">${dept.completedCount || 0}</div>
-              <div style="font-size: 0.85rem; opacity: 0.7;">completed</div>
-            </div>
+             <div style="text-align: right;">
+               <div style="font-size: 1.5rem; font-weight: 700; color: var(--recoletos-green);">${dept.completedCount || 0}</div>
+               <div style="font-size: 0.85rem; opacity: 0.7;">completed</div>
+             </div>
           </div>
         `;
       });
@@ -337,17 +370,62 @@ class SuperAdminPortal {
     const select = document.getElementById('usersDeptFilter');
     if (!select) return;
 
-    const depts = [...new Set(this.users.map(u => ({ id: u.departmentId, name: u.department })).filter(d => d.name))];
+    // Use Map to ensure unique departments by ID
+    const deptMap = new Map();
+    this.users.forEach(u => {
+      if (u.departmentId && u.department) {
+        if (!deptMap.has(u.departmentId)) {
+          deptMap.set(u.departmentId, { id: u.departmentId, name: u.department });
+        }
+      }
+    });
+    
+    const uniqueDepts = Array.from(deptMap.values());
     select.innerHTML = '<option value="all">All Departments</option>' +
-      depts.map(d => `<option value="${d.id}">${d.name}</option>`).join('');
+      uniqueDepts.map(d => `<option value="${d.id}">${d.name}</option>`).join('');
   }
 
   async loadDepartments() {
     try {
-      this.departments = await Utils.apiRequest('/departments');
+      const response = await Utils.apiRequest('/api/departments');
+      if (!response || !Array.isArray(response)) {
+        throw new Error('Invalid response from server');
+      }
+      
+      this.departments = response;
+      
+      // Get document count for each department
+      for (let dept of this.departments) {
+        try {
+          // Count documents from the department's documents array if available
+          if (dept.documents && Array.isArray(dept.documents)) {
+            dept.documentCount = dept.documents.length;
+          } else {
+            // Fallback: try to fetch documents
+            try {
+              const docs = await Utils.apiRequest(`/api/departments/${dept.id}/documents`);
+              dept.documentCount = docs ? docs.length : 0;
+            } catch (e) {
+              dept.documentCount = 0;
+            }
+          }
+        } catch (e) {
+          dept.documentCount = 0;
+        }
+      }
       this.renderDepartments();
     } catch (error) {
       console.error('Failed to load departments:', error);
+      const container = document.getElementById('departmentsList');
+      if (container) {
+        container.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state-icon">⚠️</div>
+            <h3>Failed to load departments</h3>
+            <p>${error.message || 'Please try refreshing the page'}</p>
+          </div>
+        `;
+      }
       Utils.showToast('Failed to load departments', 'error');
     }
   }
@@ -356,27 +434,36 @@ class SuperAdminPortal {
     const container = document.getElementById('departmentsList');
     if (!container) return;
 
-    if (this.departments.length === 0) {
-      container.innerHTML = '<div class="empty-state"><p>No departments found</p></div>';
+    if (!this.departments || this.departments.length === 0) {
+      container.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-state-icon">🏛️</div>
+          <h3>No departments found</h3>
+          <p>Click "Add Department" to create a new department</p>
+        </div>
+      `;
       return;
     }
 
-    container.innerHTML = this.departments.map(dept => `
-      <div class="dept-card">
-        <div class="dept-card-header">
-          <h3>${dept.name} (${dept.code})</h3>
-          <div>
-            <button class="btn-action" onclick="window.superAdminPortal.editDepartment(${dept.id})">
-              <i class="fas fa-edit"></i> Edit
-            </button>
-            <button class="btn-action danger" onclick="window.superAdminPortal.deleteDepartment(${dept.id})">
-              <i class="fas fa-trash"></i> Delete
-            </button>
+    container.innerHTML = this.departments.map(dept => {
+      if (!dept.id || !dept.name) return '';
+      return `
+        <div class="dept-card">
+          <div class="dept-card-header">
+            <h3>${dept.name}${dept.code ? ` (${dept.code})` : ''}</h3>
+            <div>
+              <button class="btn-action" onclick="window.superAdminPortal.editDepartment(${dept.id})">
+                <i class="fas fa-edit"></i> Edit
+              </button>
+              <button class="btn-action danger" onclick="window.superAdminPortal.deleteDepartment(${dept.id})">
+                <i class="fas fa-trash"></i> Delete
+              </button>
+            </div>
           </div>
+          <p>Document Types: ${dept.documentCount !== undefined ? dept.documentCount : (dept.documents ? dept.documents.length : 0)}</p>
         </div>
-        <p>Document Types: ${dept.documentCount || 0}</p>
-      </div>
-    `).join('');
+      `;
+    }).filter(html => html !== '').join('');
   }
 
   async loadDocumentTypes() {
@@ -437,10 +524,32 @@ class SuperAdminPortal {
   async loadAllRequests() {
     try {
       this.requests = await Utils.apiRequest('/super-admin/requests');
+      this.populateRequestsDepartmentFilter();
       this.renderRequests();
     } catch (error) {
       console.error('Failed to load requests:', error);
       Utils.showToast('Failed to load requests', 'error');
+    }
+  }
+
+  async populateRequestsDepartmentFilter() {
+    try {
+      const depts = await Utils.apiRequest('/api/departments');
+      const select = document.getElementById('requestsDeptFilter');
+      if (select && depts && Array.isArray(depts)) {
+        // Use Map to ensure unique departments by ID
+        const deptMap = new Map();
+        depts.forEach(d => {
+          if (d.id && d.name && !deptMap.has(d.id)) {
+            deptMap.set(d.id, { id: d.id, name: d.name });
+          }
+        });
+        const uniqueDepts = Array.from(deptMap.values());
+        select.innerHTML = '<option value="all">All Departments</option>' +
+          uniqueDepts.map(d => `<option value="${d.id}">${d.name}</option>`).join('');
+      }
+    } catch (error) {
+      console.error('Failed to load departments for filter:', error);
     }
   }
 
@@ -474,10 +583,25 @@ class SuperAdminPortal {
   async loadActivityLogs() {
     try {
       this.logs = await Utils.apiRequest('/super-admin/logs');
+      await this.populateLogsUserFilter();
       this.renderLogs();
     } catch (error) {
       console.error('Failed to load logs:', error);
       Utils.showToast('Failed to load activity logs', 'error');
+    }
+  }
+
+  async populateLogsUserFilter() {
+    try {
+      const users = await Utils.apiRequest('/super-admin/users');
+      const select = document.getElementById('logsUserFilter');
+      if (select) {
+        const uniqueUsers = [...new Map(users.map(u => [u.id, u])).values()];
+        select.innerHTML = '<option value="all">All Users</option>' +
+          uniqueUsers.map(u => `<option value="${u.id}">${u.fullName || u.idNumber || 'Unknown'}</option>`).join('');
+      }
+    } catch (error) {
+      console.error('Failed to load users for filter:', error);
     }
   }
 
@@ -590,7 +714,29 @@ class SuperAdminPortal {
   }
 
   async editDepartment(deptId) {
-    Utils.showToast('Edit department feature coming soon', 'info');
+    const dept = this.departments.find(d => d.id === deptId);
+    if (!dept) {
+      Utils.showToast('Department not found', 'error');
+      return;
+    }
+
+    const newName = prompt('Enter new department name:', dept.name);
+    if (!newName || newName.trim() === '') return;
+
+    const newCode = prompt('Enter new department code:', dept.code);
+    if (!newCode || newCode.trim() === '') return;
+
+    try {
+      await Utils.apiRequest(`/api/departments/${deptId}`, 'PUT', {
+        name: newName.trim(),
+        code: newCode.trim()
+      });
+      Utils.showToast('Department updated successfully', 'success');
+      await this.loadDepartments();
+    } catch (error) {
+      Utils.showToast('Failed to update department', 'error');
+      console.error(error);
+    }
   }
 
   async deleteDepartment(deptId) {
@@ -605,7 +751,32 @@ class SuperAdminPortal {
   }
 
   async editDocumentType(docId) {
-    Utils.showToast('Edit document type feature coming soon', 'info');
+    const doc = this.documentTypes.find(d => d.id === docId);
+    if (!doc) {
+      Utils.showToast('Document type not found', 'error');
+      return;
+    }
+
+    const newLabel = prompt('Enter new document label:', doc.label);
+    if (!newLabel || newLabel.trim() === '') return;
+
+    const newValue = prompt('Enter new document value:', doc.value);
+    if (!newValue || newValue.trim() === '') return;
+
+    const requiresFaculty = confirm('Does this document require faculty approval?');
+
+    try {
+      await Utils.apiRequest(`/super-admin/document-types/${docId}`, 'PUT', {
+        label: newLabel.trim(),
+        value: newValue.trim(),
+        requiresFaculty: requiresFaculty
+      });
+      Utils.showToast('Document type updated successfully', 'success');
+      await this.loadDocumentTypes();
+    } catch (error) {
+      Utils.showToast('Failed to update document type', 'error');
+      console.error(error);
+    }
   }
 
   async deleteDocumentType(docId) {
@@ -620,7 +791,211 @@ class SuperAdminPortal {
   }
 
   async viewRequest(requestId) {
-    Utils.showToast('View request feature coming soon', 'info');
+    const request = this.requests.find(r => r.id === requestId);
+    if (!request) {
+      Utils.showToast('Request not found', 'error');
+      return;
+    }
+
+    // Show request details in an alert (can be improved with a modal later)
+    const details = `
+Request Code: ${request.requestCode || 'N/A'}
+Student: ${request.studentName || 'N/A'}
+Department: ${request.departmentName || 'N/A'}
+Document: ${request.documentLabel || request.documentValue || 'N/A'}
+Faculty Status: ${request.facultyStatus || 'Pending'}
+Admin Status: ${request.status || 'Pending'}
+Submitted: ${request.submittedAt ? new Date(request.submittedAt).toLocaleString() : 'N/A'}
+    `.trim();
+    
+    alert(details);
+  }
+
+  // Simple CSV parser that handles quoted values
+  parseCSVLine(line) {
+    const result = [];
+    let current = '';
+    let inQuotes = false;
+    
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+      
+      if (char === '"') {
+        if (inQuotes && line[i + 1] === '"') {
+          current += '"';
+          i++; // Skip next quote
+        } else {
+          inQuotes = !inQuotes;
+        }
+      } else if (char === ',' && !inQuotes) {
+        result.push(current.trim());
+        current = '';
+      } else {
+        current += char;
+      }
+    }
+    result.push(current.trim());
+    return result;
+  }
+
+  async handleCSVImport(file) {
+    try {
+      const text = await file.text();
+      const lines = text.split(/\r?\n/).filter(line => line.trim());
+      
+      if (lines.length < 2) {
+        Utils.showToast('CSV file must have at least a header row and one data row', 'error');
+        return;
+      }
+
+      // Parse CSV header
+      const headers = this.parseCSVLine(lines[0]).map(h => h.trim().toLowerCase().replace(/"/g, ''));
+      const requiredHeaders = ['role', 'id_number', 'full_name', 'email', 'password'];
+      const missingHeaders = requiredHeaders.filter(h => !headers.includes(h));
+      
+      if (missingHeaders.length > 0) {
+        Utils.showToast(`Missing required columns: ${missingHeaders.join(', ')}. Required: ${requiredHeaders.join(', ')}`, 'error');
+        return;
+      }
+
+      const users = [];
+      for (let i = 1; i < lines.length; i++) {
+        if (!lines[i].trim()) continue;
+        
+        const values = this.parseCSVLine(lines[i]);
+        if (values.length < headers.length) continue;
+        
+        const user = {};
+        headers.forEach((header, index) => {
+          user[header] = (values[index] || '').replace(/^"|"$/g, '').trim();
+        });
+        
+        // Validate required fields
+        if (user.role && user.id_number && user.full_name && user.email && user.password) {
+          users.push({
+            role: user.role.toLowerCase(),
+            idNumber: user.id_number,
+            fullName: user.full_name,
+            email: user.email,
+            password: user.password,
+            departmentId: user.department_id || null,
+            course: user.course || null,
+            yearLevel: user.year_level || null,
+            position: user.position || null
+          });
+        }
+      }
+
+      if (users.length === 0) {
+        Utils.showToast('No valid users found in CSV file', 'error');
+        return;
+      }
+
+      // Confirm import
+      if (!confirm(`Import ${users.length} user(s) from CSV?`)) return;
+
+      // Show loading
+      Utils.showToast('Importing users...', 'info');
+
+      // Import users
+      let successCount = 0;
+      let errorCount = 0;
+      const errors = [];
+      
+      for (const user of users) {
+        try {
+          await Utils.apiRequest('/super-admin/users', 'POST', user);
+          successCount++;
+        } catch (error) {
+          console.error(`Failed to import user ${user.idNumber}:`, error);
+          errorCount++;
+          errors.push(`${user.idNumber}: ${error.message || 'Import failed'}`);
+        }
+      }
+
+      if (successCount > 0) {
+        Utils.showToast(`Successfully imported ${successCount} user(s)${errorCount > 0 ? `. ${errorCount} failed.` : ''}`, 'success');
+        if (errorCount > 0 && errors.length > 0) {
+          console.error('Import errors:', errors);
+        }
+        await this.loadUsers();
+      } else {
+        Utils.showToast('Failed to import all users. Please check the CSV format and try again.', 'error');
+      }
+    } catch (error) {
+      console.error('CSV import error:', error);
+      Utils.showToast('Failed to import CSV file: ' + (error.message || 'Unknown error'), 'error');
+    }
+  }
+
+  filterRequests() {
+    const statusFilter = document.getElementById('requestsStatusFilter')?.value || 'all';
+    const deptFilter = document.getElementById('requestsDeptFilter')?.value || 'all';
+    const search = document.getElementById('requestsSearch')?.value.toLowerCase() || '';
+
+    const filtered = this.requests.filter(req => {
+      if (statusFilter !== 'all' && req.status !== statusFilter) return false;
+      if (deptFilter !== 'all' && req.departmentId != deptFilter) return false;
+      if (search && !req.studentName?.toLowerCase().includes(search) &&
+          !req.requestCode?.toLowerCase().includes(search) &&
+          !req.documentLabel?.toLowerCase().includes(search) &&
+          !req.documentValue?.toLowerCase().includes(search)) return false;
+      return true;
+    });
+
+    const tbody = document.getElementById('requestsTableBody');
+    if (!tbody) return;
+
+    if (filtered.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="8" class="text-center">No requests found</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = filtered.map(req => `
+      <tr>
+        <td>${req.requestCode || 'N/A'}</td>
+        <td>${req.studentName || ''}</td>
+        <td>${req.departmentName || ''}</td>
+        <td>${req.documentLabel || req.documentValue || ''}</td>
+        <td><span class="status-badge ${req.facultyStatus || 'pending'}">${req.facultyStatus || 'Pending'}</span></td>
+        <td><span class="status-badge ${req.status || 'pending'}">${req.status || 'Pending'}</span></td>
+        <td>${req.submittedAt ? new Date(req.submittedAt).toLocaleDateString() : 'N/A'}</td>
+        <td>
+          <button class="btn-action" onclick="window.superAdminPortal.viewRequest(${req.id})">
+            <i class="fas fa-eye"></i> View
+          </button>
+        </td>
+      </tr>
+    `).join('');
+  }
+
+  filterLogs() {
+    const userFilter = document.getElementById('logsUserFilter')?.value || 'all';
+    const activityFilter = document.getElementById('logsActivityFilter')?.value || 'all';
+
+    const filtered = this.logs.filter(log => {
+      if (userFilter !== 'all' && log.userId != userFilter) return false;
+      if (activityFilter !== 'all' && log.activity?.toLowerCase() !== activityFilter.toLowerCase()) return false;
+      return true;
+    });
+
+    const container = document.getElementById('logsList');
+    if (!container) return;
+
+    if (filtered.length === 0) {
+      container.innerHTML = '<div class="empty-state"><p>No activity logs match the filters</p></div>';
+      return;
+    }
+
+    container.innerHTML = filtered.map(log => `
+      <div class="log-item">
+        <div class="log-info">
+          <strong>${log.userName || 'Unknown'}</strong> ${log.activity || ''}
+          <div style="font-size: 0.85rem; opacity: 0.7; margin-top: 0.25rem;">${log.details || ''}</div>
+        </div>
+        <div class="log-time">${log.timestamp ? new Date(log.timestamp).toLocaleString() : 'N/A'}</div>
+      </div>
+    `).join('');
   }
 }
 

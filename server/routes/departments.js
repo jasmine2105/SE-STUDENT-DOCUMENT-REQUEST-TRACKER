@@ -1,5 +1,6 @@
 const express = require('express');
 const { getConnection } = require('../config/db');
+const authMiddleware = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -51,6 +52,52 @@ router.get('/', async (req, res) => {
     console.warn('Using fallback departments data due to database connection failure');
     // Return fallback data instead of error - allows app to work without database
     res.json(FALLBACK_DEPARTMENTS);
+  }
+});
+
+// Get documents for a specific department
+router.get('/:id/documents', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const conn = await getConnection();
+    try {
+      const [documents] = await conn.query(
+        'SELECT id, label, value, requires_faculty FROM department_documents WHERE department_id = ?',
+        [id]
+      );
+      res.json(documents);
+    } finally {
+      conn.release();
+    }
+  } catch (error) {
+    console.error('Department documents error:', error);
+    res.status(500).json({ message: 'Failed to load department documents' });
+  }
+});
+
+// Update department (requires authentication)
+router.put('/:id', authMiddleware(), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, code } = req.body;
+    
+    if (!name || !code) {
+      return res.status(400).json({ message: 'Name and code are required' });
+    }
+    
+    const conn = await getConnection();
+    try {
+      await conn.query(
+        'UPDATE departments SET name = ?, code = ? WHERE id = ?',
+        [name, code, id]
+      );
+      res.json({ message: 'Department updated successfully' });
+    } finally {
+      conn.release();
+    }
+  } catch (error) {
+    console.error('Update department error:', error);
+    res.status(500).json({ message: 'Failed to update department' });
   }
 });
 

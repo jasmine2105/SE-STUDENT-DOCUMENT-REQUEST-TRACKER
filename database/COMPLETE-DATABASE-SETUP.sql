@@ -441,11 +441,11 @@ ON DUPLICATE KEY UPDATE full_name = new_values.full_name, email = new_values.ema
 -- ====================================================
 -- SCS Students
 INSERT INTO users (role, id_number, full_name, email, password_hash, department_id, course, year_level) VALUES
-  ('student', '2021001001', 'Juan Dela Cruz', 'juan.delacruz@student.usjr.edu.ph', @defaultPassword, 
+  ('student', '2021001001', 'Christ Catipay', 'juan.delacruz@student.usjr.edu.ph', @defaultPassword, 
    (SELECT id FROM departments WHERE code = 'SCS' LIMIT 1), 'BS Computer Science', '3rd Year'),
-  ('student', '2021001002', 'Maria Santos', 'maria.santos@student.usjr.edu.ph', @defaultPassword, 
+  ('student', '2021001002', 'Jamaica Dotillos', 'maria.santos@student.usjr.edu.ph', @defaultPassword, 
    (SELECT id FROM departments WHERE code = 'SCS' LIMIT 1), 'BS Information Technology', '2nd Year'),
-  ('student', '2021001003', 'Carlos Reyes', 'carlos.reyes@student.usjr.edu.ph', @defaultPassword, 
+  ('student', '2021001003', 'Martina Monica', 'carlos.reyes@student.usjr.edu.ph', @defaultPassword, 
    (SELECT id FROM departments WHERE code = 'SCS' LIMIT 1), 'BS Entertainment and Multimedia Computing', '4th Year')
 AS new_values
 ON DUPLICATE KEY UPDATE full_name = new_values.full_name, email = new_values.email;

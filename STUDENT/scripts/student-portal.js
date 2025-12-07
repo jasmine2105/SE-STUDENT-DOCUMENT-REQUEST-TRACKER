@@ -151,28 +151,42 @@ class StudentPortal {
 
   async loadDepartmentsFromApi() {
     if (this.departments.length > 0) return;
+    
+    // Allowed department codes
+    const allowedDepartmentCodes = ['SCS', 'SBM', 'SDPC', 'SASO', 'SSD', 'CLINIC', 'SCHOLARSHIP', 'LIBRARY', 'CMO'];
+    
     try {
-      const data = await Utils.apiRequest('/departments', {
+      const data = await Utils.apiRequest('/api/departments', {
         timeout: 30000 // 30 seconds timeout
       });
       if (Array.isArray(data) && data.length) {
-        // Ensure all department IDs are numbers
-        this.departments = data.map(dept => ({
-          ...dept,
-          id: typeof dept.id === 'number' ? dept.id : parseInt(dept.id, 10) || dept.id
-        }));
+        // Filter to only allowed departments and ensure all department IDs are numbers
+        this.departments = data
+          .filter(dept => {
+            const code = (dept.code || '').toString().toUpperCase();
+            return allowedDepartmentCodes.includes(code);
+          })
+          .map(dept => ({
+            ...dept,
+            id: typeof dept.id === 'number' ? dept.id : parseInt(dept.id, 10) || dept.id
+          }));
       } else {
         throw new Error('No departments returned from API');
       }
     } catch (error) {
       console.warn('Failed to load departments from API', error);
-      // Use fallback config, but convert IDs to numbers if possible
+      // Use fallback config, but convert IDs to numbers if possible and filter
       const fallbackDepts = (window.RecoletosConfig && window.RecoletosConfig.departments) || [];
-      this.departments = fallbackDepts.map((dept, index) => ({
-        ...dept,
-        id: typeof dept.id === 'number' ? dept.id : (parseInt(dept.id, 10) || index + 1),
-        code: dept.id || dept.code || `DEPT-${index + 1}`
-      }));
+      this.departments = fallbackDepts
+        .filter(dept => {
+          const code = (dept.code || dept.id || '').toString().toUpperCase();
+          return allowedDepartmentCodes.includes(code);
+        })
+        .map((dept, index) => ({
+          ...dept,
+          id: typeof dept.id === 'number' ? dept.id : (parseInt(dept.id, 10) || index + 1),
+          code: dept.code || dept.id || `DEPT-${index + 1}`
+        }));
     }
   }
 
@@ -1194,9 +1208,25 @@ class StudentPortal {
     // Personal information is automatically retrieved from the logged-in user's account
     // No need to validate or collect it from the form
 
+    // Ensure departments are loaded before submission
+    if (this.departments.length === 0) {
+      console.warn('Departments not loaded, loading now...');
+      try {
+        await this.loadDepartmentsFromApi();
+      } catch (error) {
+        console.error('Failed to load departments:', error);
+        Utils.showToast('Failed to load departments. Please refresh the page and try again.', 'error');
+        return;
+      }
+    }
+
     const formData = new FormData(form);
     const departmentCode = formData.get('department');
     const documentValue = formData.get('documentType');
+
+    console.log('📝 Form submission - Department Code:', departmentCode);
+    console.log('📝 Available departments:', this.departments);
+    console.log('📝 Document Value:', documentValue);
 
     if (!departmentCode || !documentValue) {
       Utils.showToast('Please select both department and document type.', 'warning');
@@ -1207,8 +1237,12 @@ class StudentPortal {
     const selectedOption = documentSelect?.options[documentSelect.selectedIndex];
     const requiresFaculty = selectedOption ? selectedOption.getAttribute('data-requires-faculty') === 'true' : true;
 
-    // Find department by code or name
-    let department = this.departments.find(dept => dept.code === departmentCode);
+    // Find department by code (case-insensitive)
+    let department = this.departments.find(dept => {
+      const deptCode = (dept.code || '').toString().toUpperCase();
+      return deptCode === departmentCode.toUpperCase();
+    });
+    
     if (!department) {
       // Try finding by name if code doesn't match
       department = this.departments.find(dept =>
@@ -1216,11 +1250,50 @@ class StudentPortal {
       );
     }
 
+    // If still not found, try to load departments again and retry
+    if (!department && this.departments.length === 0) {
+      console.warn('Departments array is empty, attempting to reload...');
+      try {
+        await this.loadDepartmentsFromApi();
+        department = this.departments.find(dept => {
+          const deptCode = (dept.code || '').toString().toUpperCase();
+          return deptCode === departmentCode.toUpperCase();
+        });
+      } catch (error) {
+        console.error('Failed to reload departments:', error);
+      }
+    }
+
+    // If still not found, try to fetch department directly from API
+    if (!department) {
+      console.warn('Department not found in local array, fetching from API...');
+      try {
+        const allDepts = await Utils.apiRequest('/api/departments');
+        if (Array.isArray(allDepts)) {
+          department = allDepts.find(dept => {
+            const deptCode = (dept.code || '').toString().toUpperCase();
+            return deptCode === departmentCode.toUpperCase();
+          });
+          // If found, add it to local array for future use
+          if (department) {
+            this.departments.push({
+              ...department,
+              id: typeof department.id === 'number' ? department.id : parseInt(department.id, 10) || department.id
+            });
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch department from API:', error);
+      }
+    }
+
     if (!department) {
       console.error('Department not found:', departmentCode, 'Available departments:', this.departments);
       Utils.showToast('Invalid department selected. Please refresh the page and try again.', 'error');
       return;
     }
+    
+    console.log('✅ Found department:', department.code, 'ID:', department.id);
 
     // Ensure departmentId is a number
     let departmentId = department.id;
@@ -1250,7 +1323,13 @@ class StudentPortal {
       requiresFaculty: requiresFaculty
     };
 
-    console.log('Submitting request with data:', { ...requestData, attachments: '[...]' });
+    console.log('📤 Submitting request with data:', { 
+      ...requestData, 
+      departmentCode: departmentCode,
+      departmentName: department.name,
+      departmentId: departmentId,
+      attachments: '[...]' 
+    });
 
     // check attachment requirement
     const uploadArea = document.getElementById('fileUploadArea');

@@ -240,6 +240,32 @@ router.get('/document-types', async (req, res) => {
   }
 });
 
+// Update Document Type
+router.put('/document-types/:docId', async (req, res) => {
+  try {
+    const { docId } = req.params;
+    const { label, value, requiresFaculty } = req.body;
+    
+    if (!label || !value) {
+      return res.status(400).json({ message: 'Label and value are required' });
+    }
+    
+    const conn = await getConnection();
+    try {
+      await conn.query(
+        'UPDATE department_documents SET label = ?, value = ?, requires_faculty = ? WHERE id = ?',
+        [label, value, requiresFaculty || false, docId]
+      );
+      res.json({ message: 'Document type updated successfully' });
+    } finally {
+      conn.release();
+    }
+  } catch (error) {
+    console.error('Update document type error:', error);
+    res.status(500).json({ message: 'Failed to update document type' });
+  }
+});
+
 // Delete Document Type
 router.delete('/document-types/:docId', async (req, res) => {
   try {
@@ -298,6 +324,7 @@ router.get('/requests', async (req, res) => {
           r.document_value AS documentValue,
           r.document_label AS documentLabel,
           r.status,
+          r.department_id AS departmentId,
           r.submitted_at AS submittedAt,
           d.name AS departmentName,
           d.code AS departmentCode,
