@@ -5,14 +5,16 @@ const router = express.Router();
 
 // Fallback departments data when database is unavailable
 const FALLBACK_DEPARTMENTS = [
-  { id: 1, code: 'SCS', name: 'School of Computer Studies (SCS)', documents: [] },
-  { id: 2, code: 'SBM', name: 'School of Business Management (SBM)', documents: [] },
-  { id: 3, code: 'SOE', name: 'School of Engineering (SOE)', documents: [] },
-  { id: 4, code: 'SAS', name: 'School of Arts and Sciences (SAS)', documents: [] },
-  { id: 5, code: 'SOEd', name: 'School of Education (SOEd)', documents: [] },
-  { id: 6, code: 'SAMS', name: 'School of Allied Medical Sciences (SAMS)', documents: [] },
-  { id: 7, code: 'SOL', name: 'School of Law (SOL)', documents: [] },
-  { id: 8, code: 'ETEEAP', name: 'ETEEAP (Expanded Tertiary Education Equivalency and Accreditation Program)', documents: [] }
+  { id: 1, code: 'SBM', name: 'School of Business Management (SBM)', documents: [] },
+  { id: 2, code: 'SAS', name: 'School of Arts and Sciences (SAS)', documents: [] },
+  { id: 3, code: 'SDPC', name: 'Student Development and Programs Center (SDPC)', documents: [] },
+  { id: 4, code: 'SASO', name: 'Student Affairs and Services Office (SASO)', documents: [] },
+  { id: 5, code: 'SSD', name: 'Security Services Department (SSD)', documents: [] },
+  { id: 6, code: 'CLINIC', name: 'Clinic', documents: [] },
+  { id: 7, code: 'SCS', name: 'School of Computer Studies (SCS)', documents: [] },
+  { id: 8, code: 'SCHOLARSHIP', name: 'Scholarship Office', documents: [] },
+  { id: 9, code: 'LIBRARY', name: 'Library', documents: [] },
+  { id: 10, code: 'CMO', name: 'Campus Management Office (CMO)', documents: [] }
 ];
 
 router.get('/', async (req, res) => {

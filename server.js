@@ -23,6 +23,7 @@ console.log('✅ Request routes loaded');
 const notificationRoutes = require('./server/routes/notifications');
 const userRoutes = require('./server/routes/users');
 const conversationRoutes = require('./server/routes/conversations');
+const superAdminRoutes = require('./server/routes/super-admin');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -108,6 +109,7 @@ app.use('/api/requests', requestRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/conversations', conversationRoutes);
+app.use('/api/super-admin', superAdminRoutes);
 
 app.get('/api/health', async (req, res) => {
   try {

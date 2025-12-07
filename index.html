@@ -48,10 +48,10 @@
                 <h1 class="hero-title">USJR Recoletos Document Tracker</h1>
                 <p class="hero-subtitle">Manage, request, and track student documents with ease and real-time updates.</p>
                 <div class="hero-buttons">
-                    <a href="#roles" class="btn-hero btn-hero-primary">
-                        <i class="fas fa-file-alt"></i>
-                        Request a Document
-                    </a>
+                    <button class="btn-hero btn-hero-primary" id="openLoginBtnHero">
+                        <i class="fas fa-sign-in-alt"></i>
+                        Sign In
+                    </button>
                     <a href="#track" class="btn-hero btn-hero-secondary">
                         <i class="fas fa-search"></i>
                         Track Request
@@ -73,65 +73,6 @@
         </div>
     </section>
 
-    <!-- Role Selection Section -->
-    <section id="roles" class="roles-section">
-        <div class="section-container">
-            <h2 class="section-title">Select Your Role</h2>
-            <p class="section-subtitle">Choose your role to access the appropriate portal</p>
-            <div class="role-cards-grid">
-                <div class="role-card-premium" data-role="student">
-                    <div class="role-icon-large">
-                        <i class="fas fa-graduation-cap"></i>
-                    </div>
-                    <h3>Student</h3>
-                    <p>Submit document requests, track progress, and receive real-time updates on your academic documents.</p>
-                    <div class="role-features">
-                        <span class="feature-tag"><i class="fas fa-check"></i> Request Documents</span>
-                        <span class="feature-tag"><i class="fas fa-check"></i> Track Status</span>
-                        <span class="feature-tag"><i class="fas fa-check"></i> View History</span>
-                    </div>
-                    <button class="btn-role-signin" data-role="student">
-                        <i class="fas fa-sign-in-alt"></i>
-                        Sign In
-                    </button>
-                </div>
-
-                <div class="role-card-premium" data-role="faculty">
-                    <div class="role-icon-large">
-                        <i class="fas fa-chalkboard-teacher"></i>
-                    </div>
-                    <h3>Faculty</h3>
-                    <p>Review and approve academic document requests that require your verification and endorsement.</p>
-                    <div class="role-features">
-                        <span class="feature-tag"><i class="fas fa-check"></i> Review Request  </span>
-                        <span class="feature-tag"><i class="fas fa-check"></i> Approved/Decline</span>
-                        <span class="feature-tag"><i class="fas fa-check"></i> Add Comments</span>
-                    </div>
-                    <button class="btn-role-signin" data-role="faculty">
-                        <i class="fas fa-sign-in-alt"></i>
-                        Sign In
-                    </button>
-                </div>
-
-                <div class="role-card-premium" data-role="admin">
-                    <div class="role-icon-large">
-                        <i class="fas fa-shield-alt"></i>
-                    </div>
-                    <h3>Administrator</h3>
-                    <p>Manage all document requests, coordinate with faculty, and process requests efficiently.</p>
-                    <div class="role-features">
-                        <span class="feature-tag"><i class="fas fa-check"></i> Manage All Request</span>
-                        <span class="feature-tag"><i class="fas fa-check"></i> Filter & Search</span>
-                        <span class="feature-tag"><i class="fas fa-check"></i> Track Progress</span>
-                    </div>
-                    <button class="btn-role-signin" data-role="admin">
-                        <i class="fas fa-sign-in-alt"></i>
-                        Sign In
-                    </button>
-                </div>
-            </div>
-        </div>
-    </section>
 
     <!-- Common Document Types Section -->
     <section id="request" class="documents-section">
@@ -337,15 +278,14 @@
         // Open login modal when clicking role cards (default view is login)
         // Signup form will only show when user clicks "Sign up" link inside the modal
 
-        // Open login modal when clicking Sign In buttons on role cards
-        document.querySelectorAll('.btn-role-signin').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.stopPropagation(); // Prevent card click event
-                const role = btn.dataset.role;
-                loginModal.currentRole = role;
+        // Open login modal when clicking Sign In button in hero section
+        const openLoginBtnHero = document.getElementById('openLoginBtnHero');
+        if (openLoginBtnHero) {
+            openLoginBtnHero.addEventListener('click', (e) => {
+                e.preventDefault();
                 loginModal.show();
             });
-        });
+        }
 
         // Open login modal when clicking Sign In button
         const openLoginBtn = document.getElementById('openLoginBtn');

@@ -18,22 +18,32 @@ const authMiddleware = require('../middleware/auth');
 // NOTE: In production, JWT_SECRET should ALWAYS be set in .env for security
 const JWT_SECRET = process.env.JWT_SECRET || 'recoletos-secret';
 
-// Helper function to detect role from ID number
+// Helper function to detect role from ID number length
 function detectRoleFromId(idNumber) {
   const id = idNumber.trim();
   
-  // Student: 10 digits starting with 20 (e.g., 2022011084)
-  if (/^20\d{8}$/.test(id)) {
+  // Must be numeric only
+  if (!/^\d+$/.test(id)) {
+    return null;
+  }
+  
+  // Student: exactly 10 digits
+  if (id.length === 10) {
     return 'student';
   }
   
-  // Faculty: Starts with FAC- or F followed by digits
-  if (/^FAC-?\d+$/i.test(id) || /^F\d{4,}$/i.test(id)) {
+  // Faculty: exactly 5 digits
+  if (id.length === 5) {
     return 'faculty';
   }
   
-  // Admin: Starts with ADM- or A followed by digits
-  if (/^ADM-?\d+$/i.test(id) || /^A\d{4,}$/i.test(id)) {
+  // Super Admin: exactly 4 digits
+  if (id.length === 4) {
+    return 'admin'; // Super admin is still role 'admin' but with is_super_admin flag
+  }
+  
+  // Regular Admin: exactly 3 digits
+  if (id.length === 3) {
     return 'admin';
   }
   
@@ -70,9 +80,17 @@ router.post('/signup', async (req, res) => {
     console.log('🔎 Detected role from ID on server:', { idNumber, detectedRole });
     
     if (!detectedRole) {
+      const idLength = idNumber.trim().length;
+      let errorMessage = 'Invalid ID length. ';
+      if (idLength < 3) {
+        errorMessage = 'Invalid ID Number';
+      } else if (idLength > 10) {
+        errorMessage = 'ID number must be 10 digits or less. ';
+      }
+      errorMessage += '';
       return res.status(400).json({ 
-        error: 'Invalid ID format',
-        message: 'ID number format not recognized. Use: Student (2022011084), Faculty (FAC-001), or Admin (ADM-001)' 
+        error: 'Invalid ID length',
+        message: errorMessage
       });
     }
 
@@ -253,7 +271,8 @@ router.post('/signup', async (req, res) => {
         departmentId: user.departmentId,
         departmentName: user.department,
         fullName: user.fullName,
-        idNumber: user.idNumber
+        idNumber: user.idNumber,
+        isSuperAdmin: false
       },
       JWT_SECRET,
       { expiresIn: '12h' }
@@ -279,7 +298,8 @@ router.post('/signup', async (req, res) => {
         departmentCode: user.departmentCode,
         course: user.course || null,
         yearLevel: user.yearLevel || null,
-        position: user.position || null
+        position: user.position || null,
+        isSuperAdmin: false
       },
       token
     });
@@ -322,6 +342,31 @@ router.post('/login', async (req, res) => {
       });
     }
 
+    // Validate ID number format (must be numeric)
+    if (!/^\d+$/.test(idNumber.trim())) {
+      return res.status(400).json({ 
+        error: 'Invalid ID format',
+        message: 'ID number must contain only digits.' 
+      });
+    }
+
+    // Validate ID number length for role detection
+    const detectedRole = detectRoleFromId(idNumber);
+    if (!detectedRole) {
+      const idLength = idNumber.trim().length;
+      let errorMessage = 'Invalid ID length. ';
+      if (idLength < 3) {
+        errorMessage = 'Invalid ID Number ';
+      } else if (idLength > 10) {
+        errorMessage = 'ID number must be 10 digits or less. ';
+      }
+      errorMessage += '';
+      return res.status(400).json({ 
+        error: 'Invalid ID length',
+        message: errorMessage
+      });
+    }
+
     // Find user by ID number (role is determined from database)
     const pool = await initPool();
     const [users] = await pool.query(`
@@ -337,7 +382,8 @@ router.post('/login', async (req, res) => {
         d.code as departmentCode,
         u.course,
         u.year_level AS yearLevel,
-        u.position
+        u.position,
+        COALESCE(u.is_super_admin, FALSE) AS isSuperAdmin
       FROM users u
       LEFT JOIN departments d ON u.department_id = d.id
       WHERE u.id_number = ?
@@ -369,7 +415,8 @@ router.post('/login', async (req, res) => {
         departmentId: user.departmentId,
         departmentName: user.department,
         fullName: user.fullName,
-        idNumber: user.idNumber
+        idNumber: user.idNumber,
+        isSuperAdmin: !!user.isSuperAdmin
       },
       JWT_SECRET,
       { expiresIn: '12h' }
@@ -395,7 +442,8 @@ router.post('/login', async (req, res) => {
         departmentCode: user.departmentCode,
         course: user.course || null,
         yearLevel: user.yearLevel || null,
-        position: user.position || null
+        position: user.position || null,
+        isSuperAdmin: !!user.isSuperAdmin
       },
       token
     });

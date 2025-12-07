@@ -118,6 +118,9 @@ class StudentPortal {
       this.renderDashboard();
       this.renderHistory();
       this.renderNotifications();
+      
+      // Load profile photo if available
+      this.loadProfilePhoto();
 
       // Portal initialized successfully
     } catch (error) {
@@ -278,26 +281,7 @@ class StudentPortal {
     // Render My Documents first for better UX
     this.renderMyDocuments();
 
-    const container = document.getElementById('recentRequests');
-    if (!container) return;
-
-    // Recent requests (show empty state if none)
-    if (!this.requests.length) {
-      container.innerHTML = `
-        <div class="empty-state">
-          <div class="empty-state-icon">📄</div>
-          <h3>No recent requests</h3>
-          <p>Submit a request to see it here.</p>
-        </div>
-      `;
-    } else {
-      const recent = [...this.requests]
-        .sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt))
-        .slice(0, 5)
-        .map((request) => this.buildRequestRow(request, true))
-        .join('');
-      container.innerHTML = `<div class="request-list">${recent}</div>`;
-    }
+    // Recent Requests section removed - redundant with My Documents table
   }
 
   getStatusIcon(status) {
@@ -333,7 +317,11 @@ class StudentPortal {
     const searchTerm = searchEl ? (searchEl.value || '').toLowerCase().trim() : '';
     const sortBy = sortEl ? sortEl.value : 'date-desc';
 
-    let filtered = [...this.requests];
+    // Dashboard only shows approved and claimed (completed) documents
+    let filtered = [...this.requests].filter((r) => {
+      return r.status === 'approved' || r.status === 'completed';
+    });
+    
     if (selectedStatus && selectedStatus !== 'all') {
       filtered = filtered.filter((r) => r.status === selectedStatus);
     }
@@ -980,12 +968,10 @@ class StudentPortal {
                 </option>
               `
             )
-            .join('') +
-          '<option value="others">Others</option>';
+            .join('');
       } else {
         documentTypeSelect.innerHTML =
-          '<option value="">No document types configured – please select "Others" and specify</option>' +
-          '<option value="others">Others</option>';
+          '<option value="">No document types available for this department</option>';
       }
     } catch (error) {
       if (this.currentDocumentTypeRequest !== requestId) {
@@ -1074,6 +1060,8 @@ class StudentPortal {
     // Render view-specific content
     if (view === 'profile') {
       this.renderProfile();
+      // Load profile photo after rendering
+      setTimeout(() => this.loadProfilePhoto(), 100);
     } else if (view === 'settings') {
       this.renderSettings();
     }
@@ -1842,9 +1830,13 @@ class StudentPortal {
       <div class="profile-view-content">
         <div class="profile-header-card">
           <div class="profile-photo-wrapper">
-            <div class="profile-photo">
-              <i class="fas fa-user"></i>
+            <div class="profile-photo" id="profilePhotoDisplay" style="${this.currentUser.profilePhoto ? `background-image: url('${this.currentUser.profilePhoto}'); background-size: cover; background-position: center;` : ''}">
+              ${!this.currentUser.profilePhoto ? '<i class="fas fa-user"></i>' : ''}
             </div>
+            <button class="profile-photo-edit" id="profilePhotoEditBtn" title="Upload Photo" onclick="document.getElementById('profilePhotoInput').click()">
+              <i class="fas fa-camera"></i>
+            </button>
+            <input type="file" id="profilePhotoInput" accept="image/*" style="display: none;" onchange="studentPortal.handlePhotoUpload(event)" />
           </div>
           <div class="profile-header-info">
             <h3>${displayName}</h3>
@@ -1980,6 +1972,97 @@ class StudentPortal {
     `;
   }
 
+  async handlePhotoUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      Utils.showToast('Please select an image file', 'error');
+      return;
+    }
+
+    // Check file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      Utils.showToast('Image size must be less than 5MB', 'error');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const imageData = e.target.result;
+      const userId = this.currentUser.id;
+      const storageKey = `profileImage_${userId}`;
+      
+      // Store in localStorage
+      localStorage.setItem(storageKey, imageData);
+      
+      // Update current user object
+      this.currentUser.profilePhoto = imageData;
+      localStorage.setItem('currentUser', JSON.stringify(this.currentUser));
+      
+      // Update display immediately
+      const photoDisplay = document.getElementById('profilePhotoDisplay');
+      if (photoDisplay) {
+        photoDisplay.style.backgroundImage = `url('${imageData}')`;
+        photoDisplay.style.backgroundSize = 'cover';
+        photoDisplay.style.backgroundPosition = 'center';
+        const icon = photoDisplay.querySelector('i');
+        if (icon) icon.style.display = 'none';
+      }
+      
+      // Also update header profile display if it exists
+      this.updateHeaderProfilePhoto(imageData);
+      
+      Utils.showToast('Profile photo updated!', 'success');
+    };
+    reader.onerror = () => {
+      Utils.showToast('Failed to read image file', 'error');
+    };
+    reader.readAsDataURL(file);
+    
+    // Reset input
+    event.target.value = '';
+  }
+
+  updateHeaderProfilePhoto(imageData) {
+    // Update profile photo in header if it exists
+    const headerProfile = document.querySelector('.user-profile-display .user-pill i');
+    if (headerProfile && imageData) {
+      // Create an img element or update background
+      const parent = headerProfile.parentElement;
+      if (parent) {
+        let img = parent.querySelector('img.profile-photo-img');
+        if (!img) {
+          img = document.createElement('img');
+          img.className = 'profile-photo-img';
+          img.style.cssText = 'width: 32px; height: 32px; border-radius: 50%; object-fit: cover; margin-right: 0.5rem;';
+          parent.insertBefore(img, headerProfile);
+        }
+        img.src = imageData;
+        headerProfile.style.display = 'none';
+      }
+    }
+  }
+
+  loadProfilePhoto() {
+    const userId = this.currentUser.id;
+    const storageKey = `profileImage_${userId}`;
+    const savedImage = localStorage.getItem(storageKey);
+    
+    if (savedImage) {
+      this.currentUser.profilePhoto = savedImage;
+      const photoDisplay = document.getElementById('profilePhotoDisplay');
+      if (photoDisplay) {
+        photoDisplay.style.backgroundImage = `url('${savedImage}')`;
+        photoDisplay.style.backgroundSize = 'cover';
+        photoDisplay.style.backgroundPosition = 'center';
+        const icon = photoDisplay.querySelector('i');
+        if (icon) icon.style.display = 'none';
+      }
+      this.updateHeaderProfilePhoto(savedImage);
+    }
+  }
+
   async saveProfile() {
     const fullName = document.getElementById('editFullName')?.value.trim() || '';
     const email = document.getElementById('editEmail')?.value.trim() || '';
@@ -2022,6 +2105,9 @@ class StudentPortal {
       // Refresh profile view (exit edit mode)
       this.renderProfile(false);
       
+      // Load profile photo after rendering
+      setTimeout(() => this.loadProfilePhoto(), 100);
+      
       // Update header display name
       this.loadUserInfo();
     } catch (error) {
@@ -2042,9 +2128,6 @@ class StudentPortal {
           </button>
           <button class="settings-tab" data-tab="notifications" onclick="studentPortal.switchSettingsTab('notifications')">
             <i class="fas fa-bell"></i> Notifications
-          </button>
-          <button class="settings-tab" data-tab="appearance" onclick="studentPortal.switchSettingsTab('appearance')">
-            <i class="fas fa-palette"></i> Appearance
           </button>
         </div>
 
@@ -2100,20 +2183,6 @@ class StudentPortal {
                   <span class="settings-toggle-slider"></span>
                 </label>
                 <small>Receive notifications via SMS</small>
-              </div>
-            </div>
-          </div>
-
-          <div class="settings-tab-panel" id="settingsTabAppearance">
-            <div class="settings-section">
-              <h3><i class="fas fa-moon"></i> Theme</h3>
-              <div class="settings-select-group">
-                <label>Theme</label>
-                <select id="themeSelect" class="settings-select">
-                  <option value="light" ${(this.currentUser.theme || 'light') === 'light' ? 'selected' : ''}>Light</option>
-                  <option value="dark" ${this.currentUser.theme === 'dark' ? 'selected' : ''}>Dark</option>
-                  <option value="auto" ${this.currentUser.theme === 'auto' ? 'selected' : ''}>Auto</option>
-                </select>
               </div>
             </div>
           </div>

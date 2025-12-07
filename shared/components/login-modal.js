@@ -16,28 +16,74 @@ class LoginModal {
   async loadDepartments() {
     try {
       this.departments = await Utils.apiRequest('/departments');
+      // Ensure departments have numeric IDs
+      if (Array.isArray(this.departments) && this.departments.length > 0) {
+        this.departments = this.departments.map((dept, index) => ({
+          ...dept,
+          id: typeof dept.id === 'number' ? dept.id : (parseInt(dept.id, 10) || index + 1)
+        }));
+      }
     } catch (error) {
-      console.warn('Unable to load departments yet:', error);
-      this.departments = [];
+      console.warn('Unable to load departments from API, using fallback:', error);
+      // Use fallback from config
+      const fallbackDepts = (window.RecoletosConfig && window.RecoletosConfig.departments) || [];
+      this.departments = fallbackDepts.map((dept, index) => ({
+        id: index + 1,
+        code: dept.id,
+        name: dept.name
+      }));
+    }
+    
+    // Filter to only allowed departments
+    const allowedDepartmentCodes = ['SCS', 'SBM', 'SDPC', 'CLINIC', 'SSD', 'SCHOLARSHIP', 'LIBRARY', 'CMO', 'SASO'];
+    this.departments = (this.departments || []).filter(dept => {
+      const code = dept.code || dept.id || '';
+      return allowedDepartmentCodes.includes(code.toUpperCase());
+    });
+    
+    // Ensure we have at least some departments
+    if (!this.departments || this.departments.length === 0) {
+      console.warn('No departments available, using minimal fallback');
+      this.departments = [
+        { id: 1, code: 'SCS', name: 'School of Computer Studies (SCS)' },
+        { id: 2, code: 'SBM', name: 'School of Business Management (SBM)' },
+        { id: 3, code: 'SDPC', name: 'Student Development and Programs Center (SDPC)' },
+        { id: 4, code: 'SASO', name: 'Student Affairs and Services Office (SASO)' },
+        { id: 5, code: 'SSD', name: 'Security Services Department (SSD)' },
+        { id: 6, code: 'CLINIC', name: 'Clinic' },
+        { id: 7, code: 'SCHOLARSHIP', name: 'Scholarship Office' },
+        { id: 8, code: 'LIBRARY', name: 'Library' },
+        { id: 9, code: 'CMO', name: 'Campus Management Office (CMO)' }
+      ];
     }
   }
 
-  // Auto-detect role from ID number format
+  // Auto-detect role from ID number length
   detectRoleFromId(idNumber) {
     const id = idNumber.trim();
     
-    // Student: 10 digits starting with 20 (e.g., 2022011084)
-    if (/^20\d{8}$/.test(id)) {
+    // Must be numeric only
+    if (!/^\d+$/.test(id)) {
+      return null;
+    }
+    
+    // Student: exactly 10 digits
+    if (id.length === 10) {
       return 'student';
     }
     
-    // Faculty: Starts with FAC- or Faculty ID pattern
-    if (/^FAC-?\d+$/i.test(id) || /^F\d{4,}$/i.test(id)) {
+    // Faculty: exactly 5 digits
+    if (id.length === 5) {
       return 'faculty';
     }
     
-    // Admin: Starts with ADM- or Admin ID pattern
-    if (/^ADM-?\d+$/i.test(id) || /^A\d{4,}$/i.test(id)) {
+    // Super Admin: exactly 4 digits
+    if (id.length === 4) {
+      return 'admin'; // Super admin is still role 'admin' but with is_super_admin flag
+    }
+    
+    // Regular Admin: exactly 3 digits
+    if (id.length === 3) {
       return 'admin';
     }
     
@@ -55,11 +101,19 @@ class LoginModal {
       };
     });
 
-    const departmentOptions = (this.departments || [])
+    // Filter departments to only allowed ones
+    const allowedDepartmentCodes = ['SCS', 'SBM', 'SDPC', 'CLINIC', 'SSD', 'SCHOLARSHIP', 'LIBRARY', 'CMO', 'SASO'];
+    const filteredDepartments = (this.departments || []).filter(dept => {
+      const code = (dept.code || dept.id || '').toString().toUpperCase();
+      return allowedDepartmentCodes.includes(code);
+    });
+    
+    const departmentOptions = filteredDepartments
       .map((dept) => `<option value="${dept.id}" data-code="${dept.code || ''}" data-name="${dept.name || ''}">${dept.name}</option>`)
       .join('');
 
     const departmentCourses = {
+      // Only allowed departments with their courses
       "School of Computer Studies (SCS)": [
         "BS Computer Science",
         "BS Information Technology",
@@ -71,38 +125,40 @@ class LoginModal {
         "BS Management Accounting",
         "BS Marketing Management"
       ],
-      "School of Engineering (SOE)": [
-        "BS Civil Engineering",
-        "BS Computer Engineering",
-        "BS Electrical Engineering",
-        "BS Electronics Engineering",
-        "BS Industrial Engineering",
-        "BS Mechanical Engineering"
+      "Student Development and Programs Center (SDPC)": [
+        "BS Computer Science",
+        "BS Information Technology",
+        "BS Business Administration"
       ],
-      "School of Arts and Sciences (SAS)": [
-        "AB Communication",
-        "AB Psychology",
-        "BS Biology",
-        "BS Social Work"
+      "Student Affairs and Services Office (SASO)": [
+        "BS Computer Science",
+        "BS Information Technology",
+        "BS Business Administration"
       ],
-      "School of Education (SOEd)": [
-        "BEED (Elementary Education)",
-        "BSED English",
-        "BSED Mathematics",
-        "BSED Science",
-        "BSED Social Studies"
+      "Security Services Department (SSD)": [
+        "BS Computer Science",
+        "BS Information Technology",
+        "BS Business Administration"
       ],
-      "School of Allied Medical Sciences (SAMS)": [
-        "BS Nursing",
-        "BS Medical Technology",
-        "BS Pharmacy"
+      "Clinic": [
+        "BS Computer Science",
+        "BS Information Technology",
+        "BS Business Administration"
       ],
-      "School of Law (SOL)": [
-        "Bachelor of Laws (LLB)"
+      "Scholarship Office": [
+        "BS Computer Science",
+        "BS Information Technology",
+        "BS Business Administration"
       ],
-      "ETEEAP (Expanded Tertiary Education Equivalency and Accreditation Program)": [
-        "BS Business Administration",
-        "BS Information Technology"
+      "Library": [
+        "BS Computer Science",
+        "BS Information Technology",
+        "BS Business Administration"
+      ],
+      "Campus Management Office (CMO)": [
+        "BS Computer Science",
+        "BS Information Technology",
+        "BS Business Administration"
       ],
       // Add variations and aliases for better matching
       "SCS": [
@@ -116,38 +172,40 @@ class LoginModal {
         "BS Management Accounting",
         "BS Marketing Management"
       ],
-      "SOE": [
-        "BS Civil Engineering",
-        "BS Computer Engineering",
-        "BS Electrical Engineering",
-        "BS Electronics Engineering",
-        "BS Industrial Engineering",
-        "BS Mechanical Engineering"
+      "SDPC": [
+        "BS Computer Science",
+        "BS Information Technology",
+        "BS Business Administration"
       ],
-      "SAS": [
-        "AB Communication",
-        "AB Psychology",
-        "BS Biology",
-        "BS Social Work"
+      "SASO": [
+        "BS Computer Science",
+        "BS Information Technology",
+        "BS Business Administration"
       ],
-      "SOEd": [
-        "BEED (Elementary Education)",
-        "BSED English",
-        "BSED Mathematics",
-        "BSED Science",
-        "BSED Social Studies"
+      "SSD": [
+        "BS Computer Science",
+        "BS Information Technology",
+        "BS Business Administration"
       ],
-      "SAMS": [
-        "BS Nursing",
-        "BS Medical Technology",
-        "BS Pharmacy"
+      "CLINIC": [
+        "BS Computer Science",
+        "BS Information Technology",
+        "BS Business Administration"
       ],
-      "SOL": [
-        "Bachelor of Laws (LLB)"
+      "SCHOLARSHIP": [
+        "BS Computer Science",
+        "BS Information Technology",
+        "BS Business Administration"
       ],
-      "ETEEAP": [
-        "BS Business Administration",
-        "BS Information Technology"
+      "LIBRARY": [
+        "BS Computer Science",
+        "BS Information Technology",
+        "BS Business Administration"
+      ],
+      "CMO": [
+        "BS Computer Science",
+        "BS Information Technology",
+        "BS Business Administration"
       ]
     };
 
@@ -201,18 +259,56 @@ class LoginModal {
 
           <!-- Signup Form -->
           <form id="signupForm" class="auth-form">
-            <!-- ID Number Field - Always shown first -->
+            <!-- ID Number Field -->
             <div class="form-group">
               <label for="signupIdNumber">ID Number *</label>
               <input type="text" id="signupIdNumber" name="signupIdNumber" placeholder="Enter your ID number" required />
-              <small class="form-help">Format: Students (2022011084), Faculty (FAC-001), Admin (ADM-001)</small>
-              <div class="role-indicator hidden" id="roleIndicator"></div>
               <div class="error-message" id="signupIdError"></div>
             </div>
 
-            <!-- Dynamic Fields Container -->
-            <div id="dynamicFields"></div>
+            <!-- Full Name Field -->
+            <div class="form-group">
+              <label for="fullName">Full Name *</label>
+              <input type="text" id="fullName" name="fullName" placeholder="Juan Dela Cruz" required />
+            </div>
 
+            <!-- Email Field -->
+            <div class="form-group">
+              <label for="signupEmail">Email (Gmail) *</label>
+              <input type="email" id="signupEmail" name="signupEmail" placeholder="name@gmail.com" required />
+            </div>
+
+            <!-- Department Field -->
+            <div class="form-group">
+              <label for="departmentSelect">Department *</label>
+              <select id="departmentSelect" name="departmentSelect" required>
+                <option value="">Select department</option>
+                ${this.departmentOptions}
+              </select>
+            </div>
+
+            <!-- Course Field -->
+            <div class="form-group">
+              <label for="courseSelect">Course *</label>
+              <select id="courseSelect" name="courseSelect" required disabled>
+                <option value="">Select a department first</option>
+              </select>
+            </div>
+
+            <!-- Year Level Field -->
+            <div class="form-group">
+              <label for="yearLevelSelect">Year Level *</label>
+              <select id="yearLevelSelect" name="yearLevelSelect" required>
+                <option value="">Select year level</option>
+                <option value="1st Year">1st Year</option>
+                <option value="2nd Year">2nd Year</option>
+                <option value="3rd Year">3rd Year</option>
+                <option value="4th Year">4th Year</option>
+                <option value="5th Year">5th Year</option>
+              </select>
+            </div>
+
+            <!-- Password Fields -->
             <div class="form-group">
               <label for="signupPassword">Create Password *</label>
               <div class="password-input-wrapper">
@@ -247,19 +343,25 @@ class LoginModal {
     this.modal = document.getElementById('loginModal');
     this.signupModal = document.getElementById('signupModal');
     
-    // Initialize signup form fields when signup modal is created
-    if (this.signupModal) {
-      const signupIdInput = document.getElementById('signupIdNumber');
-      if (signupIdInput) {
-        signupIdInput.addEventListener('input', (e) => {
-          this.handleIdNumberChange(e.target.value);
-        });
-      }
-    }
-
     // Store department courses for dynamic population
     this.departmentCourses = departmentCourses;
     this.departmentOptions = departmentOptions;
+    
+    // Setup department -> course linking when signup modal is created
+    if (this.signupModal) {
+      setTimeout(() => {
+        // Ensure department select is enabled
+        const deptSelect = document.getElementById('departmentSelect');
+        if (deptSelect) {
+          deptSelect.disabled = false;
+          deptSelect.removeAttribute('disabled');
+          deptSelect.style.pointerEvents = 'auto';
+          deptSelect.style.cursor = 'pointer';
+          deptSelect.style.opacity = '1';
+        }
+        this.setupDepartmentCourseLink();
+      }, 100);
+    }
   }
 
   attachEventListeners() {
@@ -403,11 +505,10 @@ class LoginModal {
       });
     }
 
-    // Real-time ID number validation and role detection for signup
-    const signupIdInput = document.getElementById('signupIdNumber');
-    signupIdInput.addEventListener('input', (e) => {
-      this.handleIdNumberChange(e.target.value);
-    });
+    // Setup department -> course linking for signup form
+    setTimeout(() => {
+      this.setupDepartmentCourseLink();
+    }, 200);
 
     // Password visibility toggles
     const togglePassword = document.getElementById('togglePassword');
@@ -625,8 +726,8 @@ class LoginModal {
         signupBtn.removeAttribute('disabled');
       }
       
-      if (idNumber.length >= 5) {
-        signupIdError.textContent = 'Invalid ID format. Use: Student (2022011084), Faculty (FAC-001), or Admin (ADM-001)';
+      if (idNumber.length >= 5 && !detectedRole) {
+        signupIdError.textContent = 'Invalid ID length. Students: 10 digits, Faculty: 5 digits, Super Admin: 4 digits, Admin: 3 digits.';
         signupIdError.classList.add('show');
       }
       return;
@@ -638,7 +739,7 @@ class LoginModal {
     const roleLabels = {
       student: 'Student',
       faculty: 'Faculty',
-      admin: 'Administrator'
+      admin: id.length === 4 ? 'Super Administrator' : 'Administrator'
     };
     
     roleIndicator.innerHTML = `
@@ -776,8 +877,21 @@ class LoginModal {
       return;
     }
 
+    // Ensure department select is enabled and clickable
+    departmentSelect.disabled = false;
+    departmentSelect.removeAttribute('disabled');
+    departmentSelect.style.pointerEvents = 'auto';
+    departmentSelect.style.cursor = 'pointer';
+    departmentSelect.style.opacity = '1';
+
     // Remove any existing event listeners by cloning and replacing
     const newDeptSelect = departmentSelect.cloneNode(true);
+    // Ensure cloned select is also enabled
+    newDeptSelect.disabled = false;
+    newDeptSelect.removeAttribute('disabled');
+    newDeptSelect.style.pointerEvents = 'auto';
+    newDeptSelect.style.cursor = 'pointer';
+    newDeptSelect.style.opacity = '1';
     departmentSelect.parentNode.replaceChild(newDeptSelect, departmentSelect);
 
     newDeptSelect.addEventListener('change', () => {
@@ -840,29 +954,23 @@ class LoginModal {
       // Strategy 5: If still no courses found, provide a fallback list
       if (courses.length === 0) {
         console.warn('No courses found for department:', selectedDeptName, 'Code:', selectedDeptCode);
-        // Provide common courses as fallback based on department code
+        // Provide common courses as fallback based on department code (only for allowed departments)
         const fallbackCourses = {
           'SCS': ['BS Computer Science', 'BS Information Technology', 'BS Entertainment and Multimedia Computing'],
           'SBM': ['BS Accountancy', 'BS Business Administration', 'BS Management Accounting', 'BS Marketing Management'],
-          'SOE': ['BS Civil Engineering', 'BS Computer Engineering', 'BS Electrical Engineering', 'BS Electronics Engineering', 'BS Industrial Engineering', 'BS Mechanical Engineering'],
-          'SAS': ['AB Communication', 'AB Psychology', 'BS Biology', 'BS Social Work'],
-          'SOEd': ['BEED (Elementary Education)', 'BSED English', 'BSED Mathematics', 'BSED Science', 'BSED Social Studies'],
-          'SAMS': ['BS Nursing', 'BS Medical Technology', 'BS Pharmacy'],
-          'SOL': ['Bachelor of Laws (LLB)'],
-          'ETEEAP': ['BS Business Administration', 'BS Information Technology']
+          'SDPC': ['BS Computer Science', 'BS Information Technology', 'BS Business Administration'],
+          'SASO': ['BS Computer Science', 'BS Information Technology', 'BS Business Administration'],
+          'SSD': ['BS Computer Science', 'BS Information Technology', 'BS Business Administration'],
+          'CLINIC': ['BS Computer Science', 'BS Information Technology', 'BS Business Administration'],
+          'SCHOLARSHIP': ['BS Computer Science', 'BS Information Technology', 'BS Business Administration'],
+          'LIBRARY': ['BS Computer Science', 'BS Information Technology', 'BS Business Administration'],
+          'CMO': ['BS Computer Science', 'BS Information Technology', 'BS Business Administration']
         };
         
         courses = fallbackCourses[selectedDeptCode] || [
           'BS Computer Science',
           'BS Information Technology',
-          'BS Business Administration',
-          'BS Accountancy',
-          'BS Civil Engineering',
-          'BS Mechanical Engineering',
-          'BS Electrical Engineering',
-          'BS Nursing',
-          'BS Education',
-          'Other'
+          'BS Business Administration'
         ];
         console.log('Using fallback courses:', courses);
       }
@@ -960,10 +1068,38 @@ class LoginModal {
       idError.classList.add('show');
       return;
     }
+    
+    // Validate ID number format (must be numeric)
+    if (!/^\d+$/.test(idNumber)) {
+      idError.textContent = 'ID number must contain only digits';
+      idError.classList.add('show');
+      loginBtn.disabled = false;
+      loginBtn.textContent = 'Sign In';
+      return;
+    }
+    
+    // Validate ID number length for role detection
+    const detectedRole = this.detectRoleFromId(idNumber);
+    if (!detectedRole) {
+      if (idNumber.length < 3) {
+        idError.textContent = 'ID number must be at least 3 digits';
+      } else if (idNumber.length > 10) {
+        idError.textContent = 'ID number must be 10 digits or less';
+      } else {
+        idError.textContent = `Invalid ID length.`;
+      }
+      idError.classList.add('show');
+      loginBtn.disabled = false;
+      loginBtn.textContent = 'Sign In';
+      return;
+    }
+    
     if (!password) {
       console.warn('⚠️ Password is empty');
       passwordError.textContent = 'Password is required';
       passwordError.classList.add('show');
+      loginBtn.disabled = false;
+      loginBtn.textContent = 'Sign In';
       return;
     }
 
@@ -1016,14 +1152,22 @@ class LoginModal {
       this.hide();
       
       // Auto-redirect based on user role from database
+      // Super admins go to super admin portal
       // Use absolute path from root to ensure it works
-      const redirectMap = {
-        student: '/STUDENT/views/student-portal.html',
-        faculty: '/FACULTY/views/faculty-portal.html',
-        admin: '/ADMIN/views/admin-portal.html'
-      };
+      let redirectPath;
       
-      const redirectPath = redirectMap[user.role] || '/index.html';
+      if (user.isSuperAdmin || user.idNumber === '1234') {
+        // Super admin goes to super admin portal
+        redirectPath = '/SUPER ADMIN/views/super-admin-portal.html';
+        localStorage.setItem('isSuperAdmin', 'true');
+      } else {
+        const redirectMap = {
+          student: '/STUDENT/views/student-portal.html',
+          faculty: '/FACULTY/views/faculty-portal.html',
+          admin: '/ADMIN/views/admin-portal.html'
+        };
+        redirectPath = redirectMap[user.role] || '/index.html';
+      }
       
       // Use a small delay to ensure toast is shown and localStorage is written, then redirect
       setTimeout(() => {
@@ -1097,13 +1241,22 @@ class LoginModal {
       confirmPasswordError.classList.remove('show');
     }
 
-    // Validate role detection
-    const detectedRole = this.detectRoleFromId(idNumber);
-    if (!detectedRole) {
-      signupIdError.textContent = 'Invalid ID format for signup.';
+    // Validate ID number format (must be numeric)
+    if (!idNumber || !/^\d+$/.test(idNumber)) {
+      signupIdError.textContent = 'ID number must contain only digits.';
       signupIdError.classList.add('show');
       return;
     }
+
+    // Validate ID number length
+    if (idNumber.length < 3 || idNumber.length > 10) {
+      signupIdError.textContent = 'ID number must be between 3 and 10 digits.';
+      signupIdError.classList.add('show');
+      return;
+    }
+
+    // Detect role from ID for backend (but don't block signup)
+    const detectedRole = this.detectRoleFromId(idNumber);
 
     // Validate password length
     if (!password || password.length < 3) {
@@ -1147,80 +1300,79 @@ class LoginModal {
       return;
     }
 
-    // Basic client-side validation for required fields depending on role
+    // Basic client-side validation for required fields
     if (!fullName || !email) {
       errorEl.textContent = 'Full name and email are required.';
       errorEl.classList.add('show');
       return;
     }
 
-    if (detectedRole === 'student') {
-      const departmentId = document.getElementById('departmentSelect')?.value || '';
-      const course = document.getElementById('courseSelect')?.value || '';
-      const yearLevel = document.getElementById('yearLevelSelect')?.value || '';
+    // Validate email format
+    if (!email.includes('@') || !email.includes('.')) {
+      errorEl.textContent = 'Please enter a valid email address.';
+      errorEl.classList.add('show');
+      return;
+    }
+
+    // Validate all student fields are filled
+    const departmentId = document.getElementById('departmentSelect')?.value || '';
+    const course = document.getElementById('courseSelect')?.value || '';
+    const yearLevel = document.getElementById('yearLevelSelect')?.value || '';
+    
+    // Check if course select is disabled (meaning no department selected)
+    const courseSelect = document.getElementById('courseSelect');
+    if (courseSelect && courseSelect.disabled) {
+      errorEl.textContent = 'Please select a department first, then select a course.';
+      errorEl.classList.add('show');
+      // Highlight the department select
+      const deptSelect = document.getElementById('departmentSelect');
+      if (deptSelect) {
+        deptSelect.style.borderColor = '#dc3545';
+        deptSelect.focus();
+        setTimeout(() => {
+          deptSelect.style.borderColor = '';
+        }, 3000);
+      }
+      return;
+    }
+    
+    if (!departmentId || !course || !yearLevel) {
+      let missingFields = [];
+      if (!departmentId) missingFields.push('department');
+      if (!course) missingFields.push('course');
+      if (!yearLevel) missingFields.push('year level');
+      errorEl.textContent = `Please fill in: ${missingFields.join(', ')}.`;
+      errorEl.classList.add('show');
       
-      // Check if course select is disabled (meaning no department selected)
-      const courseSelect = document.getElementById('courseSelect');
-      if (courseSelect && courseSelect.disabled) {
-        errorEl.textContent = 'Please select a department first, then select a course.';
-        errorEl.classList.add('show');
-        // Highlight the department select
+      // Highlight missing fields
+      if (!departmentId) {
         const deptSelect = document.getElementById('departmentSelect');
         if (deptSelect) {
           deptSelect.style.borderColor = '#dc3545';
           deptSelect.focus();
-          setTimeout(() => {
-            deptSelect.style.borderColor = '';
-          }, 3000);
         }
-        return;
+      }
+      if (!course) {
+        const courseSelect = document.getElementById('courseSelect');
+        if (courseSelect) {
+          courseSelect.style.borderColor = '#dc3545';
+          if (departmentId) courseSelect.focus();
+        }
+      }
+      if (!yearLevel) {
+        const yearSelect = document.getElementById('yearLevelSelect');
+        if (yearSelect) {
+          yearSelect.style.borderColor = '#dc3545';
+          if (departmentId && course) yearSelect.focus();
+        }
       }
       
-      if (!departmentId || !course || !yearLevel) {
-        let missingFields = [];
-        if (!departmentId) missingFields.push('department');
-        if (!course) missingFields.push('course');
-        if (!yearLevel) missingFields.push('year level');
-        errorEl.textContent = `Please fill in: ${missingFields.join(', ')}.`;
-        errorEl.classList.add('show');
-        
-        // Highlight missing fields
-        if (!departmentId) {
-          const deptSelect = document.getElementById('departmentSelect');
-          if (deptSelect) {
-            deptSelect.style.borderColor = '#dc3545';
-            deptSelect.focus();
-          }
-        }
-        if (!course) {
-          const courseSelect = document.getElementById('courseSelect');
-          if (courseSelect) {
-            courseSelect.style.borderColor = '#dc3545';
-            if (departmentId) courseSelect.focus();
-          }
-        }
-        if (!yearLevel) {
-          const yearSelect = document.getElementById('yearLevelSelect');
-          if (yearSelect) {
-            yearSelect.style.borderColor = '#dc3545';
-            if (departmentId && course) yearSelect.focus();
-          }
-        }
-        
-        setTimeout(() => {
-          document.querySelectorAll('#signupForm select').forEach(select => {
-            select.style.borderColor = '';
-          });
-        }, 3000);
-        return;
-      }
-    } else if (detectedRole === 'faculty' || detectedRole === 'admin') {
-      const departmentId = document.getElementById('departmentSelect')?.value || '';
-      if (!departmentId) {
-        errorEl.textContent = 'Department is required.';
-        errorEl.classList.add('show');
-        return;
-      }
+      setTimeout(() => {
+        document.querySelectorAll('#signupForm select').forEach(select => {
+          select.style.borderColor = '';
+        });
+      }, 3000);
+      return;
     }
 
     if (!signupBtn) {
@@ -1245,43 +1397,21 @@ class LoginModal {
     console.log('🚀 Submitting signup request...', { role: detectedRole, hasDepartment: !!document.getElementById('departmentSelect')?.value });
 
     try {
+      // Always send as student role (since all fields are student fields)
+      const departmentId = document.getElementById('departmentSelect').value;
+      const course = document.getElementById('courseSelect').value.trim();
+      const yearLevel = document.getElementById('yearLevelSelect').value.trim();
+
       let requestBody = {
         fullName,
         email,
         idNumber,
         password,
-        role: detectedRole // Send detected role
+        role: detectedRole || 'student', // Use detected role or default to student
+        departmentId,
+        course,
+        yearLevel
       };
-
-      // Add role-specific fields
-      if (detectedRole === 'student') {
-        const departmentId = document.getElementById('departmentSelect').value;
-        const course = document.getElementById('courseSelect').value.trim();
-        const yearLevel = document.getElementById('yearLevelSelect').value.trim();
-
-        requestBody = {
-          ...requestBody,
-          departmentId,
-          course,
-          yearLevel
-        };
-      } else if (detectedRole === 'faculty') {
-        const departmentId = document.getElementById('departmentSelect').value;
-        const position = document.getElementById('position')?.value.trim() || '';
-
-        requestBody = {
-          ...requestBody,
-          departmentId,
-          position
-        };
-      } else if (detectedRole === 'admin') {
-        const departmentId = document.getElementById('departmentSelect').value;
-
-        requestBody = {
-          ...requestBody,
-          departmentId
-        };
-      }
 
       console.log('📤 Sending signup request to server...', { ...requestBody, password: '[HIDDEN]' });
       
@@ -1327,14 +1457,15 @@ class LoginModal {
       setTimeout(() => {
         this.hide();
         
-        // Auto-redirect based on detected role
+        // Auto-redirect based on user role from server response
+        const userRole = user.role || detectedRole || 'student';
         const redirectMap = {
           student: '/STUDENT/views/student-portal.html',
           faculty: '/FACULTY/views/faculty-portal.html',
           admin: '/ADMIN/views/admin-portal.html'
         };
         
-        const redirectUrl = redirectMap[detectedRole] || '/';
+        const redirectUrl = redirectMap[userRole] || '/STUDENT/views/student-portal.html';
         console.log('🔄 Redirecting to:', redirectUrl);
         window.location.href = redirectUrl;
       }, 800);
@@ -1460,13 +1591,32 @@ class LoginModal {
           });
         }
         
-        const currentId = document.getElementById('signupIdNumber')?.value || '';
-        if (currentId) {
-          this.handleIdNumberChange(currentId);
+        // Ensure department dropdown is populated and enabled
+        const deptSelect = document.getElementById('departmentSelect');
+        if (deptSelect) {
+          // Ensure it's enabled
+          deptSelect.disabled = false;
+          deptSelect.removeAttribute('disabled');
+          deptSelect.style.pointerEvents = 'auto';
+          deptSelect.style.cursor = 'pointer';
+          deptSelect.style.opacity = '1';
+          
+          // Repopulate department options if empty (filtered to only allowed departments)
+          if (!deptSelect.options || deptSelect.options.length <= 1) {
+            const allowedDepartmentCodes = ['SCS', 'SBM', 'SDPC', 'CLINIC', 'SSD', 'SCHOLARSHIP', 'LIBRARY', 'CMO', 'SASO'];
+            const filteredDepts = (this.departments || []).filter(dept => {
+              const code = (dept.code || dept.id || '').toString().toUpperCase();
+              return allowedDepartmentCodes.includes(code);
+            });
+            const deptOptions = filteredDepts
+              .map((dept) => `<option value="${dept.id}" data-code="${dept.code || ''}" data-name="${dept.name || ''}">${dept.name}</option>`)
+              .join('');
+            deptSelect.innerHTML = '<option value="">Select department</option>' + deptOptions;
+          }
         }
-        setTimeout(() => {
-          this.updateSignupButtonState();
-        }, 200);
+        
+        // Setup department -> course linking
+        this.setupDepartmentCourseLink();
       }, 100);
     } else {
       console.error('❌ Signup modal not found!');
@@ -1498,13 +1648,7 @@ class LoginModal {
       });
     }
 
-    // Re-attach ID number change handler
-    const signupIdInput = document.getElementById('signupIdNumber');
-    if (signupIdInput) {
-      signupIdInput.addEventListener('input', (e) => {
-        this.handleIdNumberChange(e.target.value);
-      });
-    }
+    // Department -> course linking is handled by setupDepartmentCourseLink
   }
 
   hide() {

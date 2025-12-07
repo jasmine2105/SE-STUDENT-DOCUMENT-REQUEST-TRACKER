@@ -2,77 +2,87 @@ window.RecoletosConfig = window.RecoletosConfig || {};
 
 window.RecoletosConfig.departments = [
   {
-    id: 'SCS',
-    name: 'School of Computer Studies (SCS)',
-    documents: [
-      { value: 'Transcript of Records', label: 'Transcript of Records', requiresFaculty: true },
-      { value: 'Good Moral Certificate', label: 'Certificate of Good Moral Character', requiresFaculty: true },
-      { value: 'Course Syllabus', label: 'Course Syllabus', requiresFaculty: true },
-      { value: 'Clearance', label: 'Clearance', requiresFaculty: false },
-      { value: 'Enrollment Certification', label: 'Enrollment Certification', requiresFaculty: false }
-    ]
-  },
-  {
     id: 'SBM',
     name: 'School of Business Management (SBM)',
     documents: [
-      { value: 'Transcript of Records - SBM', label: 'Transcript of Records', requiresFaculty: true },
-      { value: 'Good Moral Certificate - SBM', label: 'Certificate of Good Moral Character', requiresFaculty: true },
-      { value: 'Internship Certification', label: 'Internship Certification', requiresFaculty: true },
-      { value: 'Clearance - SBM', label: 'Clearance', requiresFaculty: false }
+      { value: 'Clearance', label: 'Clearance', requiresFaculty: false },
+      { value: 'Endorsement Letter', label: 'Endorsement Letter', requiresFaculty: false },
+      { value: 'Activity Letter', label: 'Activity Letter', requiresFaculty: false }
     ]
   },
   {
     id: 'SAS',
     name: 'School of Arts and Sciences (SAS)',
     documents: [
-      { value: 'Transcript of Records - SAS', label: 'Transcript of Records', requiresFaculty: true },
-      { value: 'Program Certification', label: 'Program Certification', requiresFaculty: true },
-      { value: 'Clearance - SAS', label: 'Clearance', requiresFaculty: false }
+      { value: 'Clearance', label: 'Clearance', requiresFaculty: false },
+      { value: 'Endorsement Letter', label: 'Endorsement Letter', requiresFaculty: false }
     ]
   },
   {
-    id: 'SOE',
-    name: 'School of Engineering (SOE)',
+    id: 'SDPC',
+    name: 'Student Development and Programs Center (SDPC)',
     documents: [
-      { value: 'Transcript of Records - SOE', label: 'Transcript of Records', requiresFaculty: true },
-      { value: 'Board Exam Endorsement', label: 'Board Exam Endorsement', requiresFaculty: true },
-      { value: 'Clearance - SOE', label: 'Clearance', requiresFaculty: false }
+      { value: 'Excuse Slip', label: 'Excuse Slip', requiresFaculty: false },
+      { value: 'Counseling Referral Form', label: 'Counseling Referral Form', requiresFaculty: false }
     ]
   },
   {
-    id: 'SAMS',
-    name: 'School of Allied Medical Sciences (SAMS)',
+    id: 'SASO',
+    name: 'Student Affairs and Services Office (SASO)',
     documents: [
-      { value: 'Transcript of Records - SAMS', label: 'Transcript of Records', requiresFaculty: true },
-      { value: 'Clinical Rotation Certification', label: 'Clinical Rotation Certification', requiresFaculty: true },
-      { value: 'Good Moral Certificate - SAMS', label: 'Certificate of Good Moral Character', requiresFaculty: true }
+      { value: 'Exemption Slip', label: 'Exemption Slip', requiresFaculty: false },
+      { value: 'Parent Consent Letter', label: 'Parent Consent Letter', requiresFaculty: false }
     ]
   },
   {
-    id: 'SOL',
-    name: 'School of Law (SOL)',
+    id: 'SSD',
+    name: 'Security Services Department (SSD)',
     documents: [
-      { value: 'Transcript of Records - SOL', label: 'Transcript of Records', requiresFaculty: true },
-      { value: 'BAR Endorsement', label: 'BAR Endorsement', requiresFaculty: true },
-      { value: 'Certification of Grades', label: 'Certification of Grades', requiresFaculty: true }
+      { value: 'Sticker for Vehicles', label: 'Sticker for Vehicles', requiresFaculty: false },
+      { value: 'Gate Pass Request', label: 'Gate Pass Request', requiresFaculty: false },
+      { value: 'Lost ID Incident Report', label: 'Lost ID Incident Report', requiresFaculty: false }
     ]
   },
   {
-    id: 'ETEEAP',
-    name: 'ETEEAP (Expanded Tertiary Education Equivalency and Accreditation Program)',
+    id: 'CLINIC',
+    name: 'Clinic',
     documents: [
-      { value: 'ETEEAP TOR', label: 'Transcript of Records', requiresFaculty: true },
-      { value: 'Competency Certificate', label: 'Competency Certificate', requiresFaculty: true }
+      { value: 'Medical Certificate', label: 'Medical Certificate', requiresFaculty: false },
+      { value: 'Dental Check-up Form', label: 'Dental Check-up Form', requiresFaculty: false },
+      { value: 'Health Clearance', label: 'Health Clearance', requiresFaculty: false }
     ]
   },
   {
-    id: 'SOED',
-    name: 'School of Education (SOEd)',
+    id: 'SCS',
+    name: 'School of Computer Studies (SCS)',
     documents: [
-      { value: 'Transcript of Records - SOEd', label: 'Transcript of Records', requiresFaculty: true },
-      { value: 'Practice Teaching Certification', label: 'Practice Teaching Certification', requiresFaculty: true },
-      { value: 'Good Moral Certificate - SOEd', label: 'Certificate of Good Moral Character', requiresFaculty: true }
+      { value: 'Clearance', label: 'Clearance', requiresFaculty: false },
+      { value: 'Endorsement Letter', label: 'Endorsement Letter', requiresFaculty: false },
+      { value: 'MOA', label: 'MOA', requiresFaculty: false }
+    ]
+  },
+  {
+    id: 'SCHOLARSHIP',
+    name: 'Scholarship Office',
+    documents: [
+      { value: 'Payment Slip', label: 'Payment Slip', requiresFaculty: false },
+      { value: 'Grade Compliance Report', label: 'Grade Compliance Report', requiresFaculty: false }
+    ]
+  },
+  {
+    id: 'LIBRARY',
+    name: 'Library',
+    documents: [
+      { value: 'Library Clearance', label: 'Library Clearance', requiresFaculty: false },
+      { value: 'Book Borrowing Slip', label: 'Book Borrowing Slip', requiresFaculty: false },
+      { value: 'Lost Book Payment Form', label: 'Lost Book Payment Form', requiresFaculty: false }
+    ]
+  },
+  {
+    id: 'CMO',
+    name: 'Campus Management Office (CMO)',
+    documents: [
+      { value: 'Utility Clearance', label: 'Utility Clearance', requiresFaculty: false }
     ]
   }
 ];
