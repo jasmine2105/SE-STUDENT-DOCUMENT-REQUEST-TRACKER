@@ -1458,3 +1458,207 @@ body {
   }
 }
 
+/* Change Password Modal Styles */
+.change-password-modal {
+  background: var(--white);
+  border-radius: 16px;
+  max-width: 450px;
+  width: 90%;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.25);
+  animation: modalSlideIn 0.3s ease-out;
+}
+
+@keyframes modalSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.change-password-modal .modal-header {
+  padding: 1.5rem;
+  border-bottom: 1px solid var(--border-gray);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.change-password-modal .modal-header h2 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--recoletos-green);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+}
+
+.change-password-modal .modal-header h2 i {
+  color: var(--recoletos-gold);
+}
+
+.change-password-modal .modal-close {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  color: #666;
+  cursor: pointer;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.change-password-modal .modal-close:hover {
+  background: var(--bg-cream);
+  color: var(--text-dark);
+}
+
+.change-password-modal .modal-body {
+  padding: 1.5rem;
+}
+
+.change-password-modal .form-group {
+  margin-bottom: 1.25rem;
+}
+
+.change-password-modal .form-group label {
+  display: block;
+  font-weight: 500;
+  color: var(--text-dark);
+  margin-bottom: 0.5rem;
+  font-size: 0.9rem;
+}
+
+.change-password-modal .password-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.change-password-modal .password-input-wrapper input {
+  width: 100%;
+  padding: 0.875rem 3rem 0.875rem 1rem;
+  border: 2px solid var(--border-gray);
+  border-radius: 10px;
+  font-size: 1rem;
+  transition: all 0.2s ease;
+  font-family: inherit;
+}
+
+.change-password-modal .password-input-wrapper input:focus {
+  outline: none;
+  border-color: var(--recoletos-green);
+  box-shadow: 0 0 0 3px rgba(0, 66, 37, 0.1);
+}
+
+.change-password-modal .password-toggle {
+  position: absolute;
+  right: 12px;
+  background: none;
+  border: none;
+  color: #666;
+  cursor: pointer;
+  padding: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.2s ease;
+}
+
+.change-password-modal .password-toggle:hover {
+  color: var(--recoletos-green);
+}
+
+.change-password-modal .error-message {
+  color: #dc3545;
+  font-size: 0.8rem;
+  margin-top: 0.5rem;
+  display: none;
+}
+
+.change-password-modal .error-message.show {
+  display: block;
+  background: #FEE2E2;
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+  border-left: 3px solid #dc3545;
+}
+
+.change-password-modal .modal-actions {
+  display: flex;
+  gap: 1rem;
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border-gray);
+}
+
+.change-password-modal .modal-actions button {
+  flex: 1;
+  padding: 0.875rem 1.5rem;
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.change-password-modal .btn-secondary {
+  background: var(--bg-cream);
+  border: 2px solid var(--border-gray);
+  color: var(--text-dark);
+}
+
+.change-password-modal .btn-secondary:hover {
+  background: #f0f0f0;
+  border-color: #ccc;
+}
+
+.change-password-modal .btn-primary {
+  background: var(--recoletos-green);
+  border: 2px solid var(--recoletos-green);
+  color: white;
+}
+
+.change-password-modal .btn-primary:hover {
+  background: #005638;
+  border-color: #005638;
+}
+
+.change-password-modal .btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Modal overlay */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+  backdrop-filter: blur(4px);
+}
+
+.modal-overlay.active {
+  display: flex;
+}
+
