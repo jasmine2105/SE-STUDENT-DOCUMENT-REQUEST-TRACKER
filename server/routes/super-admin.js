@@ -349,15 +349,445 @@ router.get('/requests', async (req, res) => {
   }
 });
 
-// Get Activity Logs (placeholder - would need a logs table)
+// Get Activity Logs - based on document request activities
 router.get('/logs', async (req, res) => {
   try {
-    // For now, return empty array
-    // In a real implementation, you'd query a logs/audit table
-    res.json([]);
+    const conn = await getConnection();
+    try {
+      const logs = [];
+      
+      // Get all requests with user information and track status changes
+      let requests = [];
+      try {
+        const [requestResults] = await conn.query(`
+          SELECT 
+            r.id,
+            r.request_code,
+            r.status,
+            r.faculty_status,
+            r.submitted_at,
+            r.updated_at,
+            r.document_value,
+            u.id as user_id,
+            u.full_name as user_name,
+            u.role as user_role,
+            d.name as department_name,
+            dd.label as document_label
+          FROM requests r
+          LEFT JOIN users u ON u.id = r.student_id
+          LEFT JOIN departments d ON d.id = r.department_id
+          LEFT JOIN department_documents dd ON dd.value = r.document_value AND dd.department_id = r.department_id
+          ORDER BY r.updated_at DESC
+          LIMIT 500
+        `);
+        requests = requestResults;
+      } catch (reqError) {
+        console.error('Error loading requests for activity logs:', reqError);
+        // Continue without requests - return empty logs
+      }
+
+      // Get faculty/admin actions from request_conversations/comments
+      let conversations = [];
+      try {
+        const [convResults] = await conn.query(`
+          SELECT 
+            c.id,
+            c.request_id,
+            c.user_id,
+            c.message,
+            c.created_at,
+            u.full_name as user_name,
+            u.role as user_role,
+            r.request_code,
+            r.document_value,
+            d.name as department_name,
+            dd.label as document_label
+          FROM request_conversations c
+          LEFT JOIN users u ON u.id = c.user_id
+          LEFT JOIN requests r ON r.id = c.request_id
+          LEFT JOIN departments d ON d.id = r.department_id
+          LEFT JOIN department_documents dd ON dd.value = r.document_value AND dd.department_id = r.department_id
+          WHERE u.role IN ('admin', 'faculty')
+          ORDER BY c.created_at DESC
+          LIMIT 200
+        `);
+        conversations = convResults;
+      } catch (convError) {
+        console.warn('Could not load conversations for activity logs:', convError.message);
+        // Continue without conversations - not critical
+      }
+
+      // Process requests - create logs for status changes
+      if (requests && Array.isArray(requests)) {
+        requests.forEach(req => {
+          const activity = getActivityFromStatus(req.status, req.faculty_status);
+          if (activity) {
+            logs.push({
+              id: `req_${req.id}`,
+              userId: req.user_id,
+              userName: req.user_name || 'Unknown User',
+              userRole: req.user_role,
+              activity: activity,
+              details: `${req.user_name || 'Student'} ${activity.toLowerCase()}d document request "${req.document_label || req.document_value}" for ${req.department_name || 'Department'}`,
+              timestamp: req.updated_at || req.submitted_at,
+              requestId: req.id,
+              requestCode: req.request_code,
+              documentLabel: req.document_label || req.document_value,
+              departmentName: req.department_name
+            });
+          }
+        });
+      }
+
+      // Process conversations - create logs for admin/faculty actions
+      if (conversations && Array.isArray(conversations)) {
+        conversations.forEach(conv => {
+          if (conv && conv.user_id) {
+            logs.push({
+              id: `conv_${conv.id}`,
+              userId: conv.user_id,
+              userName: conv.user_name || 'Unknown User',
+              userRole: conv.user_role,
+              activity: 'Update',
+              details: `${conv.user_name || 'Admin/Faculty'} commented on document request "${conv.document_label || conv.document_value}" for ${conv.department_name || 'Department'}: "${(conv.message || '').substring(0, 100)}${(conv.message || '').length > 100 ? '...' : ''}"`,
+              timestamp: conv.created_at,
+              requestId: conv.request_id,
+              requestCode: conv.request_code,
+              documentLabel: conv.document_label || conv.document_value,
+              departmentName: conv.department_name
+            });
+          }
+        });
+      }
+
+      // Sort by timestamp (newest first)
+      logs.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+      res.json(logs.slice(0, 300)); // Return top 300 most recent
+    } finally {
+      conn.release();
+    }
   } catch (error) {
     console.error('Logs error:', error);
     res.status(500).json({ message: 'Failed to load logs' });
+  }
+});
+
+// Helper function to determine activity from status
+function getActivityFromStatus(status, facultyStatus) {
+  if (status === 'approved' || facultyStatus === 'approved') return 'Approve';
+  if (status === 'declined' || facultyStatus === 'declined') return 'Decline';
+  if (status === 'completed') return 'Approve'; // Completed is a form of approval
+  if (status === 'pending' && !facultyStatus) return 'Create';
+  return null; // Don't log other statuses as activities
+}
+
+// Get Settings
+router.get('/settings', async (req, res) => {
+  try {
+    const conn = await getConnection();
+    try {
+      // Check if settings table exists, if not return defaults
+      const [settings] = await conn.query(`
+        SELECT setting_key, setting_value 
+        FROM system_settings
+        LIMIT 100
+      `).catch(() => {
+        // If table doesn't exist, return default settings
+        return [[{
+          setting_key: 'emailNotifications',
+          setting_value: 'true'
+        }, {
+          setting_key: 'reminderFrequency',
+          setting_value: '24'
+        }, {
+          setting_key: 'maintenanceMode',
+          setting_value: 'false'
+        }, {
+          setting_key: 'maintenanceMessage',
+          setting_value: 'System is under maintenance. Please check back later.'
+        }, {
+          setting_key: 'sessionTimeout',
+          setting_value: '60'
+        }, {
+          setting_key: 'require2FA',
+          setting_value: 'false'
+        }, {
+          setting_key: 'schoolName',
+          setting_value: 'USJR Recoletos'
+        }, {
+          setting_key: 'logoURL',
+          setting_value: ''
+        }]];
+      });
+
+      // Convert array to object
+      const settingsObj = {};
+      settings.forEach(s => {
+        const key = s.setting_key;
+        let value = s.setting_value;
+        
+        // Parse boolean and number values
+        if (value === 'true') value = true;
+        else if (value === 'false') value = false;
+        else if (!isNaN(value) && value !== '') value = Number(value);
+        
+        settingsObj[key] = value;
+      });
+
+      // Set defaults if missing
+      const defaults = {
+        emailNotifications: true,
+        reminderFrequency: 24,
+        maintenanceMode: false,
+        maintenanceMessage: 'System is under maintenance. Please check back later.',
+        sessionTimeout: 60,
+        require2FA: false,
+        schoolName: 'USJR Recoletos',
+        logoURL: ''
+      };
+
+      res.json({ ...defaults, ...settingsObj });
+    } finally {
+      conn.release();
+    }
+  } catch (error) {
+    console.error('Get settings error:', error);
+    // Return default settings on error
+    res.json({
+      emailNotifications: true,
+      reminderFrequency: 24,
+      maintenanceMode: false,
+      maintenanceMessage: 'System is under maintenance. Please check back later.',
+      sessionTimeout: 60,
+      require2FA: false,
+      schoolName: 'USJR Recoletos',
+      logoURL: ''
+    });
+  }
+});
+
+// Update Settings
+router.put('/settings', async (req, res) => {
+  try {
+    const settings = req.body;
+    const conn = await getConnection();
+    try {
+      // Ensure settings table exists
+      await conn.query(`
+        CREATE TABLE IF NOT EXISTS system_settings (
+          id INT AUTO_INCREMENT PRIMARY KEY,
+          setting_key VARCHAR(100) UNIQUE NOT NULL,
+          setting_value TEXT,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        )
+      `);
+
+      // Update or insert each setting
+      for (const [key, value] of Object.entries(settings)) {
+        await conn.query(`
+          INSERT INTO system_settings (setting_key, setting_value)
+          VALUES (?, ?)
+          ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)
+        `, [key, String(value)]);
+      }
+
+      res.json({ message: 'Settings saved successfully' });
+    } finally {
+      conn.release();
+    }
+  } catch (error) {
+    console.error('Update settings error:', error);
+    res.status(500).json({ message: 'Failed to save settings' });
+  }
+});
+
+// Create Backup
+router.post('/backup', async (req, res) => {
+  try {
+    const conn = await getConnection();
+    try {
+      const backup = {
+        timestamp: new Date().toISOString(),
+        users: [],
+        departments: [],
+        documentTypes: [],
+        requests: []
+      };
+
+      // Backup users (without passwords)
+      const [users] = await conn.query(`
+        SELECT id, role, id_number, full_name, email, department_id, course, year_level, position, is_super_admin
+        FROM users
+      `);
+      backup.users = users;
+
+      // Backup departments
+      const [departments] = await conn.query('SELECT * FROM departments');
+      backup.departments = departments;
+
+      // Backup document types
+      const [docTypes] = await conn.query('SELECT * FROM department_documents');
+      backup.documentTypes = docTypes;
+
+      // Backup requests (last 1000)
+      const [requests] = await conn.query(`
+        SELECT * FROM requests 
+        ORDER BY submitted_at DESC 
+        LIMIT 1000
+      `);
+      backup.requests = requests;
+
+      res.json(backup);
+    } finally {
+      conn.release();
+    }
+  } catch (error) {
+    console.error('Backup error:', error);
+    res.status(500).json({ message: 'Failed to create backup' });
+  }
+});
+
+// Restore Backup
+router.post('/restore', async (req, res) => {
+  try {
+    const backup = req.body;
+    
+    if (!backup || !backup.timestamp) {
+      return res.status(400).json({ message: 'Invalid backup file' });
+    }
+
+    const conn = await getConnection();
+    try {
+      await conn.beginTransaction();
+
+      // Restore departments (only if they don't exist)
+      if (backup.departments && Array.isArray(backup.departments)) {
+        for (const dept of backup.departments) {
+          await conn.query(`
+            INSERT INTO departments (id, code, name)
+            VALUES (?, ?, ?)
+            ON DUPLICATE KEY UPDATE code = VALUES(code), name = VALUES(name)
+          `, [dept.id, dept.code, dept.name]);
+        }
+      }
+
+      // Restore document types (only if they don't exist)
+      if (backup.documentTypes && Array.isArray(backup.documentTypes)) {
+        for (const doc of backup.documentTypes) {
+          await conn.query(`
+            INSERT INTO department_documents (id, department_id, label, value, requires_faculty)
+            VALUES (?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE 
+              label = VALUES(label), 
+              value = VALUES(value), 
+              requires_faculty = VALUES(requires_faculty)
+          `, [doc.id, doc.department_id, doc.label, doc.value, doc.requires_faculty || false]);
+        }
+      }
+
+      // Note: We don't restore users or requests to avoid data conflicts
+      // Users and requests should be managed separately
+
+      await conn.commit();
+      res.json({ message: 'Backup restored successfully' });
+    } catch (error) {
+      await conn.rollback();
+      throw error;
+    } finally {
+      conn.release();
+    }
+  } catch (error) {
+    console.error('Restore error:', error);
+    res.status(500).json({ message: 'Failed to restore backup' });
+  }
+});
+
+// Get Reports Data
+router.get('/reports', async (req, res) => {
+  try {
+    const conn = await getConnection();
+    try {
+      // Monthly Document Output (last 6 months)
+      const [monthlyOutput] = await conn.query(`
+        SELECT 
+          DATE_FORMAT(submitted_at, '%Y-%m') as month,
+          COUNT(*) as count
+        FROM requests
+        WHERE submitted_at >= DATE_SUB(NOW(), INTERVAL 6 MONTH)
+        GROUP BY DATE_FORMAT(submitted_at, '%Y-%m')
+        ORDER BY month DESC
+      `);
+
+      // Department Performance
+      const [departmentPerformance] = await conn.query(`
+        SELECT 
+          d.name,
+          COUNT(r.id) as total,
+          SUM(CASE WHEN r.status = 'completed' THEN 1 ELSE 0 END) as completed
+        FROM departments d
+        LEFT JOIN requests r ON r.department_id = d.id
+        GROUP BY d.id, d.name
+        ORDER BY completed DESC
+      `);
+
+      // Most Requested Documents
+      const [topDocuments] = await conn.query(`
+        SELECT 
+          dd.label,
+          dd.value,
+          COUNT(r.id) as count
+        FROM department_documents dd
+        LEFT JOIN requests r ON r.document_value = dd.value AND r.department_id = dd.department_id
+        GROUP BY dd.id, dd.label, dd.value
+        ORDER BY count DESC
+        LIMIT 10
+      `);
+
+      // Staff Performance (Faculty and Admin)
+      const [staffPerformance] = await conn.query(`
+        SELECT 
+          u.full_name as name,
+          u.role,
+          COUNT(DISTINCT r.id) as processed
+        FROM users u
+        LEFT JOIN requests r ON (
+          (u.role = 'faculty' AND r.faculty_id = u.id) OR
+          (u.role = 'admin' AND r.admin_id = u.id)
+        )
+        WHERE u.role IN ('faculty', 'admin')
+        GROUP BY u.id, u.full_name, u.role
+        ORDER BY processed DESC
+        LIMIT 10
+      `);
+
+      res.json({
+        monthlyOutput: monthlyOutput.map(m => ({
+          month: new Date(m.month + '-01').toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
+          count: m.count
+        })),
+        departmentPerformance: departmentPerformance.map(d => ({
+          name: d.name,
+          total: d.total || 0,
+          completed: d.completed || 0
+        })),
+        topDocuments: topDocuments.map(d => ({
+          label: d.label,
+          value: d.value,
+          count: d.count || 0
+        })),
+        staffPerformance: staffPerformance.map(s => ({
+          name: s.name,
+          role: s.role,
+          processed: s.processed || 0
+        }))
+      });
+    } finally {
+      conn.release();
+    }
+  } catch (error) {
+    console.error('Reports error:', error);
+    res.status(500).json({ message: 'Failed to load reports' });
   }
 });
 

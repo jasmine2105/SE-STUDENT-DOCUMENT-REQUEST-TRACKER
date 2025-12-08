@@ -75,6 +75,46 @@ router.get('/:id/documents', async (req, res) => {
   }
 });
 
+// Create department (requires authentication)
+router.post('/', authMiddleware(), async (req, res) => {
+  try {
+    const { name, code } = req.body;
+    
+    if (!name || !code) {
+      return res.status(400).json({ message: 'Name and code are required' });
+    }
+    
+    const conn = await getConnection();
+    try {
+      // Check if code already exists
+      const [existing] = await conn.query('SELECT id FROM departments WHERE code = ?', [code.toUpperCase()]);
+      if (existing.length > 0) {
+        return res.status(400).json({ message: 'Department code already exists' });
+      }
+      
+      // Insert new department
+      const [result] = await conn.query(
+        'INSERT INTO departments (name, code) VALUES (?, ?)',
+        [name.trim(), code.trim().toUpperCase()]
+      );
+      
+      res.json({ 
+        message: 'Department created successfully',
+        department: {
+          id: result.insertId,
+          name: name.trim(),
+          code: code.trim().toUpperCase()
+        }
+      });
+    } finally {
+      conn.release();
+    }
+  } catch (error) {
+    console.error('Create department error:', error);
+    res.status(500).json({ message: 'Failed to create department' });
+  }
+});
+
 // Update department (requires authentication)
 router.put('/:id', authMiddleware(), async (req, res) => {
   try {
