@@ -2,12 +2,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (!Utils.requireAuth()) return;
 
   const user = Utils.getCurrentUser();
-  const userNameEl = document.getElementById('userName');
-  const userInfoEl = document.getElementById('userInfo');
   const sidebarUserInfo = document.getElementById('sidebarUserInfo');
 
-  if (userNameEl) userNameEl.textContent = user?.fullName || user?.name || user?.idNumber || 'User';
-  if (userInfoEl) userInfoEl.textContent = `${user?.role || ''}`;
+  // Set sidebar user info (userName and userInfo will be set by FacultyPortalRequests.loadUserInfo())
   if (sidebarUserInfo) sidebarUserInfo.textContent = user?.fullName || '';
 
   // Faculty Portal class for profile and settings
@@ -208,42 +205,72 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     async saveProfile() {
-      const fullName = document.getElementById('editFullName')?.value;
-      const email = document.getElementById('editEmail')?.value;
-      const contactNumber = document.getElementById('editContactNumber')?.value;
-      const birthdate = document.getElementById('editBirthdate')?.value;
-      const address = document.getElementById('editAddress')?.value;
-      const gender = document.getElementById('editGender')?.value;
-      const position = document.getElementById('editPosition')?.value;
+      const fullName = document.getElementById('editFullName')?.value.trim() || '';
+      const email = document.getElementById('editEmail')?.value.trim() || '';
+      const contactNumber = document.getElementById('editContactNumber')?.value.trim() || '';
+      const birthdate = document.getElementById('editBirthdate')?.value || '';
+      const address = document.getElementById('editAddress')?.value.trim() || '';
+      const gender = document.getElementById('editGender')?.value || '';
+
+      if (!fullName) {
+        Utils.showToast('Full name is required', 'error');
+        return;
+      }
+
+      if (!email || !email.includes('@')) {
+        Utils.showToast('Please enter a valid email address', 'error');
+        return;
+      }
+
+      // Check if user is authenticated before making request
+      const token = Utils.getAuthToken();
+      if (!token) {
+        Utils.showToast('Your session has expired. Please log in again.', 'error');
+        setTimeout(() => {
+          Utils.clearCurrentUser();
+        }, 2000);
+        return;
+      }
 
       try {
-        await Utils.apiRequest(`/users/${this.currentUser.id}`, {
+        const updates = {
+          fullName,
+          email,
+          contactNumber: contactNumber || null,
+          birthdate: birthdate || null,
+          address: address || null,
+          gender: gender || null
+        };
+
+        await Utils.apiRequest('/auth/update-profile', {
           method: 'PUT',
-          body: {
-            fullName: fullName,
-            email: email,
-            contactNumber: contactNumber,
-            birthdate: birthdate,
-            address: address,
-            gender: gender,
-            position: position
-          }
+          body: updates
         });
 
-        this.currentUser.fullName = fullName;
-        this.currentUser.email = email;
-        this.currentUser.contactNumber = contactNumber;
-        this.currentUser.birthdate = birthdate;
-        this.currentUser.address = address;
-        this.currentUser.gender = gender;
-        this.currentUser.position = position;
+        // Update local user data
+        Object.assign(this.currentUser, updates);
         localStorage.setItem('currentUser', JSON.stringify(this.currentUser));
 
-        Utils.showToast('Profile updated successfully', 'success');
+        Utils.showToast('Profile updated successfully!', 'success');
+        
+        // Refresh profile view (exit edit mode)
         this.renderProfile(false);
+        
+        // Update header display name
+        const userNameEl = document.getElementById('userName');
+        if (userNameEl) userNameEl.textContent = this.currentUser.fullName || this.currentUser.name || 'Faculty';
       } catch (error) {
-        console.error('Failed to save profile:', error);
-        Utils.showToast('Failed to update profile. Please try again.', 'error');
+        console.error('Save profile error:', error);
+        
+        // Check if it's an authentication error
+        if (error.message && (error.message.includes('401') || error.message.includes('Authorization token missing') || error.message.includes('Unauthorized'))) {
+          Utils.showToast('Your session has expired. Please log in again.', 'error');
+          setTimeout(() => {
+            Utils.clearCurrentUser();
+          }, 2000);
+        } else {
+          Utils.showToast(error.message || 'Failed to update profile. Please try again.', 'error');
+        }
       }
     }
 
@@ -352,44 +379,46 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     async saveSettings() {
-      const currentPassword = document.getElementById('currentPassword')?.value;
-      const newPassword = document.getElementById('newPassword')?.value;
-      const confirmPassword = document.getElementById('confirmNewPassword')?.value;
-      const emailNotifications = document.getElementById('emailNotifications')?.checked;
-      const smsNotifications = document.getElementById('smsNotifications')?.checked;
-
-      if (newPassword && newPassword !== confirmPassword) {
-        Utils.showToast('New passwords do not match', 'error');
-        return;
-      }
+      const currentPassword = document.getElementById('currentPassword')?.value || '';
+      const newPassword = document.getElementById('newPassword')?.value || '';
+      const confirmPassword = document.getElementById('confirmNewPassword')?.value || '';
+      const emailNotifications = document.getElementById('emailNotifications')?.checked ?? true;
+      const smsNotifications = document.getElementById('smsNotifications')?.checked ?? false;
 
       try {
-        const updates = {};
+        // Handle password change first
         if (newPassword) {
-          updates.currentPassword = currentPassword;
-          updates.newPassword = newPassword;
-        }
-        updates.emailNotifications = emailNotifications;
-        updates.smsNotifications = smsNotifications;
-
-        await Utils.apiRequest(`/users/${this.currentUser.id}/settings`, {
-          method: 'PUT',
-          body: updates
-        });
-
-        this.currentUser.emailNotifications = emailNotifications;
-        this.currentUser.smsNotifications = smsNotifications;
-        localStorage.setItem('currentUser', JSON.stringify(this.currentUser));
-
-        Utils.showToast('Settings saved successfully', 'success');
-        if (newPassword) {
+          if (!currentPassword) {
+            Utils.showToast('Please enter your current password', 'error');
+            return;
+          }
+          if (newPassword !== confirmPassword) {
+            Utils.showToast('New passwords do not match', 'error');
+            return;
+          }
+          if (newPassword.length < 3) {
+            Utils.showToast('Password must be at least 3 characters', 'error');
+            return;
+          }
+          await Utils.apiRequest('/auth/update-password', {
+            method: 'PUT',
+            body: { currentPassword, newPassword }
+          });
           document.getElementById('currentPassword').value = '';
           document.getElementById('newPassword').value = '';
           document.getElementById('confirmNewPassword').value = '';
         }
+
+        // Store notification preferences in localStorage only
+        // (These are client-side preferences, not stored in database)
+        this.currentUser.emailNotifications = emailNotifications;
+        this.currentUser.smsNotifications = smsNotifications;
+        localStorage.setItem('currentUser', JSON.stringify(this.currentUser));
+
+        Utils.showToast('Settings saved successfully!', 'success');
       } catch (error) {
-        console.error('Failed to save settings:', error);
-        Utils.showToast('Failed to save settings. Please try again.', 'error');
+        console.error('Save settings error:', error);
+        Utils.showToast(error.message || 'Failed to save settings', 'error');
       }
     }
 
@@ -421,6 +450,109 @@ document.addEventListener('DOMContentLoaded', async () => {
     facultyPortalProfile.renderSettings();
   }
 
+  // Filter notifications to show only faculty-relevant ones
+  // Faculty should ONLY see notifications for requests:
+  // 1. Assigned to them specifically (type: 'request_assigned')
+  // 2. Pending their approval (type: 'pending_approval')
+  // NOT generic admin notes - exclude ALL admin_note notifications
+  // Also deduplicate notifications (same request_id + type)
+  function filterFacultyNotifications(allNotifications) {
+    if (!Array.isArray(allNotifications)) return [];
+    
+    const user = Utils.getCurrentUser();
+    if (!user || !user.id) return [];
+    
+    // First, filter to only show relevant notifications
+    const relevant = allNotifications.filter(n => {
+      const type = (n.type || '').toLowerCase();
+      const title = (n.title || '').toLowerCase();
+      const message = (n.message || '').toLowerCase();
+      
+      // EXCLUDE all admin notes - faculty don't need to see admin notes
+      if (type === 'admin_note' || title.includes('admin note')) {
+        return false;
+      }
+      
+      // Always include if explicitly assigned to them
+      if (type === 'request_assigned' || title.includes('assigned to you') || message.includes('assigned to you')) {
+        return true;
+      }
+      
+      // Always include if pending their approval
+      if (type === 'pending_approval' || 
+          title.includes('pending approval') || 
+          message.includes('requires your approval') ||
+          message.includes('that requires your approval')) {
+        return true;
+      }
+      
+      // Exclude student-specific notifications
+      if (n.role === 'student') {
+        return false;
+      }
+      
+      // For other types with role='faculty', only include if it's clearly for them
+      if (n.role === 'faculty') {
+        const allowedTypes = ['request_assigned', 'pending_approval', 'status_update'];
+        if (allowedTypes.includes(type)) {
+          return true;
+        }
+        return false;
+      }
+      
+      return false;
+    });
+    
+    // Deduplicate: Keep only the most recent notification for each (request_id + type) combination
+    const seen = new Map();
+    const deduplicated = [];
+    
+    // Sort by created_at descending (newest first) to keep the most recent ones
+    const sorted = relevant.sort((a, b) => {
+      const dateA = new Date(a.created_at || a.createdAt || 0);
+      const dateB = new Date(b.created_at || b.createdAt || 0);
+      return dateB - dateA;
+    });
+    
+    for (const notification of sorted) {
+      const requestId = notification.request_id || notification.requestId;
+      const type = (notification.type || '').toLowerCase();
+      const key = `${requestId}_${type}`;
+      
+      // Only add if we haven't seen this (request_id + type) combination before
+      if (!seen.has(key)) {
+        seen.set(key, true);
+        deduplicated.push(notification);
+      }
+    }
+    
+    // Sort again by date (newest first) for display
+    return deduplicated.sort((a, b) => {
+      const dateA = new Date(a.created_at || a.createdAt || 0);
+      const dateB = new Date(b.created_at || b.createdAt || 0);
+      return dateB - dateA;
+    });
+  }
+
+  // Update sidebar notification badge
+  function updateSidebarNotificationBadge(notifications) {
+    const badge = document.getElementById('sidebarNotificationCount');
+    if (!badge) return;
+
+    // Filter to only faculty-relevant notifications
+    const filteredNotifications = filterFacultyNotifications(notifications);
+    const totalCount = filteredNotifications.length;
+
+    if (totalCount > 0) {
+      badge.textContent = totalCount > 9 ? '9+' : String(totalCount);
+      badge.classList.remove('hidden');
+    } else {
+      badge.textContent = '0';
+      badge.classList.add('hidden');
+    }
+  }
+  window.updateSidebarNotificationBadge = updateSidebarNotificationBadge;
+
   // Initialize notifications (pass userId as fallback if server doesn't use auth header)
   try {
     const notificationsInstance = await Notifications.init({
@@ -429,11 +561,171 @@ document.addEventListener('DOMContentLoaded', async () => {
       countId: 'notificationCount',
       dropdownId: 'notificationDropdown',
       listId: 'notificationList',
-      markAllBtnId: 'markAllRead'
+      markAllBtnId: 'markAllRead',
+      onNotificationClick: async (requestId, notification) => {
+        // Mark notification as read when clicked
+        if (notification && !(notification.read_flag || notification.read || notification.read_at)) {
+          try {
+            await Notifications.markAllRead([notification.id]);
+            // Update local state
+            notification.read = true;
+            notification.read_flag = true;
+            notification.read_at = new Date().toISOString();
+            // Refresh to update badge count
+            if (notificationsInstance && notificationsInstance.refresh) {
+              await notificationsInstance.refresh();
+            }
+            // Update sidebar badge
+            const allNotifications = await Notifications.fetchNotifications(user?.id);
+            updateSidebarNotificationBadge(allNotifications);
+          } catch (error) {
+            console.error('Failed to mark notification as read:', error);
+          }
+        }
+        // Handle the click (open request)
+        handleNotificationClick(requestId);
+      }
     });
     // Store refresh function globally for use in notifications view
     if (notificationsInstance && notificationsInstance.refresh) {
       window.notificationsRefresh = notificationsInstance.refresh;
+      
+      // Wrap refresh to filter notifications and update counts correctly
+      const originalRefresh = notificationsInstance.refresh;
+      notificationsInstance.refresh = async function() {
+        // Fetch all notifications
+        const allNotifications = await Notifications.fetchNotifications(user?.id);
+        // Filter to only show faculty-relevant notifications
+        const filteredNotifications = filterFacultyNotifications(allNotifications);
+        
+        // Update the dropdown list with filtered notifications
+        const list = document.getElementById('notificationList');
+        const countEl = document.getElementById('notificationCount');
+        const dropdown = document.getElementById('notificationDropdown');
+        
+        if (list) {
+          list.innerHTML = '';
+          if (!filteredNotifications.length) {
+            const empty = document.createElement('div');
+            empty.className = 'empty-state';
+            empty.innerHTML = '<div class="empty-state-icon">🔕</div><h4>No notifications</h4>';
+            list.appendChild(empty);
+            if (countEl) {
+              countEl.classList.add('hidden');
+              countEl.textContent = '0';
+            }
+          } else {
+            filteredNotifications.forEach(n => {
+              const item = Notifications.renderNotificationItem(n, async (requestId, notification) => {
+                // Close dropdown
+                if (dropdown) dropdown.classList.add('hidden');
+                // Mark notification as read when clicked
+                if (notification && !(notification.read_flag || notification.read || notification.read_at)) {
+                  try {
+                    await Notifications.markAllRead([notification.id]);
+                    // Update local state
+                    notification.read = true;
+                    notification.read_flag = true;
+                    notification.read_at = new Date().toISOString();
+                    // Refresh to update badge count
+                    if (notificationsInstance && notificationsInstance.refresh) {
+                      await notificationsInstance.refresh();
+                    }
+                    // Update sidebar badge
+                    const allNotifications = await Notifications.fetchNotifications(user?.id);
+                    updateSidebarNotificationBadge(allNotifications);
+                  } catch (error) {
+                    console.error('Failed to mark notification as read:', error);
+                  }
+                }
+                // Handle the click (open request)
+                handleNotificationClick(requestId);
+              });
+              list.appendChild(item);
+            });
+            
+            // Update count badge with filtered unread count
+            const unreadCount = filteredNotifications.filter(n => !(n.read_flag || n.read || n.read_at)).length || 0;
+            if (countEl) {
+              if (unreadCount > 0) {
+                countEl.classList.remove('hidden');
+                countEl.textContent = unreadCount > 9 ? '9+' : String(unreadCount);
+              } else {
+                countEl.classList.add('hidden');
+                countEl.textContent = '0';
+              }
+            }
+          }
+        }
+        
+        // Update sidebar badge with filtered notifications
+        updateSidebarNotificationBadge(allNotifications);
+      };
+      
+      // Store onNotificationClick for use in refresh
+      notificationsInstance.onNotificationClick = async (requestId, notification) => {
+        // Mark notification as read when clicked
+        if (notification && !(notification.read_flag || notification.read || notification.read_at)) {
+          try {
+            await Notifications.markAllRead([notification.id]);
+            // Update local state
+            notification.read = true;
+            notification.read_flag = true;
+            notification.read_at = new Date().toISOString();
+            // Refresh to update badge count
+            if (notificationsInstance && notificationsInstance.refresh) {
+              await notificationsInstance.refresh();
+            }
+            // Update sidebar badge
+            const allNotifications = await Notifications.fetchNotifications(user?.id);
+            updateSidebarNotificationBadge(allNotifications);
+          } catch (error) {
+            console.error('Failed to mark notification as read:', error);
+          }
+        }
+        // Handle the click (open request)
+        handleNotificationClick(requestId);
+      };
+      
+      // Override the mark all read button to use filtered notifications
+      const markAllBtn = document.getElementById('markAllRead');
+      if (markAllBtn) {
+        // Remove existing listener by cloning the button
+        const newMarkAllBtn = markAllBtn.cloneNode(true);
+        markAllBtn.parentNode.replaceChild(newMarkAllBtn, markAllBtn);
+        
+        newMarkAllBtn.addEventListener('click', async () => {
+          try {
+            const allNotifications = await Notifications.fetchNotifications(user?.id);
+            const filteredNotifications = filterFacultyNotifications(allNotifications);
+            const unreadFiltered = filteredNotifications.filter(n => !(n.read_flag || n.read || n.read_at));
+            const ids = unreadFiltered.map(n => n.id).filter(Boolean);
+            
+            if (ids.length === 0) {
+              Utils.showToast('All notifications are already read', 'info');
+              return;
+            }
+            
+            await Notifications.markAllRead(ids);
+            Utils.showToast('All notifications marked as read', 'success');
+            
+            // Refresh notifications display
+            if (notificationsInstance && notificationsInstance.refresh) {
+              await notificationsInstance.refresh();
+            }
+            // Update sidebar badge
+            updateSidebarNotificationBadge(allNotifications);
+          } catch (error) {
+            console.error('Failed to mark all notifications as read:', error);
+            Utils.showToast('Failed to mark notifications as read', 'error');
+          }
+        });
+      }
+      
+      // Initial sidebar badge update with filtered notifications
+      const initialNotifications = await Notifications.fetchNotifications(user?.id);
+      // updateSidebarNotificationBadge already filters inside, so just pass all notifications
+      updateSidebarNotificationBadge(initialNotifications);
     }
   } catch (err) {
     console.warn('Notifications init failed', err.message || err);
@@ -569,97 +861,111 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   await loadRecent();
 
-  // Load notifications view
+  // Load notifications view (matching admin side design)
   async function loadNotificationsView() {
+    const container = document.getElementById('notificationsFullList');
+    if (!container) return;
+
     try {
-      const notifications = await Notifications.fetchNotifications(user?.id);
-      const container = document.getElementById('notificationsFullList');
-      if (!container) return;
+      const allNotifications = await Notifications.fetchNotifications(user?.id);
+      
+      // Filter to show only faculty-relevant notifications
+      const notifications = filterFacultyNotifications(allNotifications);
+      
+      // Update sidebar notification badge
+      updateSidebarNotificationBadge(notifications);
 
       if (!notifications || notifications.length === 0) {
         container.innerHTML = `
           <div class="empty-state">
-            <div class="empty-state-icon">🔕</div>
-            <h3>No notifications</h3>
-            <p>You don't have any notifications yet.</p>
+            <div class="empty-state-icon">🔔</div>
+            <h3>No notifications yet</h3>
+            <p>You'll see notifications here when there are updates.</p>
           </div>
         `;
         return;
       }
 
-      // Build table
-      const rows = notifications.map(n => {
-        const isRead = n.read_flag || n.read;
-        const rowClass = isRead ? '' : 'unread';
-        const timeAgo = Utils.formatRelativeTime(n.created_at || n.createdAt);
-        const requestCell = n.request_id || n.requestId
-          ? `<button class="btn-secondary" data-request-id="${n.request_id || n.requestId}"><i class="fas fa-eye"></i> View</button>`
-          : '<span class="muted">-</span>';
+      container.innerHTML = notifications.map(notif => {
+        const isRead = notif.read_flag || notif.read || notif.is_read;
+        const requestId = notif.request_id || notif.requestId;
         return `
-          <tr class="${rowClass}">
-            <td>${n.title || 'Notification'}</td>
-            <td>${n.message || ''}</td>
-            <td>${timeAgo}</td>
-            <td>${requestCell}</td>
-          </tr>
-        `;
-      }).join('');
-
-      container.innerHTML = `
-        <div class="table-wrapper">
-          <table class="requests-table">
-            <thead>
-              <tr>
-                <th>Title</th>
-                <th>Message</th>
-                <th>Received</th>
-                <th>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${rows}
-            </tbody>
-          </table>
+        <div class="notification-item ${isRead ? '' : 'unread'} ${requestId ? 'clickable' : ''}" 
+             ${requestId ? `data-request-id="${requestId}" onclick="handleNotificationClick(${requestId})"` : ''}>
+          <div class="notification-icon">
+            <i class="fas fa-bell"></i>
+          </div>
+          <div class="notification-content">
+            <div class="notification-title">${notif.title || 'Notification'}</div>
+            <div class="notification-message">${notif.message || ''}</div>
+            <div class="notification-time">${Utils.formatDate(notif.created_at || notif.createdAt)}</div>
+          </div>
+          ${requestId ? '<div class="notification-arrow"><i class="fas fa-chevron-right"></i></div>' : ''}
         </div>
       `;
-
-      // Add click handlers for notifications with request IDs
-      container.querySelectorAll('[data-request-id]').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const requestId = btn.dataset.requestId;
-          if (requestId && window.facultyPortal) {
-            window.facultyPortal.viewRequest(parseInt(requestId, 10));
-          }
-        });
-      });
-
-      // Mark all as read button
-      const markAllBtn = document.getElementById('markAllReadNotifications');
-      if (markAllBtn) {
-        markAllBtn.onclick = async () => {
-          const ids = notifications.map(n => n.id).filter(Boolean);
-          await Notifications.markAllRead(ids);
-          // Reload view
-          await loadNotificationsView();
-          // Refresh bell count
-          if (window.notificationsRefresh) {
-            await window.notificationsRefresh();
-          }
-        };
-      }
-    } catch (error) {
-      console.error('Failed to load notifications view:', error);
-      const container = document.getElementById('notificationsFullList');
-      if (container) {
-        container.innerHTML = `
-          <div class="empty-state">
-            <div class="empty-state-icon">⚠️</div>
-            <h3>Error loading notifications</h3>
-            <p>${error.message || 'Please try again later.'}</p>
-          </div>
-        `;
-      }
+      }).join('');
+    } catch (err) {
+      container.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-state-icon">❌</div>
+          <h3>Failed to load notifications</h3>
+        </div>
+      `;
+      // Update badge even on error (set to 0)
+      updateSidebarNotificationBadge([]);
     }
+  }
+
+  // Handle notification click (matching admin side)
+  function handleNotificationClick(requestId) {
+    console.log('🔔 Notification clicked from view, request ID:', requestId);
+    
+    // Switch to requests view
+    const links = document.querySelectorAll('.sidebar-link');
+    links.forEach(l => l.classList.remove('active'));
+    const requestsLink = document.querySelector('.sidebar-link[data-view="requests"]');
+    if (requestsLink) requestsLink.classList.add('active');
+    
+    // Hide all views, show requests view
+    document.getElementById('dashboardView')?.classList.add('hidden');
+    document.getElementById('requestsView')?.classList.remove('hidden');
+    document.getElementById('notificationsView')?.classList.add('hidden');
+    document.getElementById('profileView')?.classList.add('hidden');
+    document.getElementById('settingsView')?.classList.add('hidden');
+    
+    // View the specific request after a short delay
+    setTimeout(() => {
+      if (window.facultyPortal && window.facultyPortal.viewRequest) {
+        window.facultyPortal.viewRequest(requestId);
+      }
+    }, 100);
+  }
+  window.handleNotificationClick = handleNotificationClick;
+
+  // Mark all as read button handler (matching admin side)
+  const markAllReadSecondary = document.getElementById('markAllReadSecondary');
+  if (markAllReadSecondary) {
+    markAllReadSecondary.addEventListener('click', async () => {
+      try {
+        const allNotifications = await Notifications.fetchNotifications(user?.id);
+        const filteredNotifications = filterFacultyNotifications(allNotifications);
+        const ids = filteredNotifications.map(n => n.id).filter(Boolean);
+        
+        if (ids.length > 0) {
+          await Notifications.markAllRead(ids);
+        }
+        
+        Utils.showToast('All notifications marked as read', 'success');
+        await loadNotificationsView();
+        // Refresh bell count
+        if (window.notificationsRefresh) {
+          await window.notificationsRefresh();
+        }
+      } catch (err) {
+        console.error('Failed to mark all as read:', err);
+        Utils.showToast('Failed to mark notifications as read', 'error');
+      }
+    });
   }
 
   // Expose loadNotificationsView globally for refresh
@@ -672,7 +978,14 @@ class FacultyPortalRequests {
     this.allRequests = [];
     this.requests = [];
     this.filteredRequests = [];
+    this.allDepartmentRequests = [];
+    this.filteredAllRequests = [];
     this.filterStatus = 'all';
+    this.filterPriority = 'all';
+    this.searchQuery = '';
+    this.allFilterStatus = 'all';
+    this.allFilterPriority = 'all';
+    this.allSearchQuery = '';
     this.init();
   }
 
@@ -689,6 +1002,7 @@ class FacultyPortalRequests {
     this.setupEventListeners();
     this.updateStats();
     this.renderRequests();
+    this.renderAllRequests();
   }
 
   loadUserInfo() {
@@ -725,7 +1039,14 @@ class FacultyPortalRequests {
           (requiresFaculty && isMyDepartment && !r.facultyApproval)
         );
       });
+      
+      // All requests in the faculty's department (for "All Document Requests" section)
+      this.allDepartmentRequests = this.allRequests.filter(r => {
+        return r.departmentId === this.currentUser.departmentId;
+      });
+      
       this.filterRequests();
+      this.filterAllRequests();
     } catch (error) {
       console.error('Failed to load requests:', error);
       Utils.showToast('Failed to load requests', 'error');
@@ -733,12 +1054,61 @@ class FacultyPortalRequests {
   }
 
   filterRequests() {
-    if (this.filterStatus === 'all') {
-      this.filteredRequests = this.requests;
-    } else {
-      this.filteredRequests = this.requests.filter(r => r.status === this.filterStatus);
+    let filtered = [...this.requests];
+    
+    // Status filter
+    if (this.filterStatus !== 'all') {
+      filtered = filtered.filter(r => r.status === this.filterStatus);
     }
+    
+    // Priority filter
+    if (this.filterPriority !== 'all') {
+      filtered = filtered.filter(r => r.priority === this.filterPriority);
+    }
+    
+    // Search filter
+    if (this.searchQuery) {
+      const query = this.searchQuery.toLowerCase().trim();
+      filtered = filtered.filter(request => {
+        const matchesName = (request.studentName || request.student_name || '').toLowerCase().includes(query);
+        const matchesId = (request.studentIdNumber || request.student_id_number || '').toLowerCase().includes(query);
+        const matchesDoc = (request.documentType || request.document_label || request.documentValue || '').toLowerCase().includes(query);
+        const matchesCode = (request.requestCode || '').toLowerCase().includes(query);
+        return matchesName || matchesId || matchesDoc || matchesCode;
+      });
+    }
+    
+    this.filteredRequests = filtered;
     this.renderRequests();
+  }
+
+  filterAllRequests() {
+    let filtered = [...this.allDepartmentRequests];
+    
+    // Status filter
+    if (this.allFilterStatus !== 'all') {
+      filtered = filtered.filter(r => r.status === this.allFilterStatus);
+    }
+    
+    // Priority filter
+    if (this.allFilterPriority !== 'all') {
+      filtered = filtered.filter(r => r.priority === this.allFilterPriority);
+    }
+    
+    // Search filter
+    if (this.allSearchQuery) {
+      const query = this.allSearchQuery.toLowerCase().trim();
+      filtered = filtered.filter(request => {
+        const matchesName = (request.studentName || request.student_name || '').toLowerCase().includes(query);
+        const matchesId = (request.studentIdNumber || request.student_id_number || '').toLowerCase().includes(query);
+        const matchesDoc = (request.documentType || request.document_label || request.documentValue || '').toLowerCase().includes(query);
+        const matchesCode = (request.requestCode || '').toLowerCase().includes(query);
+        return matchesName || matchesId || matchesDoc || matchesCode;
+      });
+    }
+    
+    this.filteredAllRequests = filtered;
+    this.renderAllRequests();
   }
 
   renderRequests() {
@@ -746,11 +1116,15 @@ class FacultyPortalRequests {
     if (!container) return;
 
     if (this.filteredRequests.length === 0) {
+      let message = 'No requests found';
+      if (this.searchQuery || this.filterStatus !== 'all' || this.filterPriority !== 'all') {
+        message = 'No requests match your filters';
+      }
       container.innerHTML = `
         <div class="empty-state">
           <div class="empty-state-icon">📋</div>
-          <h3>No requests found</h3>
-          <p>There are no requests ${this.filterStatus === 'all' ? '' : `with status "${this.filterStatus}"`}.</p>
+          <h3>${message}</h3>
+          <p>Try adjusting your filters or search query.</p>
         </div>
       `;
       return;
@@ -772,6 +1146,122 @@ class FacultyPortalRequests {
       // Sort by priority first (urgent first), then by date (newest first)
       if (a.priority === 'urgent' && b.priority !== 'urgent') return -1;
       if (b.priority === 'urgent' && a.priority !== 'urgent') return 1;
+      return new Date(b.submittedAt || b.submitted_at) - new Date(a.submittedAt || a.submitted_at);
+    });
+
+    container.innerHTML = `
+      <div class="table-wrapper">
+        <table class="requests-table">
+          <thead>
+            <tr>
+              <th>Request Code</th>
+              <th>Student Name</th>
+              <th>Document Name</th>
+              <th>Department</th>
+              <th>Date Submitted</th>
+              <th>Priority</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${sortedRequests.map(r => {
+              const statusClass = Utils.getStatusBadgeClass(r.status);
+              const statusText = Utils.getStatusText(r.status);
+              const statusIcon = getStatusIcon(r.status);
+              const priorityClass = r.priority === 'urgent' ? 'urgent' : 'normal';
+              return `
+              <tr>
+                <td><strong>${r.requestCode || 'N/A'}</strong></td>
+                <td>${r.studentName || r.student_name || 'N/A'}</td>
+                <td>${r.documentType || r.document_label || r.documentValue || 'N/A'}</td>
+                <td>${r.department || 'N/A'}</td>
+                <td>${Utils.formatDate(r.submittedAt || r.submitted_at)}</td>
+                <td><span class="priority-badge ${priorityClass}">${(r.priority || 'normal').toUpperCase()}</span></td>
+                <td>
+                  <span class="status-badge ${statusClass}">
+                    <i class="fas ${statusIcon}"></i>
+                    ${statusText}
+                  </span>
+                </td>
+                <td>
+                  ${r.status === 'pending_faculty' ? `
+                    <button class="btn-approve" onclick="window.facultyPortal?.showApprovalModal(${r.id}, 'approve')" title="Approve" style="margin-right: 0.5rem;">
+                      <i class="fas fa-check"></i> Approve
+                    </button>
+                    <button class="btn-decline" onclick="window.facultyPortal?.showApprovalModal(${r.id}, 'decline')" title="Decline" style="margin-right: 0.5rem;">
+                      <i class="fas fa-times"></i> Decline
+                    </button>
+                  ` : ''}
+                  <button class="btn-secondary" onclick="window.facultyPortal?.viewRequest(${r.id})" title="View Details">
+                    <i class="fas fa-eye"></i> View
+                  </button>
+                </td>
+              </tr>
+            `;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+  }
+
+  renderAllRequests() {
+    const container = document.getElementById('allRequestsList');
+    if (!container) return;
+
+    if (this.filteredAllRequests.length === 0) {
+      let message = 'No requests found';
+      if (this.allSearchQuery || this.allFilterStatus !== 'all' || this.allFilterPriority !== 'all') {
+        message = 'No requests match your filters';
+      }
+      container.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-state-icon">🗂️</div>
+          <h3>${message}</h3>
+          <p>Try adjusting your filters or search query.</p>
+        </div>
+      `;
+      return;
+    }
+
+    function getStatusIcon(status) {
+      const icons = {
+        pending: 'fa-clock',
+        pending_faculty: 'fa-hourglass-half',
+        in_progress: 'fa-spinner',
+        approved: 'fa-check-circle',
+        completed: 'fa-check-double',
+        declined: 'fa-times-circle'
+      };
+      return icons[status] || 'fa-circle';
+    }
+
+    // Sort: Completed always at bottom, then urgent non-completed at top, then normal non-completed
+    const sortedRequests = this.filteredAllRequests.sort((a, b) => {
+      const aIsUrgent = a.priority === 'urgent';
+      const bIsUrgent = b.priority === 'urgent';
+      const aIsCompleted = a.status === 'completed';
+      const bIsCompleted = b.status === 'completed';
+      
+      // Completed requests ALWAYS go to bottom (regardless of priority)
+      if (aIsCompleted && !bIsCompleted) return 1;
+      if (!aIsCompleted && bIsCompleted) return -1;
+      
+      // If both completed or both not completed, then check priority
+      // Urgent non-completed requests come first
+      if (!aIsCompleted && !bIsCompleted) {
+        if (aIsUrgent && !bIsUrgent) return -1;
+        if (!aIsUrgent && bIsUrgent) return 1;
+      }
+      
+      // If both completed, urgent completed can be above normal completed
+      if (aIsCompleted && bIsCompleted) {
+        if (aIsUrgent && !bIsUrgent) return -1;
+        if (!aIsUrgent && bIsUrgent) return 1;
+      }
+      
+      // If same completion status and priority, sort by date (newest first)
       return new Date(b.submittedAt || b.submitted_at) - new Date(a.submittedAt || a.submitted_at);
     });
 
@@ -885,12 +1375,67 @@ class FacultyPortalRequests {
   }
 
   setupEventListeners() {
-    // Filter dropdown
+    // Status filter dropdown
     const filterSelect = document.getElementById('filterStatus');
     if (filterSelect) {
       filterSelect.addEventListener('change', (e) => {
         this.filterStatus = e.target.value;
         this.filterRequests();
+      });
+    }
+    
+    // Priority filter dropdown
+    const prioritySelect = document.getElementById('filterPriority');
+    if (prioritySelect) {
+      prioritySelect.addEventListener('change', (e) => {
+        this.filterPriority = e.target.value;
+        this.filterRequests();
+      });
+    }
+    
+    // Search input
+    const searchInput = document.getElementById('requestsSearchInput');
+    if (searchInput) {
+      // Filter on input with debounce
+      let searchTimeout;
+      searchInput.addEventListener('input', (e) => {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(() => {
+          this.searchQuery = e.target.value;
+          this.filterRequests();
+        }, 300); // Wait 300ms after user stops typing
+      });
+    }
+
+    // All Document Requests - Status filter dropdown
+    const allFilterSelect = document.getElementById('allFilterStatus');
+    if (allFilterSelect) {
+      allFilterSelect.addEventListener('change', (e) => {
+        this.allFilterStatus = e.target.value;
+        this.filterAllRequests();
+      });
+    }
+    
+    // All Document Requests - Priority filter dropdown
+    const allPrioritySelect = document.getElementById('allFilterPriority');
+    if (allPrioritySelect) {
+      allPrioritySelect.addEventListener('change', (e) => {
+        this.allFilterPriority = e.target.value;
+        this.filterAllRequests();
+      });
+    }
+    
+    // All Document Requests - Search input
+    const allSearchInput = document.getElementById('allRequestsSearchInput');
+    if (allSearchInput) {
+      // Filter on input with debounce
+      let allSearchTimeout;
+      allSearchInput.addEventListener('input', (e) => {
+        clearTimeout(allSearchTimeout);
+        allSearchTimeout = setTimeout(() => {
+          this.allSearchQuery = e.target.value;
+          this.filterAllRequests();
+        }, 300); // Wait 300ms after user stops typing
       });
     }
 
@@ -985,7 +1530,7 @@ class FacultyPortalRequests {
         timestamp: new Date().toISOString()
       };
 
-      await Utils.apiRequest(`/requests/${requestId}`, {
+      const response = await Utils.apiRequest(`/requests/${requestId}`, {
         method: 'PATCH',
         body: {
           status: action === 'approve' ? 'in_progress' : 'declined',
@@ -995,36 +1540,83 @@ class FacultyPortalRequests {
       });
 
       Utils.showToast(`Request ${action === 'approve' ? 'approved' : 'declined'} successfully!`, 'success');
-      document.getElementById('approvalModal').remove();
+      
+      // Close approval modal
+      const approvalModal = document.getElementById('approvalModal');
+      if (approvalModal) approvalModal.remove();
+      
+      // Close and refresh request details modal if open
+      const viewRequestModal = document.getElementById('viewRequestModal');
+      if (viewRequestModal) {
+        viewRequestModal.remove();
+      }
+      
+      // Reload requests to get updated status
       await this.loadRequests();
       this.updateStats();
       this.renderRequests();
+      this.renderAllRequests();
+      
+      // If the request details modal was open, reopen it with updated data
+      if (viewRequestModal) {
+        // Small delay to ensure data is refreshed
+        setTimeout(() => {
+          this.viewRequest(requestId);
+        }, 300);
+      }
     } catch (error) {
       Utils.showToast('Failed to submit approval', 'error');
     }
   }
 
-  viewRequest(requestId) {
-    let request = this.requests.find(r => r.id === requestId);
-    if (!request && this.allRequests && this.allRequests.length) {
-      request = this.allRequests.find(r => r.id === requestId);
+  async viewRequest(requestId) {
+    // Always fetch fresh data from API to ensure status is up-to-date
+    let request;
+    try {
+      request = await Utils.apiRequest(`/requests/${requestId}`, { method: 'GET' });
+    } catch (error) {
+      console.error('Failed to load request:', error);
+      Utils.showToast('Request not found', 'error');
+      return;
     }
+    
     if (!request) {
       Utils.showToast('Request not found', 'error');
       return;
+    }
+    
+    // Update local cache with fresh data
+    const localRequestIndex = this.requests?.findIndex(r => r.id === requestId);
+    if (localRequestIndex !== undefined && localRequestIndex >= 0) {
+      this.requests[localRequestIndex] = request;
+    }
+    
+    const allRequestIndex = this.allRequests?.findIndex(r => r.id === requestId);
+    if (allRequestIndex !== undefined && allRequestIndex >= 0) {
+      this.allRequests[allRequestIndex] = request;
     }
 
     const statusClass = Utils.getStatusBadgeClass(request.status);
     const statusText = Utils.getStatusText(request.status);
 
-    const approvalHTML = request.facultyApproval
+    // Parse faculty approval if it's a JSON string
+    let facultyApproval = request.facultyApproval;
+    if (typeof facultyApproval === 'string') {
+      try {
+        facultyApproval = JSON.parse(facultyApproval);
+      } catch (e) {
+        facultyApproval = null;
+      }
+    }
+
+    const approvalHTML = facultyApproval && facultyApproval.status
       ? `
-          <div style="padding: 0.75rem; background: ${request.facultyApproval.status === 'approved' ? '#D1FAE5' : '#FEE2E2'}; border-radius: 6px;">
+          <div style="padding: 0.75rem; background: ${facultyApproval.status === 'approved' ? '#D1FAE5' : '#FEE2E2'}; border-radius: 6px;">
             <div style="font-weight: 600; margin-bottom: 0.25rem;">
-              ${request.facultyApproval.facultyName} - ${request.facultyApproval.status.toUpperCase()}
+              ${facultyApproval.facultyName || 'Faculty'} - ${(facultyApproval.status || 'pending').toUpperCase()}
             </div>
-            ${request.facultyApproval.comment ? `<div style="margin-top: 0.5rem;">${request.facultyApproval.comment}</div>` : ''}
-            <div style="font-size: 0.8rem; opacity: 0.6; margin-top: 0.25rem;">${Utils.formatDate(request.facultyApproval.timestamp)}</div>
+            ${facultyApproval.comment ? `<div style="margin-top: 0.5rem;">${facultyApproval.comment}</div>` : ''}
+            ${facultyApproval.timestamp ? `<div style="font-size: 0.8rem; opacity: 0.6; margin-top: 0.25rem;">${Utils.formatDate(facultyApproval.timestamp)}</div>` : ''}
           </div>
         `
       : '<p style="opacity: 0.6;">Not yet reviewed</p>';
@@ -1051,16 +1643,18 @@ class FacultyPortalRequests {
           </div>
           <div>
             <div style="margin-bottom: 1.5rem;">
-              <h3 style="color: var(--recoletos-green); margin-bottom: 0.5rem;">${request.documentType}</h3>
+              <h3 style="color: var(--recoletos-green); margin-bottom: 0.5rem;">${request.documentType || request.documentValue || 'N/A'}</h3>
               <div class="status-badge ${statusClass}" style="margin-bottom: 1rem;">${statusText}</div>
             </div>
             
             <div style="margin-bottom: 1.5rem;">
-              <strong>Student:</strong> ${request.studentName} (${request.studentIdNumber})<br>
-              <strong>Submitted:</strong> ${Utils.formatDate(request.submittedAt)}<br>
-              <strong>Last Updated:</strong> ${Utils.formatDate(request.updatedAt)}<br>
-              <strong>Quantity:</strong> ${request.quantity}<br>
-              <strong>Purpose:</strong> ${request.purpose}
+              <strong>Request Code:</strong> ${request.requestCode || 'N/A'}<br>
+              <strong>Student:</strong> ${request.studentName || 'N/A'} (${request.studentIdNumber || 'N/A'})<br>
+              <strong>Department:</strong> ${request.department || 'N/A'}<br>
+              <strong>Submitted:</strong> ${Utils.formatDate(request.submittedAt || request.submitted_at)}<br>
+              <strong>Last Updated:</strong> ${Utils.formatDate(request.updatedAt || request.updated_at)}<br>
+              <strong>Quantity:</strong> ${request.quantity || 1}<br>
+              <strong>Purpose:</strong> ${request.purpose || 'None'}
             </div>
 
             ${attachmentsHTML}
@@ -1085,10 +1679,10 @@ class FacultyPortalRequests {
   }
 }
 
-// Initialize portal when DOM is loaded
-let facultyPortal;
+// Initialize requests portal when DOM is loaded (separate from profile/settings)
+let facultyPortalRequests;
 document.addEventListener('DOMContentLoaded', () => {
-  facultyPortal = new FacultyPortal();
-  window.facultyPortal = facultyPortal;
+  facultyPortalRequests = new FacultyPortalRequests();
+  window.facultyPortal = facultyPortalRequests; // Keep this for backward compatibility with request handlers
 });
 

@@ -153,6 +153,9 @@ const Utils = {
       const token = this.getAuthToken();
       if (token) {
         headers.Authorization = `Bearer ${token}`;
+      } else {
+        console.warn('⚠️ No auth token found for request to:', endpoint);
+        // Don't throw here - let the server handle it, but log for debugging
       }
 
       const fetchOptions = { ...options, headers };

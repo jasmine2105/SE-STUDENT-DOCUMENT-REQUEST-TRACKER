@@ -683,3 +683,132 @@ body {
   }
 }
 
+/* Notifications Table - Yellow Background */
+.notifications-table tbody tr {
+  background-color: #FFF9E6 !important;
+  border-left: 3px solid #FFA500;
+}
+
+.notifications-table tbody tr:hover {
+  background-color: #FFF5CC !important;
+  box-shadow: 0 2px 8px rgba(255, 165, 0, 0.2);
+}
+
+.notifications-table tbody tr.unread {
+  background-color: #FFF4D6 !important;
+  border-left-color: #FF8C00;
+  font-weight: 500;
+}
+
+.notifications-table tbody tr.unread:hover {
+  background-color: #FFEECC !important;
+}
+
+.notifications-table thead tr {
+  background-color: #FFF9E6;
+  border-bottom: 2px solid #FFA500;
+}
+
+.notifications-table th {
+  background-color: #FFF9E6 !important;
+  color: var(--text-dark);
+  font-weight: 600;
+}
+
+
+/* Notification Items (matching admin side) */
+.notification-item {
+  display: flex;
+  gap: 1rem;
+  padding: 1rem;
+  background: var(--white);
+  border-radius: 8px;
+  margin-bottom: 0.75rem;
+  border: 1px solid var(--border-gray);
+  transition: all 0.2s ease;
+}
+
+.notification-item:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.notification-item.unread {
+  background: #FEF3C7;
+  border-color: #F59E0B;
+}
+
+.notification-item.clickable {
+  cursor: pointer;
+}
+
+.notification-item.clickable:hover {
+  background: #FEF3C7;
+  transform: translateX(4px);
+}
+
+.notification-arrow {
+  display: flex;
+  align-items: center;
+  color: var(--recoletos-green);
+  opacity: 0.5;
+  transition: opacity 0.2s ease;
+}
+
+.notification-item.clickable:hover .notification-arrow {
+  opacity: 1;
+}
+
+.notification-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--recoletos-green);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.notification-content {
+  flex: 1;
+}
+
+.notification-title {
+  font-weight: 600;
+  color: var(--text-dark);
+  margin-bottom: 0.25rem;
+}
+
+.notification-message {
+  color: #666;
+  font-size: 0.9rem;
+  margin-bottom: 0.25rem;
+}
+
+.notification-time {
+  color: #999;
+  font-size: 0.8rem;
+}
+
+/* Search Input (matching admin side) */
+.search-input {
+  padding: 0.5rem 1rem;
+  border: 2px solid var(--border-gray);
+  border-radius: 8px;
+  font-size: 0.9rem;
+  background-color: var(--white);
+  transition: all 0.2s ease;
+  min-width: 200px;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: var(--recoletos-green);
+  box-shadow: 0 0 0 3px rgba(0, 66, 37, 0.1);
+}
+
+.search-input::placeholder {
+  color: #999;
+  opacity: 0.7;
+}

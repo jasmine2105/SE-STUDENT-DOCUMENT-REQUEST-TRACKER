@@ -365,13 +365,29 @@ class StudentPortal {
     });
 
     if (!filtered.length) {
-      container.innerHTML = `
-        <div class="empty-state">
-          <div class="empty-state-icon">📁</div>
-          <h3>No documents match your criteria</h3>
-          <p>Try changing the filter or search term.</p>
-        </div>
-      `;
+      // Check if there are any requests at all, or if filters are applied
+      const hasRequests = this.requests.length > 0;
+      const hasFilters = (selectedStatus && selectedStatus !== 'all') || searchTerm;
+      
+      if (!hasRequests) {
+        // No requests at all - show initial empty state
+        container.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state-icon">📁</div>
+            <h3>No document requests yet</h3>
+            <p>Your requested documents and their status will appear here.</p>
+          </div>
+        `;
+      } else {
+        // Has requests but filters don't match - show filter message
+        container.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state-icon">📁</div>
+            <h3>No documents match your criteria</h3>
+            <p>Try changing the filter or search term.</p>
+          </div>
+        `;
+      }
       return;
     }
 
@@ -1502,21 +1518,35 @@ class StudentPortal {
   }
 
   async markAllNotificationsRead() {
-    const unread = this.notifications.filter((notif) => !(notif.read_flag || notif.read || notif.read_at));
-    for (const notification of unread) {
-      try {
-        await Utils.apiRequest(`/notifications/${notification.id}`, {
-          method: 'PATCH',
-          body: { read: true, read_flag: true }
-        });
+    try {
+      const unread = this.notifications.filter((notif) => !(notif.read_flag || notif.read || notif.read_at));
+      const ids = unread.map(n => n.id).filter(Boolean);
+      
+      if (ids.length === 0) {
+        Utils.showToast('All notifications are already read', 'info');
+        return;
+      }
+      
+      // Use the mark-read endpoint (same as faculty/admin)
+      await Utils.apiRequest('/notifications/mark-read', {
+        method: 'POST',
+        body: { ids }
+      });
+      
+      // Update local state
+      unread.forEach(notification => {
         notification.read = true;
         notification.read_flag = true;
         notification.read_at = new Date().toISOString();
-      } catch (error) {
-        console.error(`Failed to mark notification ${notification.id} as read:`, error);
-      }
+      });
+      
+      // Refresh notifications display
+      this.renderNotifications();
+      Utils.showToast('All notifications marked as read', 'success');
+    } catch (error) {
+      console.error('Failed to mark all notifications as read:', error);
+      Utils.showToast('Failed to mark notifications as read', 'error');
     }
-    this.renderNotifications();
   }
 
   async toggleNotificationRead(notificationId, read) {
@@ -1537,11 +1567,25 @@ class StudentPortal {
     const dropdownList = document.getElementById('notificationList');
     const fullList = document.getElementById('notificationsFullList');
     const countBadge = document.getElementById('notificationCount');
+    const sidebarBadge = document.getElementById('sidebarNotificationCount');
 
     const unreadCount = this.notifications.filter((n) => !(n.read_flag || n.read || n.read_at)).length;
+    const totalCount = this.notifications.length;
+    
     if (countBadge) {
       countBadge.textContent = unreadCount;
       countBadge.classList.toggle('hidden', unreadCount === 0);
+    }
+    
+    // Update sidebar badge with total count
+    if (sidebarBadge) {
+      if (totalCount > 0) {
+        sidebarBadge.textContent = totalCount > 9 ? '9+' : String(totalCount);
+        sidebarBadge.classList.remove('hidden');
+      } else {
+        sidebarBadge.textContent = '0';
+        sidebarBadge.classList.add('hidden');
+      }
     }
 
     const buildNotificationItem = (notif, isDropdown = false) => {
@@ -1587,20 +1631,25 @@ class StudentPortal {
   }
 
   async handleNotificationClick(notificationId, requestId) {
-    // Mark as read
+    // Mark as read using the mark-read endpoint
     try {
-      await Utils.apiRequest(`/notifications/${notificationId}`, {
-        method: 'PATCH',
-        body: { read: true, read_flag: true }
-      });
-      
       const notification = this.notifications.find(n => n.id === notificationId);
-      if (notification) {
+      
+      // Only mark as read if it's not already read
+      if (notification && !(notification.read_flag || notification.read || notification.read_at)) {
+        await Utils.apiRequest('/notifications/mark-read', {
+          method: 'POST',
+          body: { ids: [notificationId] }
+        });
+        
+        // Update local state
         notification.read = true;
         notification.read_flag = true;
         notification.read_at = new Date().toISOString();
+        
+        // Refresh notifications display to update badge count
+        this.renderNotifications();
       }
-      this.renderNotifications();
 
       // If notification is related to a request, open it
       if (requestId && requestId !== 'null') {
@@ -1608,6 +1657,10 @@ class StudentPortal {
       }
     } catch (error) {
       console.error('Failed to mark notification as read:', error);
+      // Still allow opening the request even if marking as read fails
+      if (requestId && requestId !== 'null') {
+        this.viewRequest(Number(requestId));
+      }
     }
   }
 
@@ -2194,6 +2247,16 @@ class StudentPortal {
       return;
     }
 
+    // Check if user is authenticated before making request
+    const token = Utils.getAuthToken();
+    if (!token) {
+      Utils.showToast('Your session has expired. Please log in again.', 'error');
+      setTimeout(() => {
+        Utils.clearCurrentUser();
+      }, 2000);
+      return;
+    }
+
     try {
       const updates = {
         fullName,
@@ -2204,6 +2267,8 @@ class StudentPortal {
         gender: gender || null
       };
 
+      console.log('💾 Saving profile with token:', token ? 'Token exists' : 'No token');
+      
       await Utils.apiRequest('/auth/update-profile', {
         method: 'PUT',
         body: updates
@@ -2225,7 +2290,16 @@ class StudentPortal {
       this.loadUserInfo();
     } catch (error) {
       console.error('Save profile error:', error);
-      Utils.showToast(error.message || 'Failed to update profile', 'error');
+      
+      // Check if it's an authentication error
+      if (error.message && (error.message.includes('401') || error.message.includes('Authorization token missing') || error.message.includes('Unauthorized'))) {
+        Utils.showToast('Your session has expired. Please log in again.', 'error');
+        setTimeout(() => {
+          Utils.clearCurrentUser();
+        }, 2000);
+      } else {
+        Utils.showToast(error.message || 'Failed to update profile. Please try again.', 'error');
+      }
     }
   }
 

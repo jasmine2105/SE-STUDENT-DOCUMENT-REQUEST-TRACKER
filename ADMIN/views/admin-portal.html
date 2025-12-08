@@ -41,6 +41,7 @@
                 </button>
                 <button class="sidebar-link" data-view="notifications">
                     <i class="fas fa-bell"></i> Notifications
+                    <span class="sidebar-notification-badge hidden" id="sidebarNotificationCount">0</span>
                 </button>
                 <button class="sidebar-link" data-view="profile">
                     <i class="fas fa-user"></i> My Profile
@@ -108,6 +109,23 @@
                             <i class="fas fa-file-alt section-icon"></i>
                             <h2>Recent Requests</h2>
                         </div>
+                        <div class="section-controls" style="display: flex; gap: 1rem; align-items: center;">
+                            <input type="text" id="dashboardSearchInput" class="search-input" placeholder="Search by name or ID..." style="min-width: 200px;">
+                            <select id="dashboardFilterStatus" class="filter-select">
+                                <option value="all">All Status</option>
+                                <option value="pending">Pending</option>
+                                <option value="pending_faculty">Awaiting Faculty Approval</option>
+                                <option value="in_progress">In Progress</option>
+                                <option value="approved">Approved</option>
+                                <option value="completed">Completed</option>
+                                <option value="declined">Declined</option>
+                            </select>
+                            <select id="dashboardFilterPriority" class="filter-select">
+                                <option value="all">All Priority</option>
+                                <option value="normal">Normal</option>
+                                <option value="urgent">Urgent</option>
+                            </select>
+                        </div>
                     </div>
                     <div id="recentRequests">
                         <div class="empty-state">
@@ -121,6 +139,23 @@
 
             <!-- Requests View -->
             <section class="main-container hidden" id="requestsView">
+                <!-- Recent Requests Section -->
+                <div class="content-section">
+                    <div class="section-header">
+                        <div class="section-title-wrapper">
+                            <i class="fas fa-clock section-icon"></i>
+                            <h2>Recent Requests</h2>
+                        </div>
+                    </div>
+                    <div id="recentRequestsList">
+                        <div class="empty-state">
+                            <div class="empty-state-icon">📄</div>
+                            <h3>Loading recent requests...</h3>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- All Requests Section -->
                 <div class="content-section">
                     <div class="section-header">
                         <div class="section-title-wrapper">

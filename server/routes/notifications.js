@@ -57,6 +57,76 @@ router.get('/', authMiddleware(), async (req, res) => {
   }
 });
 
+// POST mark notifications as read
+router.post('/mark-read', authMiddleware(), async (req, res) => {
+  let conn;
+  try {
+    const userId = req.user?.id;
+    const { ids } = req.body;
+    
+    if (!userId) {
+      return res.status(401).json({ message: 'Authentication required.' });
+    }
+    
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ message: 'Notification IDs are required.' });
+    }
+    
+    conn = await getConnection();
+    
+    // Mark notifications as read
+    const placeholders = ids.map(() => '?').join(',');
+    await conn.query(
+      `UPDATE notifications 
+       SET read_flag = TRUE, read = TRUE, read_at = NOW()
+       WHERE user_id = ? AND id IN (${placeholders})`,
+      [userId, ...ids]
+    );
+    
+    res.json({ message: 'Notifications marked as read', count: ids.length });
+    
+  } catch (error) {
+    console.error('❌ Mark read error:', error);
+    res.status(500).json({ message: 'Failed to mark notifications as read.' });
+  } finally {
+    if (conn) {
+      conn.release();
+    }
+  }
+});
+
+// POST mark all notifications as read (for current user)
+router.post('/mark-all-read', authMiddleware(), async (req, res) => {
+  let conn;
+  try {
+    const userId = req.user?.id;
+    
+    if (!userId) {
+      return res.status(401).json({ message: 'Authentication required.' });
+    }
+    
+    conn = await getConnection();
+    
+    // Mark all unread notifications as read for this user
+    const [result] = await conn.query(
+      `UPDATE notifications 
+       SET read_flag = TRUE, read = TRUE, read_at = NOW()
+       WHERE user_id = ? AND (read_flag = FALSE OR read_flag IS NULL)`,
+      [userId]
+    );
+    
+    res.json({ message: 'All notifications marked as read', count: result.affectedRows });
+    
+  } catch (error) {
+    console.error('❌ Mark all read error:', error);
+    res.status(500).json({ message: 'Failed to mark all notifications as read.' });
+  } finally {
+    if (conn) {
+      conn.release();
+    }
+  }
+});
+
 // ✅ KEEPING YOUR EXISTING CODE - completely unchanged
 async function createNotification({ userId, role, type, title, message, requestId }) {
   if (!userId) return;

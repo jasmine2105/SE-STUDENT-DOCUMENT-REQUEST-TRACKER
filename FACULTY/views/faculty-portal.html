@@ -39,6 +39,7 @@
                 </button>
                 <button class="sidebar-link" data-view="notifications">
                     <i class="fas fa-bell"></i> Notifications
+                    <span class="sidebar-notification-badge hidden" id="sidebarNotificationCount">0</span>
                 </button>
                 <button class="sidebar-link" data-view="profile">
                     <i class="fas fa-user"></i> My Profile
@@ -116,33 +117,66 @@
 
             <!-- Requests View -->
             <section class="main-container hidden" id="requestsView">
+                <!-- Document Requests Section (Assigned/Pending Approval) -->
                 <div class="content-section">
                     <div class="section-header">
                         <div class="section-title-wrapper">
                             <i class="fas fa-list-alt section-icon"></i>
                             <h2>Document Requests</h2>
                         </div>
-                    </div>
-                    <div class="filter-section">
-                        <!-- New Filter Tabs -->
-                        <div class="filter-tabs">
-                            <button class="filter-tab active" data-filter="all">All</button>
-                            <button class="filter-tab" data-filter="urgent">🚨 Urgent</button>
-                            <button class="filter-tab" data-filter="deadline">⏳ Near Deadline</button>
-                            <button class="filter-tab" data-filter="returned">🔄 Returned</button>
+                        <div class="section-controls" style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
+                            <input type="text" id="requestsSearchInput" class="search-input" placeholder="Search by name, ID, or document..." style="min-width: 200px;">
+                            <select id="filterStatus" class="filter-select">
+                                <option value="all">All Status</option>
+                                <option value="pending_faculty">Pending Approval</option>
+                                <option value="in_progress">In Progress</option>
+                                <option value="approved">Approved</option>
+                                <option value="declined">Declined</option>
+                            </select>
+                            <select id="filterPriority" class="filter-select">
+                                <option value="all">All Priority</option>
+                                <option value="normal">Normal</option>
+                                <option value="urgent">Urgent</option>
+                            </select>
                         </div>
-                        <select id="filterStatus" class="filter-select">
-                            <option value="all">All Requests</option>
-                            <option value="pending_faculty">Pending Approval</option>
-                            <option value="in_progress">In Progress</option>
-                            <option value="approved">Approved</option>
-                            <option value="declined">Declined</option>
-                        </select>
                     </div>
                     <div id="requestsList">
                         <div class="empty-state">
                             <div class="empty-state-icon">📋</div>
                             <h3>Loading requests...</h3>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- All Document Requests Section -->
+                <div class="content-section">
+                    <div class="section-header">
+                        <div class="section-title-wrapper">
+                            <i class="fas fa-folder-open section-icon"></i>
+                            <h2>All Document Requests</h2>
+                        </div>
+                        <div class="section-controls" style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
+                            <input type="text" id="allRequestsSearchInput" class="search-input" placeholder="Search by name, ID, or document..." style="min-width: 200px;">
+                            <select id="allFilterStatus" class="filter-select">
+                                <option value="all">All Status</option>
+                                <option value="pending">Pending</option>
+                                <option value="pending_faculty">Awaiting Faculty Approval</option>
+                                <option value="in_progress">In Progress</option>
+                                <option value="approved">Approved</option>
+                                <option value="completed">Completed</option>
+                                <option value="declined">Declined</option>
+                            </select>
+                            <select id="allFilterPriority" class="filter-select">
+                                <option value="all">All Priority</option>
+                                <option value="normal">Normal</option>
+                                <option value="urgent">Urgent</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div id="allRequestsList">
+                        <div class="empty-state">
+                            <div class="empty-state-icon">🗂️</div>
+                            <h3>Loading all requests...</h3>
                         </div>
                     </div>
                 </div>
@@ -156,14 +190,14 @@
                             <i class="fas fa-bell section-icon"></i>
                             <h2>Notifications</h2>
                         </div>
-                        <button class="btn-secondary" id="markAllReadNotifications">
+                        <button class="btn-secondary" id="markAllReadSecondary">
                             <i class="fas fa-check-double"></i> Mark all as read
                         </button>
                     </div>
-                    <div class="table-wrapper" id="notificationsFullList">
+                    <div id="notificationsFullList">
                         <div class="empty-state">
                             <div class="empty-state-icon">🔔</div>
-                            <h3>Loading notifications...</h3>
+                            <h3>No notifications yet</h3>
                         </div>
                     </div>
                 </div>

@@ -21,8 +21,28 @@ document.addEventListener('DOMContentLoaded', async () => {
       dropdownId: 'notificationDropdown',
       listId: 'notificationList',
       markAllBtnId: 'markAllRead',
-      onNotificationClick: (requestId, notification) => {
+      onNotificationClick: async (requestId, notification) => {
         console.log('🔔 Notification clicked, request ID:', requestId);
+        
+        // Mark notification as read when clicked
+        if (notification && !(notification.read_flag || notification.read || notification.read_at)) {
+          try {
+            await Notifications.markAllRead([notification.id]);
+            // Update local state
+            notification.read = true;
+            notification.read_flag = true;
+            notification.read_at = new Date().toISOString();
+            // Refresh to update badge count - use the instance from closure
+            if (notificationsInstance && notificationsInstance.refresh) {
+              await notificationsInstance.refresh();
+            }
+            // Update sidebar badge
+            const allNotifications = await Notifications.fetchNotifications(user?.id);
+            updateSidebarNotificationBadge(allNotifications);
+          } catch (error) {
+            console.error('Failed to mark notification as read:', error);
+          }
+        }
         
         // Switch to requests view
         const links = document.querySelectorAll('.sidebar-link');
@@ -47,16 +67,61 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     });
     
-    // Set up polling for new notifications every 30 seconds
-    setInterval(async () => {
+    // Override the mark all read button to use the correct endpoint
+    if (notificationsInstance) {
+      const markAllBtn = document.getElementById('markAllRead');
+      if (markAllBtn) {
+        // Remove existing listener by cloning the button
+        const newMarkAllBtn = markAllBtn.cloneNode(true);
+        markAllBtn.parentNode.replaceChild(newMarkAllBtn, markAllBtn);
+        
+        newMarkAllBtn.addEventListener('click', async () => {
+          try {
+            const allNotifications = await Notifications.fetchNotifications(user?.id);
+            const unreadNotifications = allNotifications.filter(n => !(n.read_flag || n.read || n.read_at));
+            const ids = unreadNotifications.map(n => n.id).filter(Boolean);
+            
+            if (ids.length === 0) {
+              Utils.showToast('All notifications are already read', 'info');
+              return;
+            }
+            
+            await Notifications.markAllRead(ids);
+            Utils.showToast('All notifications marked as read', 'success');
+            
+            // Refresh notifications display
+            if (notificationsInstance && notificationsInstance.refresh) {
+              await notificationsInstance.refresh();
+            }
+            // Update sidebar badge
+            updateSidebarNotificationBadge(allNotifications);
+          } catch (error) {
+            console.error('Failed to mark all notifications as read:', error);
+            Utils.showToast('Failed to mark notifications as read', 'error');
+          }
+        });
+      }
+    }
+    
+    // Function to refresh notifications and update sidebar badge
+    async function refreshNotificationsAndBadge() {
       try {
         if (notificationsInstance && notificationsInstance.refresh) {
           await notificationsInstance.refresh();
         }
+        // Also fetch and update sidebar badge
+        const notifications = await Notifications.fetchNotifications(user?.id);
+        updateSidebarNotificationBadge(notifications);
       } catch (err) {
         // Silently fail - don't spam console
       }
-    }, 30000);
+    }
+
+    // Set up polling for new notifications every 30 seconds
+    setInterval(refreshNotificationsAndBadge, 30000);
+    
+    // Initial sidebar badge update
+    refreshNotificationsAndBadge();
     
     console.log('✅ Notifications initialized with polling');
   } catch (err) {
@@ -101,10 +166,26 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (markAllReadSecondary) {
     markAllReadSecondary.addEventListener('click', async () => {
       try {
-        await Utils.apiRequest('/notifications/mark-all-read', { method: 'POST' });
+        const allNotifications = await Notifications.fetchNotifications(user?.id);
+        const unreadNotifications = allNotifications.filter(n => !(n.read_flag || n.read || n.read_at));
+        const ids = unreadNotifications.map(n => n.id).filter(Boolean);
+        
+        if (ids.length === 0) {
+          Utils.showToast('All notifications are already read', 'info');
+          return;
+        }
+        
+        await Notifications.markAllRead(ids);
         Utils.showToast('All notifications marked as read', 'success');
         renderNotificationsView();
+        // Update sidebar badge
+        updateSidebarNotificationBadge(allNotifications);
+        // Refresh bell count
+        if (notificationsInstance && notificationsInstance.refresh) {
+          await notificationsInstance.refresh();
+        }
       } catch (err) {
+        console.error('Failed to mark all notifications as read:', err);
         Utils.showToast('Failed to mark notifications as read', 'error');
       }
     });
@@ -206,14 +287,20 @@ document.addEventListener('DOMContentLoaded', async () => {
             </div>
             <div class="profile-info-column">
               <div class="profile-info-item">
-                <span class="profile-info-label">Department</span>
-                <span class="profile-info-value">${formatValue(deptName)}</span>
-                <small style="color: #666; font-size: 0.85rem; display: block; margin-top: 0.25rem;">Cannot be changed</small>
+                <span class="profile-info-label">Birthdate</span>
+                ${isEditMode ? `
+                  <input type="date" id="editBirthdate" class="profile-edit-input" value="${user?.birthdate || ''}" />
+                ` : `
+                  <span class="profile-info-value">${formatValue(user?.birthdate)}</span>
+                `}
               </div>
               <div class="profile-info-item">
-                <span class="profile-info-label">Role</span>
-                <span class="profile-info-value">${roleName}</span>
-                <small style="color: #666; font-size: 0.85rem; display: block; margin-top: 0.25rem;">Cannot be changed</small>
+                <span class="profile-info-label">Address</span>
+                ${isEditMode ? `
+                  <textarea id="editAddress" class="profile-edit-textarea" placeholder="Enter address">${user?.address || ''}</textarea>
+                ` : `
+                  <span class="profile-info-value">${formatValue(user?.address)}</span>
+                `}
               </div>
               <div class="profile-info-item">
                 <span class="profile-info-label">Gender</span>
@@ -229,19 +316,46 @@ document.addEventListener('DOMContentLoaded', async () => {
                   <span class="profile-info-value">${formatValue(user?.gender)}</span>
                 `}
               </div>
-              <div class="profile-info-item">
-                <span class="profile-info-label">Address</span>
-                ${isEditMode ? `
-                  <textarea id="editAddress" class="profile-edit-textarea" placeholder="Enter address">${user?.address || ''}</textarea>
-                ` : `
-                  <span class="profile-info-value">${formatValue(user?.address)}</span>
-                `}
-              </div>
             </div>
+          </div>
+        </div>
+
+        <div class="profile-section-card">
+          <h4 class="profile-section-title">
+            <i class="fas fa-briefcase"></i> Administrative Information
+          </h4>
+          <div class="profile-academic-grid">
+            <div class="profile-academic-item">
+              <span class="profile-academic-label">Department</span>
+              <span class="profile-academic-value">${formatValue(deptName)}</span>
+              <small style="color: #666; font-size: 0.85rem; display: block; margin-top: 0.25rem;">Cannot be changed</small>
+            </div>
+            <div class="profile-academic-item">
+              <span class="profile-academic-label">Role</span>
+              <span class="profile-academic-value">${roleName}</span>
+              <small style="color: #666; font-size: 0.85rem; display: block; margin-top: 0.25rem;">Cannot be changed</small>
+            </div>
+            <div class="profile-academic-item">
+              <span class="profile-academic-label">Position</span>
+              <span class="profile-academic-value">${formatValue(user?.position || 'Administrator')}</span>
+              <small style="color: #666; font-size: 0.85rem; display: block; margin-top: 0.25rem;">Cannot be changed</small>
+            </div>
+            <div class="profile-academic-item">
+              <span class="profile-academic-label">Status</span>
+              <span class="profile-academic-value">${formatValue(user?.status || 'Active')}</span>
+            </div>
+          </div>
           </div>
         </div>
       </div>
     `;
+
+    // Load profile photo after rendering
+    setTimeout(() => {
+      if (typeof loadAdminProfilePhoto === 'function') {
+        loadAdminProfilePhoto();
+      }
+    }, 100);
   }
 
   // Make renderAdminProfile globally accessible
@@ -270,67 +384,172 @@ document.addEventListener('DOMContentLoaded', async () => {
     const file = event.target.files[0];
     if (!file) return;
 
-    // Check file size (max 2MB)
-    if (file.size > 2 * 1024 * 1024) {
-      Utils.showToast('Photo must be less than 2MB', 'error');
-      return;
-    }
-
-    // Check file type
     if (!file.type.startsWith('image/')) {
-      Utils.showToast('Please upload an image file', 'error');
+      Utils.showToast('Please select an image file', 'error');
       return;
     }
 
-    // Convert to base64 and store in localStorage (simple approach)
+    // Check file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      Utils.showToast('Image size must be less than 5MB', 'error');
+      return;
+    }
+
     const reader = new FileReader();
-    reader.onload = function(e) {
-      const photoData = e.target.result;
+    reader.onload = (e) => {
+      const imageData = e.target.result;
       const user = Utils.getCurrentUser();
-      user.profilePhoto = photoData;
-      localStorage.setItem('user', JSON.stringify(user));
+      const userId = user.id;
+      const storageKey = `profileImage_${userId}`;
       
-      // Update display
+      // Store in localStorage
+      localStorage.setItem(storageKey, imageData);
+      
+      // Update current user object
+      user.profilePhoto = imageData;
+      localStorage.setItem('currentUser', JSON.stringify(user));
+      
+      // Update display immediately
       const photoDisplay = document.getElementById('profilePhotoDisplay');
       if (photoDisplay) {
-        photoDisplay.style.backgroundImage = `url('${photoData}')`;
+        photoDisplay.style.backgroundImage = `url('${imageData}')`;
         photoDisplay.style.backgroundSize = 'cover';
         photoDisplay.style.backgroundPosition = 'center';
-        photoDisplay.innerHTML = '';
+        const icon = photoDisplay.querySelector('i');
+        if (icon) icon.style.display = 'none';
       }
+      
+      // Also update header profile display if it exists
+      updateAdminHeaderProfilePhoto(imageData);
       
       Utils.showToast('Profile photo updated!', 'success');
     };
+    reader.onerror = () => {
+      Utils.showToast('Failed to read image file', 'error');
+    };
     reader.readAsDataURL(file);
+    
+    // Reset input
+    event.target.value = '';
   }
   window.handleAdminPhotoUpload = handleAdminPhotoUpload;
+
+  // Update header profile photo for admin
+  function updateAdminHeaderProfilePhoto(imageData) {
+    // Update profile photo in header if it exists
+    const headerProfile = document.querySelector('.user-profile-display .user-pill i');
+    if (headerProfile && imageData) {
+      // Create an img element or update background
+      const parent = headerProfile.parentElement;
+      if (parent) {
+        let img = parent.querySelector('img.profile-photo-img');
+        if (!img) {
+          img = document.createElement('img');
+          img.className = 'profile-photo-img';
+          img.style.cssText = 'width: 32px; height: 32px; border-radius: 50%; object-fit: cover; margin-right: 0.5rem;';
+          parent.insertBefore(img, headerProfile);
+        }
+        img.src = imageData;
+        headerProfile.style.display = 'none';
+      }
+    }
+  }
+
+  // Load admin profile photo
+  function loadAdminProfilePhoto() {
+    const user = Utils.getCurrentUser();
+    if (!user) return;
+    
+    const userId = user.id;
+    const storageKey = `profileImage_${userId}`;
+    const savedImage = localStorage.getItem(storageKey);
+    
+    if (savedImage) {
+      user.profilePhoto = savedImage;
+      const photoDisplay = document.getElementById('profilePhotoDisplay');
+      if (photoDisplay) {
+        photoDisplay.style.backgroundImage = `url('${savedImage}')`;
+        photoDisplay.style.backgroundSize = 'cover';
+        photoDisplay.style.backgroundPosition = 'center';
+        const icon = photoDisplay.querySelector('i');
+        if (icon) icon.style.display = 'none';
+      }
+      updateAdminHeaderProfilePhoto(savedImage);
+    }
+  }
+  window.loadAdminProfilePhoto = loadAdminProfilePhoto;
 
   // Save admin profile
   async function saveAdminProfile() {
     const user = Utils.getCurrentUser();
     
-    const fullName = document.getElementById('editFullName')?.value;
-    const email = document.getElementById('editEmail')?.value;
-    const contactNumber = document.getElementById('editContactNumber')?.value;
-    const gender = document.getElementById('editGender')?.value;
-    const address = document.getElementById('editAddress')?.value;
-    
-    // Update user object
-    if (fullName) user.fullName = fullName;
-    if (email) user.email = email;
-    if (contactNumber) user.contactNumber = contactNumber;
-    if (gender) user.gender = gender;
-    if (address) user.address = address;
-    
-    // Save to localStorage
-    localStorage.setItem('user', JSON.stringify(user));
-    
-    // Update header
-    const userNameEl = document.getElementById('userName');
-    if (userNameEl) userNameEl.textContent = user.fullName || user.name || 'Admin';
-    
-    Utils.showToast('Profile updated successfully!', 'success');
-    renderAdminProfile(false);
+    const fullName = document.getElementById('editFullName')?.value.trim() || '';
+    const email = document.getElementById('editEmail')?.value.trim() || '';
+    const contactNumber = document.getElementById('editContactNumber')?.value.trim() || '';
+    const birthdate = document.getElementById('editBirthdate')?.value || '';
+    const address = document.getElementById('editAddress')?.value.trim() || '';
+    const gender = document.getElementById('editGender')?.value || '';
+
+    if (!fullName) {
+      Utils.showToast('Full name is required', 'error');
+      return;
+    }
+
+    if (!email || !email.includes('@')) {
+      Utils.showToast('Please enter a valid email address', 'error');
+      return;
+    }
+
+    // Check if user is authenticated before making request
+    const token = Utils.getAuthToken();
+    if (!token) {
+      Utils.showToast('Your session has expired. Please log in again.', 'error');
+      setTimeout(() => {
+        Utils.clearCurrentUser();
+      }, 2000);
+      return;
+    }
+
+    try {
+      const updates = {
+        fullName,
+        email,
+        contactNumber: contactNumber || null,
+        birthdate: birthdate || null,
+        address: address || null,
+        gender: gender || null
+      };
+
+      await Utils.apiRequest('/auth/update-profile', {
+        method: 'PUT',
+        body: updates
+      });
+
+      // Update local user data
+      Object.assign(user, updates);
+      localStorage.setItem('currentUser', JSON.stringify(user));
+
+      Utils.showToast('Profile updated successfully!', 'success');
+      
+      // Refresh profile view (exit edit mode)
+      renderAdminProfile(false);
+      
+      // Update header display name
+      const userNameEl = document.getElementById('userName');
+      if (userNameEl) userNameEl.textContent = user.fullName || user.name || 'Admin';
+    } catch (error) {
+      console.error('Save profile error:', error);
+      
+      // Check if it's an authentication error
+      if (error.message && (error.message.includes('401') || error.message.includes('Authorization token missing') || error.message.includes('Unauthorized'))) {
+        Utils.showToast('Your session has expired. Please log in again.', 'error');
+        setTimeout(() => {
+          Utils.clearCurrentUser();
+        }, 2000);
+      } else {
+        Utils.showToast(error.message || 'Failed to update profile. Please try again.', 'error');
+      }
+    }
   }
   window.saveAdminProfile = saveAdminProfile;
 
@@ -339,49 +558,158 @@ document.addEventListener('DOMContentLoaded', async () => {
     const container = document.getElementById('settingsContent');
     if (!container) return;
 
-    container.innerHTML = `
-      <div class="settings-card">
-        <div class="settings-section-header">
-          <i class="fas fa-bell"></i>
-          <h3>Notification Preferences</h3>
-        </div>
-        <div class="settings-options">
-          <div class="settings-option">
-            <div class="settings-option-info">
-              <label>Email Notifications</label>
-              <small>Receive email updates for new requests</small>
-            </div>
-            <label class="toggle-switch">
-              <input type="checkbox" id="emailNotifications" checked>
-              <span class="toggle-slider"></span>
-            </label>
-          </div>
-          <div class="settings-option">
-            <div class="settings-option-info">
-              <label>Push Notifications</label>
-              <small>Receive browser push notifications</small>
-            </div>
-            <label class="toggle-switch">
-              <input type="checkbox" id="pushNotifications" checked>
-              <span class="toggle-slider"></span>
-            </label>
-          </div>
-        </div>
-      </div>
+    const user = Utils.getCurrentUser();
 
-      <div class="settings-card">
-        <div class="settings-section-header">
-          <i class="fas fa-lock"></i>
-          <h3>Security</h3>
+    container.innerHTML = `
+      <div class="settings-view-content">
+        <div class="settings-tabs">
+          <button class="settings-tab active" data-tab="security" onclick="switchAdminSettingsTab('security')">
+            <i class="fas fa-lock"></i> Security
+          </button>
+          <button class="settings-tab" data-tab="notifications" onclick="switchAdminSettingsTab('notifications')">
+            <i class="fas fa-bell"></i> Notifications
+          </button>
         </div>
-        <div class="settings-options">
-          <button class="btn-secondary" onclick="showChangePasswordModal()">
-            <i class="fas fa-key"></i> Change Password
+
+        <div class="settings-tab-content">
+          <div class="settings-tab-panel active" id="settingsTabSecurity">
+            <div class="settings-section">
+              <h3><i class="fas fa-key"></i> Change Password</h3>
+              <div class="settings-password-group">
+                <label>Current Password</label>
+                <div class="settings-input-group">
+                  <input type="password" id="currentPassword" class="settings-input" placeholder="Enter current password" />
+                  <button class="btn-toggle-password" onclick="toggleAdminPasswordVisibility('currentPassword', this)">
+                    <i class="fas fa-eye"></i>
+                  </button>
+                </div>
+              </div>
+              <div class="settings-password-group">
+                <label>New Password</label>
+                <div class="settings-input-group">
+                  <input type="password" id="newPassword" class="settings-input" placeholder="Enter new password" />
+                  <button class="btn-toggle-password" onclick="toggleAdminPasswordVisibility('newPassword', this)">
+                    <i class="fas fa-eye"></i>
+                  </button>
+                </div>
+              </div>
+              <div class="settings-password-group">
+                <label>Confirm New Password</label>
+                <div class="settings-input-group">
+                  <input type="password" id="confirmNewPassword" class="settings-input" placeholder="Confirm new password" />
+                  <button class="btn-toggle-password" onclick="toggleAdminPasswordVisibility('confirmNewPassword', this)">
+                    <i class="fas fa-eye"></i>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="settings-tab-panel" id="settingsTabNotifications">
+            <div class="settings-section">
+              <h3><i class="fas fa-bell"></i> Notification Preferences</h3>
+              <div class="settings-toggle-group">
+                <label class="settings-toggle-label">
+                  <span>Email Notifications</span>
+                  <input type="checkbox" id="emailNotifications" class="settings-toggle" ${user?.emailNotifications !== false ? 'checked' : ''} />
+                  <span class="settings-toggle-slider"></span>
+                </label>
+                <small>Receive notifications via email</small>
+              </div>
+              <div class="settings-toggle-group">
+                <label class="settings-toggle-label">
+                  <span>SMS Notifications</span>
+                  <input type="checkbox" id="smsNotifications" class="settings-toggle" ${user?.smsNotifications === true ? 'checked' : ''} />
+                  <span class="settings-toggle-slider"></span>
+                </label>
+                <small>Receive notifications via SMS</small>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-save-footer">
+          <button class="btn-save-changes" onclick="saveAdminSettings()">
+            <i class="fas fa-save"></i> Save Changes
           </button>
         </div>
       </div>
     `;
   }
+
+  // Switch admin settings tab
+  function switchAdminSettingsTab(tabName) {
+    document.querySelectorAll('.settings-tab').forEach(tab => {
+      tab.classList.toggle('active', tab.dataset.tab === tabName);
+    });
+    document.querySelectorAll('.settings-tab-panel').forEach(panel => {
+      panel.classList.toggle('active', panel.id === `settingsTab${tabName.charAt(0).toUpperCase() + tabName.slice(1)}`);
+    });
+  }
+  window.switchAdminSettingsTab = switchAdminSettingsTab;
+
+  // Toggle password visibility for admin
+  function toggleAdminPasswordVisibility(inputId, button) {
+    const input = document.getElementById(inputId);
+    const icon = button.querySelector('i');
+    if (input.type === 'password') {
+      input.type = 'text';
+      icon.classList.remove('fa-eye');
+      icon.classList.add('fa-eye-slash');
+    } else {
+      input.type = 'password';
+      icon.classList.remove('fa-eye-slash');
+      icon.classList.add('fa-eye');
+    }
+  }
+  window.toggleAdminPasswordVisibility = toggleAdminPasswordVisibility;
+
+  // Save admin settings
+  async function saveAdminSettings() {
+    const user = Utils.getCurrentUser();
+    const currentPassword = document.getElementById('currentPassword')?.value || '';
+    const newPassword = document.getElementById('newPassword')?.value || '';
+    const confirmPassword = document.getElementById('confirmNewPassword')?.value || '';
+    const emailNotifications = document.getElementById('emailNotifications')?.checked ?? true;
+    const smsNotifications = document.getElementById('smsNotifications')?.checked ?? false;
+
+    try {
+      // Handle password change first
+      if (newPassword) {
+        if (!currentPassword) {
+          Utils.showToast('Please enter your current password', 'error');
+          return;
+        }
+        if (newPassword !== confirmPassword) {
+          Utils.showToast('New passwords do not match', 'error');
+          return;
+        }
+        if (newPassword.length < 3) {
+          Utils.showToast('Password must be at least 3 characters', 'error');
+          return;
+        }
+        await Utils.apiRequest('/auth/update-password', {
+          method: 'PUT',
+          body: { currentPassword, newPassword }
+        });
+        document.getElementById('currentPassword').value = '';
+        document.getElementById('newPassword').value = '';
+        document.getElementById('confirmNewPassword').value = '';
+      }
+
+      // Store notification preferences in localStorage only
+      // (These are client-side preferences, not stored in database)
+      user.emailNotifications = emailNotifications;
+      user.smsNotifications = smsNotifications;
+      localStorage.setItem('currentUser', JSON.stringify(user));
+
+      Utils.showToast('Settings saved successfully!', 'success');
+    } catch (error) {
+      console.error('Save settings error:', error);
+      Utils.showToast(error.message || 'Failed to save settings', 'error');
+    }
+  }
+  window.saveAdminSettings = saveAdminSettings;
 
   // Show change password modal
   function showChangePasswordModal() {
@@ -625,6 +953,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     try {
       const notifications = await Utils.apiRequest('/notifications');
+      
+      // Update sidebar notification badge
+      updateSidebarNotificationBadge(notifications);
 
       if (!notifications || notifications.length === 0) {
         container.innerHTML = `
@@ -658,8 +989,29 @@ document.addEventListener('DOMContentLoaded', async () => {
           <h3>Failed to load notifications</h3>
         </div>
       `;
+      // Update badge even on error (set to 0)
+      updateSidebarNotificationBadge([]);
     }
   }
+
+  // Update sidebar notification badge
+  function updateSidebarNotificationBadge(notifications) {
+    const badge = document.getElementById('sidebarNotificationCount');
+    if (!badge) return;
+
+    const notificationsArray = Array.isArray(notifications) ? notifications : [];
+    const unreadCount = notificationsArray.filter(n => !(n.read_flag || n.read || n.is_read)).length;
+    const totalCount = notificationsArray.length;
+
+    if (totalCount > 0) {
+      badge.textContent = totalCount > 9 ? '9+' : String(totalCount);
+      badge.classList.remove('hidden');
+    } else {
+      badge.textContent = '0';
+      badge.classList.add('hidden');
+    }
+  }
+  window.updateSidebarNotificationBadge = updateSidebarNotificationBadge;
 
   // Handle notification click from notifications view
   function handleNotificationClick(requestId) {
@@ -700,21 +1052,89 @@ document.addEventListener('DOMContentLoaded', async () => {
     return icons[status] || 'fa-circle';
   }
 
-  async function loadRecent() {
-    try {
-      const requests = await Utils.apiRequest('/requests', { method: 'GET' });
-      const recentEl = document.getElementById('recentRequests');
-      const statTotal = document.getElementById('statTotal');
-      const statPending = document.getElementById('statPending');
-      const statCompleted = document.getElementById('statCompleted');
+  // Store dashboard requests globally for filtering
+  let dashboardRequests = [];
 
-      if (!Array.isArray(requests) || requests.length === 0) {
-        recentEl.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📄</div><h3>No recent requests</h3><p>Requests across the system will appear here.</p></div>';
-        if (statTotal) statTotal.textContent = '0';
-        if (statPending) statPending.textContent = '0';
-        if (statCompleted) statCompleted.textContent = '0';
-        return;
+  function filterAndRenderDashboard() {
+    const recentEl = document.getElementById('recentRequests');
+    const statTotal = document.getElementById('statTotal');
+    const statPending = document.getElementById('statPending');
+    const statCompleted = document.getElementById('statCompleted');
+    const searchInput = document.getElementById('dashboardSearchInput');
+    const statusFilter = document.getElementById('dashboardFilterStatus');
+    const priorityFilter = document.getElementById('dashboardFilterPriority');
+
+    if (!recentEl) return;
+
+    const searchQuery = searchInput ? (searchInput.value || '').toLowerCase().trim() : '';
+    const selectedStatus = statusFilter ? statusFilter.value : 'all';
+    const selectedPriority = priorityFilter ? priorityFilter.value : 'all';
+
+    // Filter requests
+    let filtered = dashboardRequests.filter(request => {
+      // Status filter
+      if (selectedStatus !== 'all' && request.status !== selectedStatus) {
+        return false;
       }
+
+      // Priority filter
+      if (selectedPriority !== 'all' && request.priority !== selectedPriority) {
+        return false;
+      }
+
+      // Search query
+      if (searchQuery) {
+        const query = searchQuery.toLowerCase();
+        const matchesName = (request.studentName || request.student_name || '').toLowerCase().includes(query);
+        const matchesId = (request.studentIdNumber || request.student_id_number || '').toLowerCase().includes(query);
+        const matchesDoc = (request.documentType || request.document_label || request.documentValue || '').toLowerCase().includes(query);
+        const matchesCode = (request.requestCode || '').toLowerCase().includes(query);
+        if (!matchesName && !matchesId && !matchesDoc && !matchesCode) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+
+    if (filtered.length === 0) {
+      recentEl.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-state-icon">📋</div>
+          <h3>No requests found</h3>
+          <p>Try adjusting your filters or search query.</p>
+        </div>
+      `;
+      return;
+    }
+
+    // Sort requests: Completed at bottom, urgent non-completed at top
+    const sortedRequests = filtered.sort((a, b) => {
+        const aIsUrgent = a.priority === 'urgent';
+        const bIsUrgent = b.priority === 'urgent';
+        const aIsCompleted = a.status === 'completed';
+        const bIsCompleted = b.status === 'completed';
+        
+        // Completed requests ALWAYS go to bottom (regardless of priority)
+        if (aIsCompleted && !bIsCompleted) return 1; // a is completed, b is not - a goes to bottom
+        if (!aIsCompleted && bIsCompleted) return -1; // a is not completed, b is - b goes to bottom
+        
+        // If both completed or both not completed, then check priority
+        // Urgent non-completed requests come first
+        if (!aIsCompleted && !bIsCompleted) {
+          if (aIsUrgent && !bIsUrgent) return -1; // a is urgent, b is not - a comes first
+          if (!aIsUrgent && bIsUrgent) return 1; // b is urgent, a is not - b comes first
+        }
+        
+        // If both completed, urgent completed can be above normal completed
+        if (aIsCompleted && bIsCompleted) {
+          if (aIsUrgent && !bIsUrgent) return -1; // urgent completed above normal completed
+          if (!aIsUrgent && bIsUrgent) return 1;
+        }
+        
+        // If same completion status and priority, sort by date (newest first)
+        return new Date(b.submittedAt || b.submitted_at) - new Date(a.submittedAt || a.submitted_at);
+      });
 
       // Create table structure matching student portal design
       recentEl.innerHTML = `
@@ -727,15 +1147,17 @@ document.addEventListener('DOMContentLoaded', async () => {
                 <th>Document Name</th>
                 <th>Department</th>
                 <th>Date Submitted</th>
+                <th>Priority</th>
                 <th>Status</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
-              ${requests.slice(0, 10).map(r => {
+              ${sortedRequests.slice(0, 10).map(r => {
                 const statusClass = Utils.getStatusBadgeClass(r.status);
                 const statusText = Utils.getStatusText(r.status);
                 const statusIcon = getStatusIcon(r.status);
+                const priorityClass = r.priority === 'urgent' ? 'urgent' : 'normal';
                 return `
                 <tr>
                   <td><strong>${r.requestCode || 'N/A'}</strong></td>
@@ -743,6 +1165,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                   <td>${r.documentType || r.document_label || r.documentValue || 'N/A'}</td>
                   <td>${r.department || 'N/A'}</td>
                   <td>${Utils.formatDate(r.submittedAt || r.submitted_at)}</td>
+                  <td><span class="priority-badge ${priorityClass}">${(r.priority || 'normal').toUpperCase()}</span></td>
                   <td>
                     <span class="status-badge ${statusClass}">
                       <i class="fas ${statusIcon}"></i>
@@ -762,21 +1185,69 @@ document.addEventListener('DOMContentLoaded', async () => {
         </div>
       `;
 
-      if (statTotal) statTotal.textContent = String(requests.length || 0);
-      if (statPending) statPending.textContent = String(requests.filter(x => x.status && x.status.includes('pending')).length || 0);
-      if (statCompleted) statCompleted.textContent = String(requests.filter(x => x.status === 'completed' || x.status === 'approved').length || 0);
+      if (statTotal) statTotal.textContent = String(dashboardRequests.length || 0);
+      if (statPending) statPending.textContent = String(dashboardRequests.filter(x => x.status && x.status.includes('pending')).length || 0);
+      if (statCompleted) statCompleted.textContent = String(dashboardRequests.filter(x => x.status === 'completed' || x.status === 'approved').length || 0);
 
       // Store requests in adminPortal instance so viewRequest can access them
       if (window.adminPortal) {
-        window.adminPortal.requests = requests;
+        window.adminPortal.requests = dashboardRequests;
       }
+  }
+
+  async function loadRecent() {
+    try {
+      dashboardRequests = await Utils.apiRequest('/requests', { method: 'GET' });
+      
+      if (!Array.isArray(dashboardRequests) || dashboardRequests.length === 0) {
+        const recentEl = document.getElementById('recentRequests');
+        if (recentEl) {
+          recentEl.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📄</div><h3>No recent requests</h3><p>Requests across the system will appear here.</p></div>';
+        }
+        const statTotal = document.getElementById('statTotal');
+        const statPending = document.getElementById('statPending');
+        const statCompleted = document.getElementById('statCompleted');
+        if (statTotal) statTotal.textContent = '0';
+        if (statPending) statPending.textContent = '0';
+        if (statCompleted) statCompleted.textContent = '0';
+        return;
+      }
+
+      // Render with filters
+      filterAndRenderDashboard();
 
     } catch (error) {
       console.error('Failed to load recent requests', error);
     }
   }
 
+  // Set up dashboard filter event listeners
+  function setupDashboardFilters() {
+    const searchInput = document.getElementById('dashboardSearchInput');
+    const statusFilter = document.getElementById('dashboardFilterStatus');
+    const priorityFilter = document.getElementById('dashboardFilterPriority');
+
+    if (searchInput) {
+      searchInput.addEventListener('input', () => {
+        filterAndRenderDashboard();
+      });
+    }
+
+    if (statusFilter) {
+      statusFilter.addEventListener('change', () => {
+        filterAndRenderDashboard();
+      });
+    }
+
+    if (priorityFilter) {
+      priorityFilter.addEventListener('change', () => {
+        filterAndRenderDashboard();
+      });
+    }
+  }
+
   await loadRecent();
+  setupDashboardFilters();
 });
 // Admin Portal JavaScript
 class AdminPortal {
@@ -838,6 +1309,7 @@ class AdminPortal {
     try {
       this.requests = await Utils.apiRequest('/requests');
       this.filterRequests();
+      this.renderRecentRequests();
     } catch (error) {
       Utils.showToast('Failed to load requests', 'error');
     }
@@ -878,6 +1350,125 @@ class AdminPortal {
     this.renderRequests();
   }
 
+  renderRecentRequests() {
+    const container = document.getElementById('recentRequestsList');
+    if (!container) return;
+
+    // Get recent requests (last 7 days or last 20 requests, whichever is more)
+    const now = new Date();
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    
+    let recentRequests = this.requests.filter(r => {
+      const submittedDate = new Date(r.submittedAt || r.submitted_at);
+      return submittedDate >= sevenDaysAgo;
+    });
+
+    // Sort: Completed always at bottom, then urgent non-completed at top, then normal non-completed
+    recentRequests.sort((a, b) => {
+      const aIsUrgent = a.priority === 'urgent';
+      const bIsUrgent = b.priority === 'urgent';
+      const aIsCompleted = a.status === 'completed';
+      const bIsCompleted = b.status === 'completed';
+      
+      // Completed requests ALWAYS go to bottom (regardless of priority)
+      if (aIsCompleted && !bIsCompleted) return 1; // a is completed, b is not - a goes to bottom
+      if (!aIsCompleted && bIsCompleted) return -1; // a is not completed, b is - b goes to bottom
+      
+      // If both completed or both not completed, then check priority
+      // Urgent non-completed requests come first
+      if (!aIsCompleted && !bIsCompleted) {
+        if (aIsUrgent && !bIsUrgent) return -1; // a is urgent, b is not - a comes first
+        if (!aIsUrgent && bIsUrgent) return 1; // b is urgent, a is not - b comes first
+      }
+      
+      // If both completed, urgent completed can be above normal completed
+      if (aIsCompleted && bIsCompleted) {
+        if (aIsUrgent && !bIsUrgent) return -1; // urgent completed above normal completed
+        if (!aIsUrgent && bIsUrgent) return 1;
+      }
+      
+      // If same completion status and priority, sort by date (newest first)
+      return new Date(b.submittedAt || b.submitted_at) - new Date(a.submittedAt || a.submitted_at);
+    });
+
+    // Limit to 20 most recent
+    recentRequests = recentRequests.slice(0, 20);
+
+    if (recentRequests.length === 0) {
+      container.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-state-icon">📄</div>
+          <h3>No recent requests</h3>
+          <p>Requests submitted in the last 7 days will appear here.</p>
+        </div>
+      `;
+      return;
+    }
+
+    function getStatusIcon(status) {
+      const icons = {
+        pending: 'fa-clock',
+        pending_faculty: 'fa-hourglass-half',
+        in_progress: 'fa-spinner',
+        approved: 'fa-check-circle',
+        completed: 'fa-check-double',
+        declined: 'fa-times-circle'
+      };
+      return icons[status] || 'fa-circle';
+    }
+
+    container.innerHTML = `
+      <div class="table-wrapper">
+        <table class="requests-table">
+          <thead>
+            <tr>
+              <th>Request Code</th>
+              <th>Student Name</th>
+              <th>Document Name</th>
+              <th>Department</th>
+              <th>Date Submitted</th>
+              <th>Priority</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${recentRequests.map(r => {
+              const statusClass = Utils.getStatusBadgeClass(r.status);
+              const statusText = Utils.getStatusText(r.status);
+              const statusIcon = getStatusIcon(r.status);
+              const priorityClass = r.priority === 'urgent' ? 'urgent' : 'normal';
+              return `
+              <tr>
+                <td><strong>${r.requestCode || 'N/A'}</strong></td>
+                <td>${r.studentName || r.student_name || 'N/A'}</td>
+                <td>${r.documentType || r.document_label || r.documentValue || 'N/A'}</td>
+                <td>${r.department || 'N/A'}</td>
+                <td>${Utils.formatDate(r.submittedAt || r.submitted_at)}</td>
+                <td><span class="priority-badge ${priorityClass}">${(r.priority || 'normal').toUpperCase()}</span></td>
+                <td>
+                  <span class="status-badge ${statusClass}">
+                    <i class="fas ${statusIcon}"></i>
+                    ${statusText}
+                  </span>
+                </td>
+                <td>
+                  <button class="btn-secondary" onclick="adminPortal.showUpdateModal(${r.id})" title="Update Request" style="margin-right: 0.5rem;">
+                    <i class="fas fa-edit"></i> Update
+                  </button>
+                  <button class="btn-secondary" onclick="window.adminPortal?.viewRequest(${r.id})" title="View Details">
+                    <i class="fas fa-eye"></i> View
+                  </button>
+                </td>
+              </tr>
+            `;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+  }
+
   renderRequests() {
     const container = document.getElementById('requestsList');
     if (!container) return;
@@ -894,9 +1485,29 @@ class AdminPortal {
     }
 
     const sortedRequests = this.filteredRequests.sort((a, b) => {
-      // Sort by priority first (urgent first), then by date (newest first)
-      if (a.priority === 'urgent' && b.priority !== 'urgent') return -1;
-      if (b.priority === 'urgent' && a.priority !== 'urgent') return 1;
+      const aIsUrgent = a.priority === 'urgent';
+      const bIsUrgent = b.priority === 'urgent';
+      const aIsCompleted = a.status === 'completed';
+      const bIsCompleted = b.status === 'completed';
+      
+      // Completed requests ALWAYS go to bottom (regardless of priority)
+      if (aIsCompleted && !bIsCompleted) return 1; // a is completed, b is not - a goes to bottom
+      if (!aIsCompleted && bIsCompleted) return -1; // a is not completed, b is - b goes to bottom
+      
+      // If both completed or both not completed, then check priority
+      // Urgent non-completed requests come first
+      if (!aIsCompleted && !bIsCompleted) {
+        if (aIsUrgent && !bIsUrgent) return -1; // a is urgent, b is not - a comes first
+        if (!aIsUrgent && bIsUrgent) return 1; // b is urgent, a is not - b comes first
+      }
+      
+      // If both completed, urgent completed can be above normal completed
+      if (aIsCompleted && bIsCompleted) {
+        if (aIsUrgent && !bIsUrgent) return -1; // urgent completed above normal completed
+        if (!aIsUrgent && bIsUrgent) return 1;
+      }
+      
+      // If same completion status and priority, sort by date (newest first)
       return new Date(b.submittedAt || b.submitted_at) - new Date(a.submittedAt || a.submitted_at);
     });
 
@@ -1223,21 +1834,129 @@ class AdminPortal {
     const statusClass = Utils.getStatusBadgeClass(request.status);
     const statusText = Utils.getStatusText(request.status);
 
-    const notesHTML = request.adminNotes && request.adminNotes.length > 0
-      ? request.adminNotes.map(note => `
-          <div class="note-item">
-            <div class="note-header">
-              <span class="note-author">${note.adminName}</span>
-              <span class="note-time">${Utils.formatDate(note.timestamp)}</span>
+    // Load conversation messages
+    let conversationMessages = [];
+    try {
+      conversationMessages = await Utils.apiRequest(`/conversations/${requestId}`, {
+        timeout: 10000
+      });
+    } catch (error) {
+      console.error('Failed to load conversation:', error);
+    }
+
+    // Combine all messages (admin and student) from request and conversation
+    const adminNotesFromRequest = request.adminNotes && request.adminNotes.length > 0 
+      ? request.adminNotes.map(note => ({
+          role: 'admin',
+          name: note.adminName || 'Admin',
+          message: note.note,
+          timestamp: note.timestamp
+        }))
+      : [];
+    
+    // Get all conversation messages (admin and student)
+    const conversationMessagesFormatted = conversationMessages.map(msg => ({
+      role: msg.role,
+      name: msg.full_name || (msg.role === 'admin' ? 'Admin' : msg.role === 'student' ? request.studentName || 'Student' : 'User'),
+      message: msg.message,
+      timestamp: msg.created_at
+    }));
+    
+    // Combine and sort by timestamp
+    const allMessages = [...adminNotesFromRequest, ...conversationMessagesFormatted]
+      .sort((a, b) => new Date(a.timestamp || a.created_at) - new Date(b.timestamp || b.created_at));
+
+    const notesHTML = allMessages.length > 0
+      ? allMessages.map((msg) => {
+          const isAdmin = msg.role === 'admin';
+          const isStudent = msg.role === 'student';
+          return `
+            <div style="display: flex; flex-direction: column; align-items: ${isAdmin ? 'flex-start' : 'flex-end'}; margin-bottom: 1rem;">
+              <div style="background: ${isAdmin ? 'var(--bg-cream)' : 'var(--recoletos-green)'}; border: 1px solid ${isAdmin ? 'var(--border-gray)' : 'var(--recoletos-green)'}; border-radius: 8px; padding: 0.875rem 1rem; max-width: 85%; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                ${isAdmin ? `
+                  <div style="font-weight: 600; margin-bottom: 0.5rem; color: var(--text-dark); font-size: 0.9rem;">${msg.name}</div>
+                  <div style="font-size: 0.9rem; color: var(--text-dark); line-height: 1.5; margin-bottom: 0.5rem;">${msg.message}</div>
+                  <div style="font-size: 0.75rem; color: var(--text-dark); opacity: 0.6;">${Utils.formatDate(msg.timestamp || msg.created_at)}</div>
+                ` : `
+                  <div style="font-size: 0.9rem; color: var(--white); line-height: 1.5; margin-bottom: 0.5rem;">${msg.message}</div>
+                  <div style="font-size: 0.75rem; color: var(--white); opacity: 0.9; text-align: right;">${Utils.formatDate(msg.timestamp || msg.created_at)}</div>
+                `}
+              </div>
             </div>
-            <div class="note-content">${note.note}</div>
+          `;
+        }).join('')
+      : '<p style="opacity: 0.6; padding: 1rem; text-align: center; font-style: italic; background: var(--bg-cream); border-radius: 8px; border: 1px solid var(--border-gray);">No messages yet. Start the conversation!</p>';
+
+    // Determine progress stage based on status
+    const getProgressStage = (status) => {
+      switch(status) {
+        case 'pending':
+        case 'in_progress':
+          return 2; // Admin Processing
+        case 'pending_faculty':
+          return 3; // Faculty Approval
+        case 'approved':
+        case 'completed':
+          return 4; // Ready for Pickup
+        case 'declined':
+          return 1; // Stay at Submitted if declined
+        default:
+          return 1; // Submitted
+      }
+    };
+
+    const currentStage = getProgressStage(request.status);
+    const stages = [
+      { id: 1, label: 'Submitted', icon: 'fa-check-circle' },
+      { id: 2, label: 'Admin Processing', icon: 'fa-cog' },
+      { id: 3, label: 'Faculty Approval', icon: 'fa-user-check' },
+      { id: 4, label: 'Ready for Pickup', icon: 'fa-check-circle' }
+    ];
+
+    const progressHTML = `
+      <div style="background: var(--bg-cream); padding: 1.5rem; border-radius: 12px; border: 1px solid var(--border-gray); margin-bottom: 2rem;">
+        <h3 style="color: var(--recoletos-green); margin-bottom: 1.5rem; font-size: 1.1rem; font-weight: 600;">Request Progress</h3>
+        <div style="position: relative;">
+          <!-- Progress Bar Line -->
+          <div style="position: absolute; top: 20px; left: 0; right: 0; height: 3px; background: var(--border-gray); z-index: 1;"></div>
+          <div style="position: absolute; top: 20px; left: 0; height: 3px; background: var(--recoletos-green); z-index: 2; width: ${((currentStage - 1) / (stages.length - 1)) * 100}%; transition: width 0.3s ease;"></div>
+          
+          <!-- Stage Indicators -->
+          <div style="display: flex; justify-content: space-between; position: relative; z-index: 3;">
+            ${stages.map((stage, index) => {
+              const isCompleted = stage.id < currentStage;
+              const isActive = stage.id === currentStage;
+              const isFuture = stage.id > currentStage;
+              
+              return `
+                <div style="display: flex; flex-direction: column; align-items: center; flex: 1;">
+                  <div style="width: 40px; height: 40px; border-radius: 50%; background: ${isCompleted ? 'var(--recoletos-green)' : isActive ? 'var(--recoletos-green)' : 'var(--white)'}; border: 3px solid ${isCompleted || isActive ? 'var(--recoletos-green)' : 'var(--border-gray)'}; display: flex; align-items: center; justify-content: center; margin-bottom: 0.5rem; box-shadow: ${isActive ? '0 0 0 4px rgba(0, 102, 51, 0.1)' : 'none'};">
+                    ${isCompleted ? `
+                      <i class="fas fa-check" style="color: var(--white); font-size: 1rem;"></i>
+                    ` : isActive ? `
+                      <i class="fas ${stage.icon}" style="color: var(--white); font-size: 1rem;"></i>
+                    ` : `
+                      <i class="fas ${stage.icon}" style="color: var(--text-dark); opacity: 0.4; font-size: 1rem;"></i>
+                    `}
+                  </div>
+                  <span style="font-size: 0.85rem; font-weight: ${isActive ? '600' : '500'}; color: ${isCompleted || isActive ? 'var(--recoletos-green)' : 'var(--text-dark)'}; opacity: ${isFuture ? '0.4' : '1'}; text-align: center; max-width: 120px;">
+                    ${stage.label}
+                  </span>
+                </div>
+              `;
+            }).join('')}
           </div>
-        `).join('')
-      : '<p style="opacity: 0.6; padding: 1rem;">No notes yet</p>';
+        </div>
+      </div>
+    `;
+
+    const assignedFaculty = request.facultyId 
+      ? this.allFaculties.find(f => f.id === request.facultyId)
+      : null;
 
     const approvalHTML = request.facultyApproval && request.facultyApproval.status
       ? `
-          <div style="padding: 0.75rem; background: ${request.facultyApproval.status === 'approved' ? '#D1FAE5' : '#FEE2E2'}; border-radius: 6px;">
+          <div style="padding: 0.75rem; background: ${request.facultyApproval.status === 'approved' ? '#D1FAE5' : '#FEE2E2'}; border-radius: 6px; margin-top: 1rem;">
             <div style="font-weight: 600; margin-bottom: 0.25rem;">
               ${request.facultyApproval.facultyName || 'Faculty'} - ${(request.facultyApproval.status || 'pending').toUpperCase()}
             </div>
@@ -1245,91 +1964,223 @@ class AdminPortal {
             ${request.facultyApproval.timestamp ? `<div style="font-size: 0.8rem; opacity: 0.6; margin-top: 0.25rem;">${Utils.formatDate(request.facultyApproval.timestamp)}</div>` : ''}
           </div>
         `
-      : '<p style="opacity: 0.6;">No faculty approval yet</p>';
-
-    const assignedFaculty = request.facultyId 
-      ? this.allFaculties.find(f => f.id === request.facultyId)
-      : null;
-
-    const attachmentsHTML = request.attachments && request.attachments.length ? `
-      <div style="margin-bottom: 1.5rem;">
-        <h4 style=\"color: var(--recoletos-green); margin-bottom: 0.5rem;\">Attachments</h4>
-        <div style=\"display:grid; grid-template-columns: repeat(auto-fill, minmax(120px,1fr)); gap:0.75rem;\">
-          ${request.attachments.map(att => `
-            <a href="${att.url}" target="_blank" rel="noopener noreferrer" style="display:block;">
-              <img src="${att.url}" alt="${att.name}" style="width:100%; height:110px; object-fit:cover; border-radius:8px; border:1px solid var(--border-gray);" />
-            </a>
-          `).join('')}
-        </div>
-      </div>
-    ` : '';
+      : '';
 
     const modalHTML = `
       <div class="modal-overlay active" id="viewRequestModal">
-        <div class="action-modal">
+        <div class="request-modal">
           <div class="modal-header">
             <h2>Request Details</h2>
             <button class="close-modal" onclick="document.getElementById('viewRequestModal').remove()">&times;</button>
           </div>
-          <div>
-            <div style="margin-bottom: 1.5rem;">
-              <h3 style="color: var(--recoletos-green); margin-bottom: 0.5rem;">${request.documentType || request.documentValue || 'N/A'}</h3>
-              <div class="status-badge ${statusClass}" style="margin-bottom: 1rem;">${statusText}</div>
-            </div>
-            
-            <div style="margin-bottom: 1.5rem;">
-              <strong>Request Code:</strong> ${request.requestCode || 'N/A'}<br>
-              <strong>Student:</strong> ${request.studentName || 'N/A'} (${request.studentIdNumber || 'N/A'})<br>
-              <strong>Department:</strong> ${request.department || 'N/A'}<br>
-              <strong>Submitted:</strong> ${Utils.formatDate(request.submittedAt || request.submitted_at)}<br>
-              <strong>Last Updated:</strong> ${Utils.formatDate(request.updatedAt || request.updated_at)}<br>
-              <strong>Quantity:</strong> ${request.quantity || 1}<br>
-              <strong>Priority:</strong> <span class="priority-badge ${request.priority || 'normal'}">${(request.priority || 'normal').toUpperCase()}</span><br>
-            ${assignedFaculty ? `<strong>Assigned Faculty:</strong> ${assignedFaculty.fullName || assignedFaculty.name}<br>` : ''}
-              ${request.completedAt ? `<strong>Completed:</strong> ${Utils.formatDate(request.completedAt)}<br>` : ''}
+          <div class="request-modal-body">
+            ${progressHTML}
+            <div class="request-modal-content">
+            <!-- First Column: Student Information & Document Details -->
+            <div class="request-modal-column">
+              <!-- Student Information Section -->
+              <div style="margin-bottom: 2rem;">
+                <h3 style="color: var(--recoletos-green); margin-bottom: 1rem; font-size: 1.1rem; font-weight: 600;">
+                  <i class="fas fa-user"></i> Student Information
+                </h3>
+                <div class="document-details-horizontal" style="background: var(--bg-cream); padding: 1rem; border-radius: 8px; border: 1px solid var(--border-gray);">
+                  <div class="detail-label">Full Name:</div>
+                  <div class="detail-value">${request.studentName || 'N/A'}</div>
+                  
+                  <div class="detail-label">ID Number:</div>
+                  <div class="detail-value">${request.studentIdNumber || 'N/A'}</div>
+                  
+                  <div class="detail-label">Course:</div>
+                  <div class="detail-value">${request.studentCourse || 'N/A'}</div>
+                  
+                  <div class="detail-label">Year Level:</div>
+                  <div class="detail-value">${request.studentYearLevel || 'N/A'}</div>
+                  
+                  <div class="detail-label">Email:</div>
+                  <div class="detail-value">${request.studentEmail || 'N/A'}</div>
+                </div>
+              </div>
+
+              <!-- Document Details Section -->
+              <div>
+                <h3 style="color: var(--recoletos-green); margin-bottom: 1rem; font-size: 1.1rem; font-weight: 600;">
+                  <i class="fas fa-file-alt"></i> Document Details
+                </h3>
+                <div class="document-details-horizontal">
+                  <div class="detail-label">Request Code:</div>
+                  <div class="detail-value">${request.requestCode || 'N/A'}</div>
+                  
+                  <div class="detail-label">Document Type:</div>
+                  <div class="detail-value">${request.documentType || request.documentValue || 'N/A'}</div>
+                  
+                  <div class="detail-label">Department:</div>
+                  <div class="detail-value">${request.department || 'N/A'}</div>
+                  
+                  <div class="detail-label">Submitted:</div>
+                  <div class="detail-value">${Utils.formatDate(request.submittedAt || request.submitted_at)}</div>
+                  
+                  <div class="detail-label">Last Updated:</div>
+                  <div class="detail-value">${Utils.formatDate(request.updatedAt || request.updated_at)}</div>
+                  
+                  <div class="detail-label">Quantity:</div>
+                  <div class="detail-value">${request.quantity || 1}</div>
+                  
+                  <div class="detail-label">Priority:</div>
+                  <div class="detail-value"><span class="priority-badge ${request.priority || 'normal'}">${(request.priority || 'normal').toUpperCase()}</span></div>
+                  
+                  ${assignedFaculty ? `
+                  <div class="detail-label">Assigned Faculty:</div>
+                  <div class="detail-value">${assignedFaculty.fullName || assignedFaculty.name || 'N/A'}</div>
+                  ` : ''}
+                  
+                  ${request.completedAt ? `
+                  <div class="detail-label">Completed:</div>
+                  <div class="detail-value">${Utils.formatDate(request.completedAt)}</div>
+                  ` : ''}
+                </div>
+              </div>
+
+              ${request.attachments && request.attachments.length ? `
+              <div style="margin-top: 1.5rem;">
+                <h4 style="color: var(--recoletos-green); margin-bottom: 0.75rem; font-size: 1.1rem;">
+                  <i class="fas fa-paperclip"></i> Attachments
+                </h4>
+                <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(120px,1fr)); gap:0.75rem;">
+                  ${request.attachments.map((att) => `
+                    <a href="${att.url}" target="_blank" rel="noopener noreferrer" style="display:block;">
+                      <img src="${att.url}" alt="${att.name}" style="width:100%; height:110px; object-fit:cover; border-radius:8px; border:1px solid var(--border-gray);" />
+                    </a>
+                  `).join('')}
+                </div>
+              </div>
+              ` : ''}
+
+              ${request.facultyApproval !== null || request.status === 'pending_faculty' ? `
+              <div style="margin-top: 1.5rem;">
+                <h4 style="color: var(--recoletos-green); margin-bottom: 0.75rem; font-size: 1.1rem;">
+                  <i class="fas fa-user-check"></i> Faculty Approval
+                </h4>
+                ${approvalHTML}
+              </div>
+              ` : ''}
             </div>
 
-            <div style="margin-bottom: 1.5rem;">
-              <h4 style="color: var(--recoletos-green); margin-bottom: 0.5rem;">Student's Note</h4>
-              <div class="notes-list">
-                <div class="note-item" style="background: #FEF3C7; border-left: 3px solid #F59E0B;">
-                  <div class="note-header">
-                    <span class="note-author">${request.studentName || 'Student'}</span>
-                    <span class="note-time">${Utils.formatDate(request.submittedAt || request.submitted_at)}</span>
+            <!-- Second Column: Notes & Communication -->
+            <div class="request-modal-column">
+              <h3>Notes & Communication</h3>
+              
+              <div>
+                <!-- Chat Messages Display -->
+                <div style="margin-bottom: 1.5rem; max-height: 350px; overflow-y: auto; padding: 0.5rem; background: var(--white); border-radius: 8px; border: 1px solid var(--border-gray);">
+                  ${notesHTML}
+                </div>
+
+                <!-- Admin Input Section -->
+                <div style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border-gray);">
+                  <textarea 
+                    id="adminNoteInput" 
+                    placeholder="Add a note or message for the student"
+                    style="width: 100%; min-height: 100px; padding: 0.75rem; border: 1px solid var(--border-gray); border-radius: 8px; font-size: 0.9rem; font-family: inherit; resize: vertical; background: var(--white); margin-bottom: 0.75rem;"
+                  ></textarea>
+                  <div style="display: flex; justify-content: flex-end;">
+                    <button 
+                      id="sendNoteBtn" 
+                      onclick="window.adminPortal.sendNote(${requestId})"
+                      style="padding: 0.75rem 1.5rem; background: var(--recoletos-green); color: var(--white); border: none; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 0.9rem; transition: background 0.2s ease; display: flex; align-items: center; gap: 0.5rem;"
+                      onmouseover="this.style.background='#003318'"
+                      onmouseout="this.style.background='var(--recoletos-green)'"
+                    >
+                      <i class="fas fa-paper-plane" style="font-size: 0.85rem;"></i> Send Note
+                    </button>
                   </div>
-                  <div class="note-content">${request.purpose || 'No note provided'}</div>
                 </div>
               </div>
             </div>
-
-            <div style="margin-bottom: 1.5rem;">
-              <h4 style="color: var(--recoletos-green); margin-bottom: 0.5rem;">Admin Notes</h4>
-              <div class="notes-list">
-                ${notesHTML}
-              </div>
             </div>
-
-            ${attachmentsHTML}
-
-            ${request.facultyApproval !== null || request.status === 'pending_faculty' ? `
-              <div style="margin-bottom: 1.5rem;">
-                <h4 style="color: var(--recoletos-green); margin-bottom: 0.5rem;">Faculty Approval</h4>
-                ${approvalHTML}
-              </div>
-            ` : ''}
           </div>
         </div>
       </div>
     `;
 
-    document.body.insertAdjacentHTML('beforeend', modalHTML);
+    // Remove any existing modal first
+    const existingModal = document.getElementById('viewRequestModal');
+    if (existingModal) existingModal.remove();
 
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
     const modal = document.getElementById('viewRequestModal');
+    
+    // Auto-scroll chat messages to bottom
+    const chatContainer = modal.querySelector('[style*="max-height: 350px"]');
+    if (chatContainer) {
+      chatContainer.scrollTop = chatContainer.scrollHeight;
+    }
+    
+    // Close on overlay click
     modal.addEventListener('click', (e) => {
       if (e.target === modal) {
         modal.remove();
       }
     });
+
+    // Close on close button click
+    const closeBtn = modal.querySelector('.close-modal');
+    if (closeBtn) {
+      closeBtn.addEventListener('click', () => {
+        modal.remove();
+      });
+    }
+
+    // Close on Escape key
+    const handleEscape = (e) => {
+      if (e.key === 'Escape' && modal) {
+        modal.remove();
+        document.removeEventListener('keydown', handleEscape);
+      }
+    };
+    document.addEventListener('keydown', handleEscape);
+  }
+
+  async sendNote(requestId) {
+    const noteInput = document.getElementById('adminNoteInput');
+    const sendBtn = document.getElementById('sendNoteBtn');
+    
+    if (!noteInput || !sendBtn) return;
+
+    const message = noteInput.value.trim();
+    if (!message) {
+      Utils.showToast('Please enter a message', 'warning');
+      return;
+    }
+
+    // Disable button while sending
+    sendBtn.disabled = true;
+    sendBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
+
+    try {
+      await Utils.apiRequest(`/conversations/${requestId}`, {
+        method: 'POST',
+        body: { message },
+        timeout: 10000
+      });
+
+      Utils.showToast('Note sent successfully!', 'success');
+      noteInput.value = '';
+
+      // Reload the request modal to show the new message
+      // Close current modal and reopen
+      const modal = document.getElementById('viewRequestModal');
+      if (modal) {
+        modal.remove();
+      }
+      
+      // Reload the request view
+      await this.viewRequest(requestId);
+    } catch (error) {
+      console.error('Failed to send note:', error);
+      Utils.showToast('Failed to send note. Please try again.', 'error');
+      sendBtn.disabled = false;
+      sendBtn.innerHTML = '<i class="fas fa-paper-plane" style="font-size: 0.85rem;"></i> Send Note';
+    }
   }
 
   async loadUsers() {
@@ -1391,6 +2242,34 @@ class AdminPortal {
       return;
     }
 
+    // Sort by created_at (newest first)
+    const sortedUsers = [...users].sort((a, b) => {
+      const dateA = new Date(a.created_at || a.createdAt || 0);
+      const dateB = new Date(b.created_at || b.createdAt || 0);
+      return dateB - dateA; // Newest first
+    });
+
+    // Format date and time
+    function formatDateTime(dateString) {
+      if (!dateString) return 'N/A';
+      try {
+        const date = new Date(dateString);
+        const dateStr = date.toLocaleDateString('en-US', { 
+          year: 'numeric', 
+          month: 'short', 
+          day: 'numeric' 
+        });
+        const timeStr = date.toLocaleTimeString('en-US', { 
+          hour: '2-digit', 
+          minute: '2-digit',
+          hour12: true
+        });
+        return `${dateStr} at ${timeStr}`;
+      } catch (e) {
+        return dateString;
+      }
+    }
+
     container.innerHTML = `
       <div class="table-wrapper">
         <table class="requests-table">
@@ -1403,18 +2282,20 @@ class AdminPortal {
               <th>Course</th>
               <th>Year</th>
               <th>Department</th>
+              <th>Date & Time</th>
             </tr>
           </thead>
           <tbody>
-            ${users.map(user => `
+            ${sortedUsers.map(user => `
               <tr>
                 <td><strong>${user.fullName || 'N/A'}</strong></td>
                 <td>${user.email || 'N/A'}</td>
                 <td><span class="role-badge role-${user.role}">${user.role === 'student' ? 'Student' : user.role === 'faculty' ? 'Faculty' : 'Admin'}</span></td>
-                <td>${user.studentIdNumber || '—'}</td>
+                <td>${user.studentIdNumber || user.idNumber || '—'}</td>
                 <td>${user.course || '—'}</td>
-                <td>${user.year || '—'}</td>
+                <td>${user.year || user.yearLevel || '—'}</td>
                 <td>${user.departmentName || 'N/A'}</td>
+                <td>${formatDateTime(user.created_at || user.createdAt)}</td>
               </tr>
             `).join('')}
           </tbody>

@@ -631,7 +631,7 @@ router.put('/update-profile', authMiddleware(), async (req, res) => {
   }
 });
 
-// Change password endpoint
+// Change password endpoint (POST - for backward compatibility)
 router.post('/change-password', authMiddleware(), async (req, res) => {
   console.log('🔐 Change password request received');
 
@@ -690,7 +690,7 @@ router.post('/change-password', authMiddleware(), async (req, res) => {
     // Verify current password
     const validPassword = await bcrypt.compare(currentPassword, user.password_hash);
     if (!validPassword) {
-      return res.status(401).json({
+      return res.status(400).json({
         error: 'Invalid password',
         message: 'Current password is incorrect.'
       });
@@ -717,6 +717,88 @@ router.post('/change-password', authMiddleware(), async (req, res) => {
     res.status(500).json({
       error: 'Password change failed',
       message: 'An error occurred while changing your password. Please try again.'
+    });
+  }
+});
+
+// Update password endpoint (PUT - for student/admin settings)
+router.put('/update-password', authMiddleware(), async (req, res) => {
+  console.log('🔐 Update password request received (PUT)');
+
+  try {
+    const userId = req.user.id;
+    const { currentPassword, newPassword } = req.body;
+
+    // Validate required fields
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({
+        error: 'Missing fields',
+        message: 'Current password and new password are required.'
+      });
+    }
+
+    // Validate new password length
+    if (newPassword.length < 3) {
+      return res.status(400).json({
+        error: 'Password too short',
+        message: 'New password must be at least 3 characters long.'
+      });
+    }
+
+    // Check if new password is same as current
+    if (currentPassword === newPassword) {
+      return res.status(400).json({
+        error: 'Same password',
+        message: 'New password must be different from current password.'
+      });
+    }
+
+    // Get user from database
+    const pool = await initPool();
+    const [users] = await pool.query(
+      'SELECT id, password_hash FROM users WHERE id = ?',
+      [userId]
+    );
+
+    if (users.length === 0) {
+      return res.status(404).json({
+        error: 'User not found',
+        message: 'User not found.'
+      });
+    }
+
+    const user = users[0];
+
+    // Verify current password
+    const validPassword = await bcrypt.compare(currentPassword, user.password_hash);
+    if (!validPassword) {
+      return res.status(400).json({
+        error: 'Invalid password',
+        message: 'Current password is incorrect.'
+      });
+    }
+
+    // Hash new password
+    const saltRounds = 10;
+    const newPasswordHash = await bcrypt.hash(newPassword, saltRounds);
+
+    // Update password in database
+    await pool.query(
+      'UPDATE users SET password_hash = ? WHERE id = ?',
+      [newPasswordHash, userId]
+    );
+
+    console.log('✅ Password updated successfully for user:', userId);
+
+    res.json({
+      message: 'Password updated successfully!'
+    });
+
+  } catch (error) {
+    console.error('❌ Update password error:', error);
+    res.status(500).json({
+      error: 'Password update failed',
+      message: 'An error occurred while updating your password. Please try again.'
     });
   }
 });

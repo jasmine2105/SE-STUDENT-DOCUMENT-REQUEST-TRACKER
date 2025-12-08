@@ -101,6 +101,25 @@ body {
   box-shadow: inset 4px 0 0 rgba(0, 0, 0, 0.06);
 }
 
+/* Sidebar Notification Badge */
+.sidebar-notification-badge {
+  margin-left: auto;
+  background: var(--recoletos-gold);
+  color: var(--recoletos-green);
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 999px;
+  min-width: 20px;
+  text-align: center;
+  line-height: 1.4;
+}
+
+.sidebar-link.active .sidebar-notification-badge {
+  background: var(--recoletos-green);
+  color: var(--recoletos-gold);
+}
+
 .sidebar-footer {
   margin-top: auto;
   padding-top: 1rem;

@@ -722,26 +722,55 @@ router.patch('/:id', authMiddleware(), async (req, res) => {
       }
     }
 
-    // Notify faculty if admin added a note (they might need to review it)
+    // Notify student when admin adds a note
     if (adminNote && req.user && req.user.role === 'admin') {
       try {
-        const [faculty] = await conn.query(
-          'SELECT id FROM users WHERE role = ? AND department_id = ?',
-          ['faculty', request.departmentId]
-        );
-        
-        for (const fac of faculty) {
-          await createNotification({
-            userId: fac.id,
-            role: 'faculty',
-            type: 'admin_note',
-            title: 'Admin Note Added',
-            message: `Admin added a note to request ${updated.requestCode || ''}`,
-            requestId: request.id,
-          });
-        }
+        const adminName = req.user.fullName || req.user.name || 'Admin';
+        await createNotification({
+          userId: request.studentId,
+          role: 'student',
+          type: 'comment',
+          title: 'New Comment on Your Request',
+          message: `${adminName} sent a comment: ${adminNote.substring(0, 100)}${adminNote.length > 100 ? '...' : ''}`,
+          requestId: request.id,
+        });
+        console.log(`✅ Admin note notification sent to student ID: ${request.studentId} for request ${request.id}`);
       } catch (notifError) {
-        console.warn('Failed to notify faculty of admin note:', notifError.message);
+        console.warn('Failed to notify student of admin note:', notifError.message);
+      }
+    }
+
+    // Notify faculty if admin added a note - ONLY if the request is assigned to them
+    // Faculty don't need to see admin notes on requests they're not assigned to
+    if (adminNote && req.user && req.user.role === 'admin' && request.facultyId) {
+      try {
+        // Only notify the specific faculty member assigned to this request
+        // Get user_id from faculty table if facultyId is a faculty table ID
+        let facultyUserId = request.facultyId;
+        
+        try {
+          const [facultyRows] = await conn.query(
+            'SELECT user_id FROM faculty WHERE id = ?',
+            [request.facultyId]
+          );
+          if (facultyRows.length > 0) {
+            facultyUserId = facultyRows[0].user_id;
+          }
+        } catch (e) {
+          // If faculty table doesn't exist or error, assume facultyId is user_id
+        }
+        
+        await createNotification({
+          userId: facultyUserId,
+          role: 'faculty',
+          type: 'admin_note',
+          title: 'Admin Note Added',
+          message: `Admin added a note to request ${updated.requestCode || ''}`,
+          requestId: request.id,
+        });
+        console.log(`✅ Admin note notification sent to assigned faculty user ID: ${facultyUserId}`);
+      } catch (notifError) {
+        console.warn('Failed to notify assigned faculty of admin note:', notifError.message);
       }
     }
 
