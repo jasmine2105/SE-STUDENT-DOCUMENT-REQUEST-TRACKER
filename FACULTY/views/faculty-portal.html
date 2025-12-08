@@ -13,6 +13,8 @@
     <link rel="stylesheet" href="../../shared/styles-home.css">
     <link rel="stylesheet" href="../../STUDENT/styles/student-portal.css">
     <link rel="stylesheet" href="../styles/faculty-portal.css">
+    <link rel="stylesheet" href="../../shared/PROFILE/profile-modal.css">
+    <link rel="stylesheet" href="../../shared/SETTINGS/settings-modal.css">
 </head>
 
 <body>
@@ -29,12 +31,26 @@
                 </div>
             </div>
             <nav class="sidebar-nav">
-                <button class="sidebar-link active" data-view="dashboard">Dashboard</button>
-                <button class="sidebar-link" data-view="requests">Requests</button>
-                <button class="sidebar-link" data-view="notifications">Notifications</button>
+                <button class="sidebar-link active" data-view="dashboard">
+                    <i class="fas fa-home"></i> Dashboard
+                </button>
+                <button class="sidebar-link" data-view="requests">
+                    <i class="fas fa-file-alt"></i> Requests
+                </button>
+                <button class="sidebar-link" data-view="notifications">
+                    <i class="fas fa-bell"></i> Notifications
+                </button>
+                <button class="sidebar-link" data-view="profile">
+                    <i class="fas fa-user"></i> My Profile
+                </button>
+                <button class="sidebar-link" data-view="settings">
+                    <i class="fas fa-cog"></i> Settings
+                </button>
             </nav>
             <div class="sidebar-footer">
-                <button class="btn-logout" id="logoutBtn">Logout</button>
+                <button class="btn-logout" id="logoutBtn">
+                    <i class="fas fa-sign-out-alt"></i> Logout
+                </button>
             </div>
         </aside>
 
@@ -131,12 +147,67 @@
                     </div>
                 </div>
             </section>
+
+            <!-- Notifications View -->
+            <section class="main-container hidden" id="notificationsView">
+                <div class="content-section">
+                    <div class="section-header">
+                        <div class="section-title-wrapper">
+                            <i class="fas fa-bell section-icon"></i>
+                            <h2>Notifications</h2>
+                        </div>
+                        <button class="btn-secondary" id="markAllReadNotifications">
+                            <i class="fas fa-check-double"></i> Mark all as read
+                        </button>
+                    </div>
+                    <div class="table-wrapper" id="notificationsFullList">
+                        <div class="empty-state">
+                            <div class="empty-state-icon">🔔</div>
+                            <h3>Loading notifications...</h3>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Profile View -->
+            <section class="main-container hidden" id="profileView">
+                <div class="content-section">
+                    <div class="section-header">
+                        <div class="section-title-wrapper">
+                            <i class="fas fa-user section-icon"></i>
+                            <h2>My Profile</h2>
+                        </div>
+                    </div>
+                    <div id="profileContent">
+                        <!-- Profile content will be rendered here -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- Settings View -->
+            <section class="main-container hidden" id="settingsView">
+                <div class="content-section">
+                    <div class="section-header">
+                        <div class="section-title-wrapper">
+                            <i class="fas fa-cog section-icon"></i>
+                            <h2>Settings</h2>
+                        </div>
+                    </div>
+                    <div id="settingsContent">
+                        <!-- Settings content will be rendered here -->
+                    </div>
+                </div>
+            </section>
         </div>
     </div>
 
     <!-- Scripts -->
     <script src="../../shared/utils.js"></script>
     <script src="../../shared/scripts/notifications.js"></script>
+    <script src="../../shared/PROFILE/profile-utils.js"></script>
+    <script src="../../shared/SETTINGS/settings-utils.js"></script>
+    <script src="../../shared/PROFILE/profile-modal.js"></script>
+    <script src="../../shared/SETTINGS/settings-modal.js"></script>
     <script src="../scripts/faculty-portal.js"></script>
 </body>
 

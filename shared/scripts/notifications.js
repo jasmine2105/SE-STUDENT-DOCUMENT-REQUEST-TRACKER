@@ -3,11 +3,23 @@
   const Notifications = {
     async fetchNotifications(userId) {
       try {
-        const endpoint = userId ? `/notifications?userId=${encodeURIComponent(userId)}` : '/notifications';
+        // The server uses authMiddleware to get userId from token, so we don't need to pass it in query
+        // But we'll log it for debugging
+        console.log('🔔 Fetching notifications, userId from param:', userId);
+        const currentUser = Utils.getCurrentUser();
+        console.log('🔔 Current user from localStorage:', currentUser?.id, currentUser?.fullName);
+        
+        const endpoint = '/notifications';
         const data = await Utils.apiRequest(endpoint, { method: 'GET' });
+        
+        console.log('🔔 Notifications received:', Array.isArray(data) ? data.length : 0, 'notifications');
+        if (Array.isArray(data) && data.length > 0) {
+          console.log('  Sample notification:', data[0].title);
+        }
+        
         return Array.isArray(data) ? data : [];
       } catch (error) {
-        console.warn('Notifications fetch failed:', error.message || error);
+        console.error('❌ Notifications fetch failed:', error.message || error);
         return [];
       }
     },
@@ -63,9 +75,13 @@
       if (!bell || !countEl || !dropdown || !list) return;
 
       async function refresh() {
+        console.log('🔄 Refreshing notifications...');
         const notifications = await Notifications.fetchNotifications(userId);
+        console.log('🔄 Refresh complete, got', notifications.length, 'notifications');
+        
         list.innerHTML = '';
         if (!notifications.length) {
+          console.log('⚠️ No notifications to display');
           const empty = document.createElement('div');
           empty.className = 'empty-state';
           empty.innerHTML = '<div class="empty-state-icon">🔕</div><h4>No notifications</h4>';
@@ -74,6 +90,8 @@
           countEl.textContent = '0';
           return;
         }
+        
+        console.log('✅ Rendering', notifications.length, 'notifications');
 
         notifications.forEach(n => {
           const item = Notifications.renderNotificationItem(n, (requestId, notification) => {
@@ -97,9 +115,24 @@
         }
       }
 
-      // Toggle dropdown
-      bell.addEventListener('click', (e) => {
+      // Toggle dropdown and refresh when opened
+      bell.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const isHidden = dropdown.classList.contains('hidden');
         dropdown.classList.toggle('hidden');
+        
+        // Refresh notifications when opening the dropdown
+        if (isHidden) {
+          console.log('🔔 Bell clicked, refreshing notifications...');
+          await refresh();
+        }
+      });
+      
+      // Close dropdown when clicking outside
+      document.addEventListener('click', (e) => {
+        if (!bell.contains(e.target) && !dropdown.contains(e.target)) {
+          dropdown.classList.add('hidden');
+        }
       });
 
       if (markAllBtn) {
@@ -116,8 +149,21 @@
       // Initial fetch
       await refresh();
 
-      // Expose a manual refresh
-      return { refresh };
+      // Auto-refresh notifications every 30 seconds
+      const refreshInterval = setInterval(async () => {
+        // Only refresh if dropdown is closed (to avoid interrupting user)
+        if (dropdown.classList.contains('hidden')) {
+          await refresh();
+        }
+      }, 30000);
+
+      // Expose a manual refresh and cleanup
+      return { 
+        refresh,
+        destroy: () => {
+          clearInterval(refreshInterval);
+        }
+      };
     }
   };
 

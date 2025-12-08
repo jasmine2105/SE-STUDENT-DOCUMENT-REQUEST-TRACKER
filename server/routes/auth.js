@@ -369,6 +369,24 @@ router.post('/login', async (req, res) => {
 
     // Find user by ID number (role is determined from database)
     const pool = await initPool();
+    
+    // Check if is_super_admin column exists
+    let isSuperAdminSelect = 'FALSE AS isSuperAdmin';
+    try {
+      const [columns] = await pool.query(`
+        SELECT COLUMN_NAME 
+        FROM INFORMATION_SCHEMA.COLUMNS 
+        WHERE TABLE_SCHEMA = DATABASE() 
+        AND TABLE_NAME = 'users' 
+        AND COLUMN_NAME = 'is_super_admin'
+      `);
+      if (columns.length > 0) {
+        isSuperAdminSelect = 'COALESCE(u.is_super_admin, FALSE) AS isSuperAdmin';
+      }
+    } catch (colError) {
+      console.warn('⚠️ Could not check for is_super_admin column, using default FALSE');
+    }
+    
     const [users] = await pool.query(`
       SELECT 
         u.id, 
@@ -383,7 +401,7 @@ router.post('/login', async (req, res) => {
         u.course,
         u.year_level AS yearLevel,
         u.position,
-        COALESCE(u.is_super_admin, FALSE) AS isSuperAdmin
+        ${isSuperAdminSelect}
       FROM users u
       LEFT JOIN departments d ON u.department_id = d.id
       WHERE u.id_number = ?
@@ -450,9 +468,18 @@ router.post('/login', async (req, res) => {
 
   } catch (error) {
     console.error('❌ Login error:', error);
+    console.error('❌ Login error stack:', error.stack);
+    console.error('❌ Login error details:', {
+      message: error.message,
+      code: error.code,
+      errno: error.errno,
+      sqlState: error.sqlState,
+      sqlMessage: error.sqlMessage
+    });
     res.status(500).json({ 
       error: 'Login failed',
-      message: 'An error occurred during login. Please try again.' 
+      message: 'An error occurred during login. Please try again.',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 });

@@ -470,6 +470,34 @@ router.post('/', authMiddleware(), async (req, res) => {
       // Don't fail the request if notification fails
     }
 
+    // Notify all faculty in the same department if request requires faculty approval
+    if (requiresFaculty || initialStatus === 'pending_faculty') {
+      console.log('🔔 Notifying faculty in department:', departmentNumeric);
+      try {
+        const [faculty] = await conn.query(
+          'SELECT id FROM users WHERE role = ? AND department_id = ?',
+          ['faculty', departmentNumeric]
+        );
+        
+        console.log(`📨 Found ${faculty.length} faculty member(s) to notify`);
+        
+        for (const fac of faculty) {
+          await createNotification({
+            userId: fac.id,
+            role: 'faculty',
+            type: 'pending_approval',
+            title: 'New Request Pending Approval',
+            message: `${student.full_name} submitted a request for ${documentType} (${requestCode}) that requires your approval`,
+            requestId: requestId
+          });
+          console.log(`✅ Notification sent to faculty ID: ${fac.id}`);
+        }
+      } catch (notifError) {
+        console.warn('⚠️ Failed to notify faculty:', notifError.message);
+        // Don't fail the request if notification fails
+      }
+    }
+
     clearTimeout(requestTimeout);
     conn.release();
     const duration = Date.now() - startTime;
@@ -618,6 +646,7 @@ router.patch('/:id', authMiddleware(), async (req, res) => {
     // Notification updates
     if (status && status !== request.status) {
       try {
+        // Notify student of status change
         await createNotification({
           userId: request.studentId,
           role: 'student',
@@ -626,8 +655,93 @@ router.patch('/:id', authMiddleware(), async (req, res) => {
           message: `Your request ${updated.requestCode || ''} status is now ${status}.`,
           requestId: request.id,
         });
+
+        // Notify faculty if status changed to pending_faculty
+        if (status === 'pending_faculty') {
+          console.log('🔔 Notifying faculty for pending_faculty status');
+          const [faculty] = await conn.query(
+            'SELECT id FROM users WHERE role = ? AND department_id = ?',
+            ['faculty', request.departmentId]
+          );
+          
+          for (const fac of faculty) {
+            await createNotification({
+              userId: fac.id,
+              role: 'faculty',
+              type: 'pending_approval',
+              title: 'Request Pending Your Approval',
+              message: `Request ${updated.requestCode || ''} from ${request.studentName} requires your approval`,
+              requestId: request.id,
+            });
+            console.log(`✅ Notification sent to faculty ID: ${fac.id}`);
+          }
+        }
       } catch (notifError) {
         console.warn('Failed to create notification:', notifError.message);
+      }
+    }
+
+    // Notify specific faculty member if assigned
+    if (facultyId !== undefined && facultyId !== null && facultyId !== request.facultyId) {
+      try {
+        console.log('🔔 Notifying assigned faculty member:', facultyId);
+        
+        // facultyId might be a faculty table ID, so we need to get the user_id
+        // But it might also be a user ID directly - check both
+        let facultyUserId = facultyId;
+        
+        // Try to get user_id from faculty table if facultyId is a faculty table ID
+        try {
+          const [facultyRows] = await conn.query(
+            'SELECT user_id FROM faculty WHERE id = ?',
+            [facultyId]
+          );
+          if (facultyRows.length > 0) {
+            facultyUserId = facultyRows[0].user_id;
+            console.log(`✅ Found faculty user_id: ${facultyUserId} from faculty table ID: ${facultyId}`);
+          } else {
+            // If not found in faculty table, assume it's already a user_id
+            console.log(`ℹ️ facultyId ${facultyId} not found in faculty table, treating as user_id`);
+          }
+        } catch (e) {
+          // If faculty table doesn't exist or error, assume facultyId is user_id
+          console.log(`ℹ️ Could not check faculty table, treating facultyId as user_id`);
+        }
+        
+        await createNotification({
+          userId: facultyUserId,
+          role: 'faculty',
+          type: 'request_assigned',
+          title: 'Request Assigned to You',
+          message: `Request ${updated.requestCode || ''} from ${request.studentName} has been assigned to you`,
+          requestId: request.id,
+        });
+        console.log(`✅ Notification sent to faculty user ID: ${facultyUserId}`);
+      } catch (notifError) {
+        console.warn('Failed to notify assigned faculty:', notifError.message);
+      }
+    }
+
+    // Notify faculty if admin added a note (they might need to review it)
+    if (adminNote && req.user && req.user.role === 'admin') {
+      try {
+        const [faculty] = await conn.query(
+          'SELECT id FROM users WHERE role = ? AND department_id = ?',
+          ['faculty', request.departmentId]
+        );
+        
+        for (const fac of faculty) {
+          await createNotification({
+            userId: fac.id,
+            role: 'faculty',
+            type: 'admin_note',
+            title: 'Admin Note Added',
+            message: `Admin added a note to request ${updated.requestCode || ''}`,
+            requestId: request.id,
+          });
+        }
+      } catch (notifError) {
+        console.warn('Failed to notify faculty of admin note:', notifError.message);
       }
     }
 

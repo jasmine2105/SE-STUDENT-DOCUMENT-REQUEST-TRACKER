@@ -10,8 +10,15 @@ router.get('/', authMiddleware(), async (req, res) => {
   try {
     // Get user ID from authenticated user (set by authMiddleware)
     const userId = req.user?.id;
+    const queryUserId = req.query.userId;
+    
+    console.log('🔔 Notifications GET request:');
+    console.log('  - User from token:', userId);
+    console.log('  - User from query:', queryUserId);
+    console.log('  - Full req.user:', req.user);
     
     if (!userId) {
+      console.error('❌ No userId found in token');
       return res.status(401).json({ 
         message: 'Authentication required. Please log in to view notifications.' 
       });
@@ -20,6 +27,7 @@ router.get('/', authMiddleware(), async (req, res) => {
     conn = await getConnection();
     
     // Get notifications for this user
+    console.log(`📋 Fetching notifications for user ID: ${userId}`);
     const [notifications] = await conn.query(
       `SELECT * FROM notifications 
        WHERE user_id = ? 
@@ -28,10 +36,16 @@ router.get('/', authMiddleware(), async (req, res) => {
       [userId]
     );
 
+    console.log(`✅ Found ${notifications.length} notifications for user ${userId}`);
+    if (notifications.length > 0) {
+      console.log(`  Sample: ${notifications[0].title} - ${notifications[0].message.substring(0, 50)}...`);
+    }
+
     res.json(notifications);
     
   } catch (error) {
-    console.error('Notifications error:', error);
+    console.error('❌ Notifications error:', error);
+    console.error('❌ Error stack:', error.stack);
     res.status(500).json({ 
       message: 'Failed to load notifications.',
       error: error.message

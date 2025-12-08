@@ -10,9 +10,420 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (userInfoEl) userInfoEl.textContent = `${user?.role || ''}`;
   if (sidebarUserInfo) sidebarUserInfo.textContent = user?.fullName || '';
 
+  // Faculty Portal class for profile and settings
+  class FacultyPortal {
+    constructor() {
+      this.currentUser = user;
+      this.profileEditMode = false;
+    }
+
+    formatValue(value) {
+      if (!value || value === '-' || (typeof value === 'string' && value.trim() === '')) {
+        return 'Not Provided';
+      }
+      return value;
+    }
+
+    renderProfile(isEditMode = false) {
+      const container = document.getElementById('profileContent');
+      if (!container) return;
+
+      const displayName = this.currentUser.fullName || this.currentUser.name || 'Faculty';
+      const deptName = this.currentUser.department || this.currentUser.departmentName || 'Not Provided';
+      const position = this.currentUser.position || 'Not Provided';
+
+      this.profileEditMode = isEditMode;
+
+      container.innerHTML = `
+        <div class="profile-view-content">
+          <div class="profile-header-card">
+            <div class="profile-photo-wrapper">
+              <div class="profile-photo" id="profilePhotoDisplay" style="${this.currentUser.profilePhoto ? `background-image: url('${this.currentUser.profilePhoto}'); background-size: cover; background-position: center;` : ''}">
+                ${!this.currentUser.profilePhoto ? '<i class="fas fa-user"></i>' : ''}
+              </div>
+              <button class="profile-photo-edit" id="profilePhotoEditBtn" title="Upload Photo" onclick="document.getElementById('profilePhotoInput').click()">
+                <i class="fas fa-camera"></i>
+              </button>
+              <input type="file" id="profilePhotoInput" accept="image/*" style="display: none;" onchange="facultyPortalProfile.handlePhotoUpload(event)" />
+            </div>
+            <div class="profile-header-info">
+              <h3>${displayName}</h3>
+              <p class="profile-student-number">${this.formatValue(this.currentUser.idNumber)}</p>
+              <p class="profile-course-year">${this.formatValue(position)} • ${this.formatValue(deptName)}</p>
+              <p class="profile-email">${this.formatValue(this.currentUser.email)}</p>
+            </div>
+            <div class="profile-header-actions">
+              ${isEditMode ? `
+                <button class="btn-save-profile" onclick="facultyPortalProfile.saveProfile()">
+                  <i class="fas fa-save"></i> Save Changes
+                </button>
+                <button class="btn-cancel-profile" onclick="facultyPortalProfile.renderProfile(false)">
+                  <i class="fas fa-times"></i> Cancel
+                </button>
+              ` : `
+                <button class="btn-edit-profile" onclick="facultyPortalProfile.renderProfile(true)">
+                  <i class="fas fa-edit"></i> Edit Profile
+                </button>
+                <button class="btn-settings-profile" onclick="facultyPortalProfile.switchView('settings')">
+                  <i class="fas fa-cog"></i> Settings
+                </button>
+              `}
+            </div>
+          </div>
+
+          <div class="profile-section-card">
+            <h4 class="profile-section-title">
+              <i class="fas fa-id-card"></i> Personal Information
+            </h4>
+            <div class="profile-info-grid">
+              <div class="profile-info-column">
+                <div class="profile-info-item">
+                  <span class="profile-info-label">Full Name</span>
+                  ${isEditMode ? `
+                    <input type="text" id="editFullName" class="profile-edit-input" value="${this.currentUser.fullName || this.currentUser.name || ''}" />
+                  ` : `
+                    <span class="profile-info-value">${this.formatValue(displayName)}</span>
+                  `}
+                </div>
+                <div class="profile-info-item">
+                  <span class="profile-info-label">ID Number</span>
+                  <span class="profile-info-value">${this.formatValue(this.currentUser.idNumber)}</span>
+                  <small style="color: #666; font-size: 0.85rem; display: block; margin-top: 0.25rem;">ID Number cannot be changed</small>
+                </div>
+                <div class="profile-info-item">
+                  <span class="profile-info-label">Email</span>
+                  ${isEditMode ? `
+                    <input type="email" id="editEmail" class="profile-edit-input" value="${this.currentUser.email || ''}" />
+                  ` : `
+                    <span class="profile-info-value">${this.formatValue(this.currentUser.email)}</span>
+                  `}
+                </div>
+                <div class="profile-info-item">
+                  <span class="profile-info-label">Contact Number</span>
+                  ${isEditMode ? `
+                    <input type="tel" id="editContactNumber" class="profile-edit-input" value="${this.currentUser.contactNumber || ''}" placeholder="Enter contact number" />
+                  ` : `
+                    <span class="profile-info-value">${this.formatValue(this.currentUser.contactNumber)}</span>
+                  `}
+                </div>
+              </div>
+              <div class="profile-info-column">
+                <div class="profile-info-item">
+                  <span class="profile-info-label">Birthdate</span>
+                  ${isEditMode ? `
+                    <input type="date" id="editBirthdate" class="profile-edit-input" value="${this.currentUser.birthdate || ''}" />
+                  ` : `
+                    <span class="profile-info-value">${this.formatValue(this.currentUser.birthdate)}</span>
+                  `}
+                </div>
+                <div class="profile-info-item">
+                  <span class="profile-info-label">Address</span>
+                  ${isEditMode ? `
+                    <textarea id="editAddress" class="profile-edit-textarea" placeholder="Enter address">${this.currentUser.address || ''}</textarea>
+                  ` : `
+                    <span class="profile-info-value">${this.formatValue(this.currentUser.address)}</span>
+                  `}
+                </div>
+                <div class="profile-info-item">
+                  <span class="profile-info-label">Gender</span>
+                  ${isEditMode ? `
+                    <select id="editGender" class="profile-edit-input">
+                      <option value="">Select Gender</option>
+                      <option value="Male" ${this.currentUser.gender === 'Male' ? 'selected' : ''}>Male</option>
+                      <option value="Female" ${this.currentUser.gender === 'Female' ? 'selected' : ''}>Female</option>
+                      <option value="Other" ${this.currentUser.gender === 'Other' ? 'selected' : ''}>Other</option>
+                      <option value="Prefer not to say" ${this.currentUser.gender === 'Prefer not to say' ? 'selected' : ''}>Prefer not to say</option>
+                    </select>
+                  ` : `
+                    <span class="profile-info-value">${this.formatValue(this.currentUser.gender)}</span>
+                  `}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="profile-section-card">
+            <h4 class="profile-section-title">
+              <i class="fas fa-briefcase"></i> Professional Information
+            </h4>
+            <div class="profile-academic-grid">
+              <div class="profile-academic-item">
+                <span class="profile-academic-label">Department</span>
+                <span class="profile-academic-value">${this.formatValue(deptName)}</span>
+                <small style="color: #666; font-size: 0.85rem; display: block; margin-top: 0.25rem;">Cannot be changed</small>
+              </div>
+              <div class="profile-academic-item">
+                <span class="profile-academic-label">Position</span>
+                ${isEditMode ? `
+                  <input type="text" id="editPosition" class="profile-edit-input" value="${this.currentUser.position || ''}" placeholder="e.g., Professor, Associate Professor" />
+                ` : `
+                  <span class="profile-academic-value">${this.formatValue(position)}</span>
+                `}
+              </div>
+              <div class="profile-academic-item">
+                <span class="profile-academic-label">Status</span>
+                <span class="profile-academic-value">${this.formatValue(this.currentUser.status || 'Active')}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    async handlePhotoUpload(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      if (!file.type.startsWith('image/')) {
+        Utils.showToast('Please select an image file', 'error');
+        return;
+      }
+
+      if (file.size > 5 * 1024 * 1024) {
+        Utils.showToast('Image size must be less than 5MB', 'error');
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const imageData = e.target.result;
+        const userId = this.currentUser.id;
+        const storageKey = `profileImage_${userId}`;
+        
+        localStorage.setItem(storageKey, imageData);
+        this.currentUser.profilePhoto = imageData;
+        localStorage.setItem('currentUser', JSON.stringify(this.currentUser));
+        
+        const photoDisplay = document.getElementById('profilePhotoDisplay');
+        if (photoDisplay) {
+          photoDisplay.style.backgroundImage = `url('${imageData}')`;
+          photoDisplay.style.backgroundSize = 'cover';
+          photoDisplay.style.backgroundPosition = 'center';
+          const icon = photoDisplay.querySelector('i');
+          if (icon) icon.style.display = 'none';
+        }
+        Utils.showToast('Profile photo updated successfully', 'success');
+      };
+      reader.readAsDataURL(file);
+    }
+
+    async saveProfile() {
+      const fullName = document.getElementById('editFullName')?.value;
+      const email = document.getElementById('editEmail')?.value;
+      const contactNumber = document.getElementById('editContactNumber')?.value;
+      const birthdate = document.getElementById('editBirthdate')?.value;
+      const address = document.getElementById('editAddress')?.value;
+      const gender = document.getElementById('editGender')?.value;
+      const position = document.getElementById('editPosition')?.value;
+
+      try {
+        await Utils.apiRequest(`/users/${this.currentUser.id}`, {
+          method: 'PUT',
+          body: {
+            fullName: fullName,
+            email: email,
+            contactNumber: contactNumber,
+            birthdate: birthdate,
+            address: address,
+            gender: gender,
+            position: position
+          }
+        });
+
+        this.currentUser.fullName = fullName;
+        this.currentUser.email = email;
+        this.currentUser.contactNumber = contactNumber;
+        this.currentUser.birthdate = birthdate;
+        this.currentUser.address = address;
+        this.currentUser.gender = gender;
+        this.currentUser.position = position;
+        localStorage.setItem('currentUser', JSON.stringify(this.currentUser));
+
+        Utils.showToast('Profile updated successfully', 'success');
+        this.renderProfile(false);
+      } catch (error) {
+        console.error('Failed to save profile:', error);
+        Utils.showToast('Failed to update profile. Please try again.', 'error');
+      }
+    }
+
+    renderSettings() {
+      const container = document.getElementById('settingsContent');
+      if (!container) return;
+
+      container.innerHTML = `
+        <div class="settings-view-content">
+          <div class="settings-tabs">
+            <button class="settings-tab active" data-tab="security" onclick="facultyPortalProfile.switchSettingsTab('security')">
+              <i class="fas fa-lock"></i> Security
+            </button>
+            <button class="settings-tab" data-tab="notifications" onclick="facultyPortalProfile.switchSettingsTab('notifications')">
+              <i class="fas fa-bell"></i> Notifications
+            </button>
+          </div>
+
+          <div class="settings-tab-content">
+            <div class="settings-tab-panel active" id="settingsTabSecurity">
+              <div class="settings-section">
+                <h3><i class="fas fa-key"></i> Change Password</h3>
+                <div class="settings-password-group">
+                  <label>Current Password</label>
+                  <div class="settings-input-group">
+                    <input type="password" id="currentPassword" class="settings-input" placeholder="Enter current password" />
+                    <button class="btn-toggle-password" onclick="facultyPortalProfile.togglePasswordVisibility('currentPassword', this)">
+                      <i class="fas fa-eye"></i>
+                    </button>
+                  </div>
+                </div>
+                <div class="settings-password-group">
+                  <label>New Password</label>
+                  <div class="settings-input-group">
+                    <input type="password" id="newPassword" class="settings-input" placeholder="Enter new password" />
+                    <button class="btn-toggle-password" onclick="facultyPortalProfile.togglePasswordVisibility('newPassword', this)">
+                      <i class="fas fa-eye"></i>
+                    </button>
+                  </div>
+                </div>
+                <div class="settings-password-group">
+                  <label>Confirm New Password</label>
+                  <div class="settings-input-group">
+                    <input type="password" id="confirmNewPassword" class="settings-input" placeholder="Confirm new password" />
+                    <button class="btn-toggle-password" onclick="facultyPortalProfile.togglePasswordVisibility('confirmNewPassword', this)">
+                      <i class="fas fa-eye"></i>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="settings-tab-panel" id="settingsTabNotifications">
+              <div class="settings-section">
+                <h3><i class="fas fa-bell"></i> Notification Preferences</h3>
+                <div class="settings-toggle-group">
+                  <label class="settings-toggle-label">
+                    <span>Email Notifications</span>
+                    <input type="checkbox" id="emailNotifications" class="settings-toggle" ${this.currentUser.emailNotifications !== false ? 'checked' : ''} />
+                    <span class="settings-toggle-slider"></span>
+                  </label>
+                  <small>Receive notifications via email</small>
+                </div>
+                <div class="settings-toggle-group">
+                  <label class="settings-toggle-label">
+                    <span>SMS Notifications</span>
+                    <input type="checkbox" id="smsNotifications" class="settings-toggle" ${this.currentUser.smsNotifications === true ? 'checked' : ''} />
+                    <span class="settings-toggle-slider"></span>
+                  </label>
+                  <small>Receive notifications via SMS</small>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="settings-save-footer">
+            <button class="btn-save-changes" onclick="facultyPortalProfile.saveSettings()">
+              <i class="fas fa-save"></i> Save Changes
+            </button>
+          </div>
+        </div>
+      `;
+    }
+
+    switchSettingsTab(tabName) {
+      document.querySelectorAll('.settings-tab').forEach(tab => {
+        tab.classList.toggle('active', tab.dataset.tab === tabName);
+      });
+      document.querySelectorAll('.settings-tab-panel').forEach(panel => {
+        panel.classList.toggle('active', panel.id === `settingsTab${tabName.charAt(0).toUpperCase() + tabName.slice(1)}`);
+      });
+    }
+
+    togglePasswordVisibility(inputId, button) {
+      const input = document.getElementById(inputId);
+      const icon = button.querySelector('i');
+      if (input.type === 'password') {
+        input.type = 'text';
+        icon.classList.remove('fa-eye');
+        icon.classList.add('fa-eye-slash');
+      } else {
+        input.type = 'password';
+        icon.classList.remove('fa-eye-slash');
+        icon.classList.add('fa-eye');
+      }
+    }
+
+    async saveSettings() {
+      const currentPassword = document.getElementById('currentPassword')?.value;
+      const newPassword = document.getElementById('newPassword')?.value;
+      const confirmPassword = document.getElementById('confirmNewPassword')?.value;
+      const emailNotifications = document.getElementById('emailNotifications')?.checked;
+      const smsNotifications = document.getElementById('smsNotifications')?.checked;
+
+      if (newPassword && newPassword !== confirmPassword) {
+        Utils.showToast('New passwords do not match', 'error');
+        return;
+      }
+
+      try {
+        const updates = {};
+        if (newPassword) {
+          updates.currentPassword = currentPassword;
+          updates.newPassword = newPassword;
+        }
+        updates.emailNotifications = emailNotifications;
+        updates.smsNotifications = smsNotifications;
+
+        await Utils.apiRequest(`/users/${this.currentUser.id}/settings`, {
+          method: 'PUT',
+          body: updates
+        });
+
+        this.currentUser.emailNotifications = emailNotifications;
+        this.currentUser.smsNotifications = smsNotifications;
+        localStorage.setItem('currentUser', JSON.stringify(this.currentUser));
+
+        Utils.showToast('Settings saved successfully', 'success');
+        if (newPassword) {
+          document.getElementById('currentPassword').value = '';
+          document.getElementById('newPassword').value = '';
+          document.getElementById('confirmNewPassword').value = '';
+        }
+      } catch (error) {
+        console.error('Failed to save settings:', error);
+        Utils.showToast('Failed to save settings. Please try again.', 'error');
+      }
+    }
+
+    switchView(viewName) {
+      const links = document.querySelectorAll('.sidebar-link');
+      links.forEach(l => l.classList.remove('active'));
+      const targetLink = document.querySelector(`[data-view="${viewName}"]`);
+      if (targetLink) {
+        targetLink.classList.add('active');
+        targetLink.click();
+      }
+    }
+  }
+
+  // Initialize faculty portal instance for profile/settings
+  const facultyPortalProfile = new FacultyPortal();
+  window.facultyPortalProfile = facultyPortalProfile;
+
+  // Initialize profile and settings views
+  async function initProfileView() {
+    const container = document.getElementById('profileContent');
+    if (!container) return;
+    facultyPortalProfile.renderProfile(false);
+  }
+
+  async function initSettingsView() {
+    const container = document.getElementById('settingsContent');
+    if (!container) return;
+    facultyPortalProfile.renderSettings();
+  }
+
   // Initialize notifications (pass userId as fallback if server doesn't use auth header)
   try {
-    await Notifications.init({
+    const notificationsInstance = await Notifications.init({
       userId: user?.id,
       bellId: 'notificationBell',
       countId: 'notificationCount',
@@ -20,6 +431,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       listId: 'notificationList',
       markAllBtnId: 'markAllRead'
     });
+    // Store refresh function globally for use in notifications view
+    if (notificationsInstance && notificationsInstance.refresh) {
+      window.notificationsRefresh = notificationsInstance.refresh;
+    }
   } catch (err) {
     console.warn('Notifications init failed', err.message || err);
   }
@@ -30,8 +445,37 @@ document.addEventListener('DOMContentLoaded', async () => {
     links.forEach(l => l.classList.remove('active'));
     btn.classList.add('active');
     const view = btn.dataset.view;
-    document.getElementById('dashboardView').classList.toggle('hidden', view !== 'dashboard');
-    document.getElementById('requestsView').classList.toggle('hidden', view !== 'requests');
+    
+    // Hide all views
+    const dashboardView = document.getElementById('dashboardView');
+    const requestsView = document.getElementById('requestsView');
+    const notificationsView = document.getElementById('notificationsView');
+    const profileView = document.getElementById('profileView');
+    const settingsView = document.getElementById('settingsView');
+    
+    if (dashboardView) dashboardView.classList.toggle('hidden', view !== 'dashboard');
+    if (requestsView) requestsView.classList.toggle('hidden', view !== 'requests');
+    if (notificationsView) {
+      notificationsView.classList.toggle('hidden', view !== 'notifications');
+      // Load notifications when switching to notifications view
+      if (view === 'notifications') {
+        loadNotificationsView();
+      }
+    }
+    if (profileView) {
+      profileView.classList.toggle('hidden', view !== 'profile');
+      // Load profile when switching to profile view
+      if (view === 'profile') {
+        initProfileView();
+      }
+    }
+    if (settingsView) {
+      settingsView.classList.toggle('hidden', view !== 'settings');
+      // Load settings when switching to settings view
+      if (view === 'settings') {
+        initSettingsView();
+      }
+    }
   }));
 
   // Logout
@@ -124,11 +568,108 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   await loadRecent();
+
+  // Load notifications view
+  async function loadNotificationsView() {
+    try {
+      const notifications = await Notifications.fetchNotifications(user?.id);
+      const container = document.getElementById('notificationsFullList');
+      if (!container) return;
+
+      if (!notifications || notifications.length === 0) {
+        container.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state-icon">🔕</div>
+            <h3>No notifications</h3>
+            <p>You don't have any notifications yet.</p>
+          </div>
+        `;
+        return;
+      }
+
+      // Build table
+      const rows = notifications.map(n => {
+        const isRead = n.read_flag || n.read;
+        const rowClass = isRead ? '' : 'unread';
+        const timeAgo = Utils.formatRelativeTime(n.created_at || n.createdAt);
+        const requestCell = n.request_id || n.requestId
+          ? `<button class="btn-secondary" data-request-id="${n.request_id || n.requestId}"><i class="fas fa-eye"></i> View</button>`
+          : '<span class="muted">-</span>';
+        return `
+          <tr class="${rowClass}">
+            <td>${n.title || 'Notification'}</td>
+            <td>${n.message || ''}</td>
+            <td>${timeAgo}</td>
+            <td>${requestCell}</td>
+          </tr>
+        `;
+      }).join('');
+
+      container.innerHTML = `
+        <div class="table-wrapper">
+          <table class="requests-table">
+            <thead>
+              <tr>
+                <th>Title</th>
+                <th>Message</th>
+                <th>Received</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rows}
+            </tbody>
+          </table>
+        </div>
+      `;
+
+      // Add click handlers for notifications with request IDs
+      container.querySelectorAll('[data-request-id]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const requestId = btn.dataset.requestId;
+          if (requestId && window.facultyPortal) {
+            window.facultyPortal.viewRequest(parseInt(requestId, 10));
+          }
+        });
+      });
+
+      // Mark all as read button
+      const markAllBtn = document.getElementById('markAllReadNotifications');
+      if (markAllBtn) {
+        markAllBtn.onclick = async () => {
+          const ids = notifications.map(n => n.id).filter(Boolean);
+          await Notifications.markAllRead(ids);
+          // Reload view
+          await loadNotificationsView();
+          // Refresh bell count
+          if (window.notificationsRefresh) {
+            await window.notificationsRefresh();
+          }
+        };
+      }
+    } catch (error) {
+      console.error('Failed to load notifications view:', error);
+      const container = document.getElementById('notificationsFullList');
+      if (container) {
+        container.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state-icon">⚠️</div>
+            <h3>Error loading notifications</h3>
+            <p>${error.message || 'Please try again later.'}</p>
+          </div>
+        `;
+      }
+    }
+  }
+
+  // Expose loadNotificationsView globally for refresh
+  window.loadNotificationsView = loadNotificationsView;
 });
-// Faculty Portal JavaScript
-class FacultyPortal {
+// Faculty Portal JavaScript (for requests management)
+class FacultyPortalRequests {
   constructor() {
     this.currentUser = Utils.getCurrentUser();
+    this.allRequests = [];
     this.requests = [];
     this.filteredRequests = [];
     this.filterStatus = 'all';
@@ -167,14 +708,26 @@ class FacultyPortal {
 
   async loadRequests() {
     try {
-      const allRequests = await Utils.apiRequest('/requests');
-      // Get requests assigned to this faculty or pending faculty approval
-      this.requests = allRequests.filter(r =>
-        r.status === 'pending_faculty' ||
-        (r.facultyId === this.currentUser.id && r.facultyApproval === null)
-      );
+      this.allRequests = await Utils.apiRequest('/requests');
+      // Include requests relevant to this faculty:
+      // - Pending faculty in same department
+      // - Assigned to this faculty (any status)
+      // - Requires faculty in same department and not yet approved
+      this.requests = this.allRequests.filter(r => {
+        const isPendingFaculty = r.status === 'pending_faculty';
+        const isAssignedToMe = r.facultyId === this.currentUser.id;
+        const isMyDepartment = r.departmentId === this.currentUser.departmentId;
+        const requiresFaculty = r.requiresFaculty === true || r.requires_faculty === true;
+
+        return (
+          (isPendingFaculty && isMyDepartment) ||
+          isAssignedToMe ||
+          (requiresFaculty && isMyDepartment && !r.facultyApproval)
+        );
+      });
       this.filterRequests();
     } catch (error) {
+      console.error('Failed to load requests:', error);
       Utils.showToast('Failed to load requests', 'error');
     }
   }
@@ -452,8 +1005,14 @@ class FacultyPortal {
   }
 
   viewRequest(requestId) {
-    const request = this.requests.find(r => r.id === requestId);
-    if (!request) return;
+    let request = this.requests.find(r => r.id === requestId);
+    if (!request && this.allRequests && this.allRequests.length) {
+      request = this.allRequests.find(r => r.id === requestId);
+    }
+    if (!request) {
+      Utils.showToast('Request not found', 'error');
+      return;
+    }
 
     const statusClass = Utils.getStatusBadgeClass(request.status);
     const statusText = Utils.getStatusText(request.status);
