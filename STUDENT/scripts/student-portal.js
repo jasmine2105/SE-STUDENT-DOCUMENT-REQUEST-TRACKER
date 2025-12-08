@@ -156,7 +156,7 @@ class StudentPortal {
     const allowedDepartmentCodes = ['SCS', 'SBM', 'SDPC', 'SASO', 'SSD', 'CLINIC', 'SCHOLARSHIP', 'LIBRARY', 'CMO'];
     
     try {
-      const data = await Utils.apiRequest('/api/departments', {
+      const data = await Utils.apiRequest('/departments', {
         timeout: 30000 // 30 seconds timeout
       });
       if (Array.isArray(data) && data.length) {
@@ -1222,8 +1222,9 @@ class StudentPortal {
 
     // Get department code directly from the select element to ensure accuracy
     const departmentSelect = document.getElementById('department');
-    const departmentCode = departmentSelect ? departmentSelect.value : formData.get('department');
-    const documentValue = formData.get('documentType');
+    const documentTypeSelect = document.getElementById('documentType');
+    const departmentCode = departmentSelect ? departmentSelect.value : '';
+    const documentValue = documentTypeSelect ? documentTypeSelect.value : '';
 
     console.log('📝 Form submission - Department Code from select:', departmentCode);
     console.log('📝 Available departments count:', this.departments.length);
@@ -1267,7 +1268,7 @@ class StudentPortal {
     if (!department) {
       console.warn('⚠️ Department not found in local array, fetching from API...');
       try {
-        const allDepts = await Utils.apiRequest('/api/departments');
+        const allDepts = await Utils.apiRequest('/departments');
         console.log('📥 Fetched departments from API:', allDepts.length);
         if (Array.isArray(allDepts) && allDepts.length > 0) {
           // Filter to allowed departments
@@ -1322,7 +1323,8 @@ class StudentPortal {
       }
     }
 
-    const quantity = parseInt(formData.get('quantity'), 10) || 1;
+    const quantityInput = document.getElementById('quantity');
+    const quantity = parseInt(quantityInput ? quantityInput.value : '1', 10) || 1;
     if (isNaN(quantity) || quantity < 1 || quantity > 10) {
       Utils.showToast('Number of copies must be between 1 and 10.', 'warning');
       return;
@@ -1340,13 +1342,15 @@ class StudentPortal {
       return;
     }
 
+    const purposeInput = document.getElementById('purpose');
+    const additionalNotesInput = document.getElementById('additionalNotes');
     const requestData = {
       departmentId: departmentId,
       documentValue: documentValue,
       documentType: selectedOption ? selectedOption.text : documentValue,
       quantity: quantity,
-      purpose: formData.get('purpose') || '',
-      additionalNotes: formData.get('additionalNotes') || '',
+      purpose: purposeInput ? purposeInput.value.trim() : '',
+      additionalNotes: additionalNotesInput ? additionalNotesInput.value.trim() : '',
       crossDepartment: departmentId != this.studentDepartmentId,
       requiresFaculty: requiresFaculty
     };
