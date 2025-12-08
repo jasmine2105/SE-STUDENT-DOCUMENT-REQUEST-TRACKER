@@ -1193,14 +1193,43 @@ class LoginModal {
       } catch (e) {
         // Not JSON, use raw message
         if (error.message) {
-          errorMessage = error.message;
+          // Check for common error messages
+          if (error.message.includes('Invalid password') || error.message.includes('incorrect')) {
+            errorMessage = 'Incorrect password. Please try again.';
+          } else if (error.message.includes('not found') || error.message.includes('No user')) {
+            errorMessage = 'ID number not found. Please check and try again.';
+          } else {
+            errorMessage = error.message;
+          }
         }
       }
       
-      // Show user-friendly error
+      // Show user-friendly error - KEEP MODAL OPEN
       Utils.showToast(errorMessage, 'error');
-      passwordError.textContent = errorMessage;
-      passwordError.classList.add('show');
+      
+      // Display error prominently in the password field
+      if (passwordError) {
+        passwordError.textContent = errorMessage;
+        passwordError.classList.add('show');
+        passwordError.style.display = 'block';
+        passwordError.style.color = '#dc3545';
+        passwordError.style.marginTop = '8px';
+        passwordError.style.fontSize = '0.875rem';
+      }
+      
+      // Shake the login button to indicate error
+      if (loginBtn) {
+        loginBtn.style.animation = 'shake 0.5s ease-in-out';
+        setTimeout(() => {
+          loginBtn.style.animation = '';
+        }, 500);
+      }
+      
+      // Focus on password input for easy retry
+      if (passwordInput) {
+        passwordInput.focus();
+        passwordInput.select();
+      }
       
       // Also log troubleshooting info
       console.error('💡 TROUBLESHOOTING:');
@@ -1209,8 +1238,11 @@ class LoginModal {
       console.error('   3. Check browser console for network errors');
       console.error('   4. Verify database connection');
     } finally {
-      loginBtn.disabled = false;
-      loginBtn.textContent = 'Sign In';
+      // Re-enable the login button
+      if (loginBtn) {
+        loginBtn.disabled = false;
+        loginBtn.textContent = 'Sign In';
+      }
     }
   }
 

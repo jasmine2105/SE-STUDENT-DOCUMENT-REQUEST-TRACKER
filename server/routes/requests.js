@@ -444,6 +444,32 @@ router.post('/', authMiddleware(), async (req, res) => {
       [requestId]
     );
 
+    // Notify all admins in the same department about the new request
+    console.log('🔔 Notifying admins in department:', departmentNumeric);
+    try {
+      const [admins] = await conn.query(
+        'SELECT id FROM users WHERE role = ? AND department_id = ?',
+        ['admin', departmentNumeric]
+      );
+      
+      console.log(`📨 Found ${admins.length} admin(s) to notify`);
+      
+      for (const admin of admins) {
+        await createNotification({
+          userId: admin.id,
+          role: 'admin',
+          type: 'new_request',
+          title: 'New Document Request',
+          message: `${student.full_name} submitted a request for ${documentType} (${requestCode})`,
+          requestId: requestId
+        });
+        console.log(`✅ Notification sent to admin ID: ${admin.id}`);
+      }
+    } catch (notifError) {
+      console.warn('⚠️ Failed to notify admins:', notifError.message);
+      // Don't fail the request if notification fails
+    }
+
     clearTimeout(requestTimeout);
     conn.release();
     const duration = Date.now() - startTime;
@@ -490,7 +516,131 @@ router.post('/', authMiddleware(), async (req, res) => {
   }
 });
 
-// UPDATE request
+// UPDATE request (PATCH - used by admin portal)
+router.patch('/:id', authMiddleware(), async (req, res) => {
+  console.log('📝 PATCH /api/requests/:id - Updating request', req.params.id);
+  console.log('📝 Update payload:', req.body);
+  
+  try {
+    const { id } = req.params;
+    const { status, adminNote, facultyApproval, facultyId, priority } = req.body;
+
+    const conn = await getConnection();
+
+    // Get current request
+    const [requestRows] = await conn.query(
+      `SELECT r.*, d.name AS department_name, dd.label AS document_label,
+              u.course AS student_course, u.year_level AS student_year_level, u.email AS student_email
+       FROM requests r
+       LEFT JOIN departments d ON d.id = r.department_id
+       LEFT JOIN department_documents dd ON dd.value = r.document_value AND dd.department_id = r.department_id
+       LEFT JOIN users u ON u.id = r.student_id
+       WHERE r.id = ?`,
+      [id]
+    );
+
+    if (requestRows.length === 0) {
+      conn.release();
+      return res.status(404).json({ message: 'Request not found' });
+    }
+
+    const request = mapRequestRow(requestRows[0]);
+    const updates = [];
+    const params = [];
+
+    // Status update
+    if (status) {
+      updates.push('status = ?');
+      params.push(status);
+    }
+
+    // Priority update
+    if (priority) {
+      updates.push('priority = ?');
+      params.push(priority);
+    }
+
+    // Faculty ID update
+    if (facultyId !== undefined) {
+      updates.push('faculty_id = ?');
+      params.push(facultyId);
+    }
+
+    // Admin note update
+    if (adminNote && req.user) {
+      const updatedAdminNotes = [
+        ...(request.adminNotes || []),
+        {
+          adminId: req.user.id,
+          adminName: req.user.fullName || req.user.name || 'Admin',
+          note: adminNote,
+          timestamp: new Date().toISOString(),
+        }
+      ];
+      updates.push('admin_notes = ?');
+      params.push(JSON.stringify(updatedAdminNotes));
+    }
+
+    // Faculty approval update
+    if (facultyApproval) {
+      updates.push('faculty_approval = ?');
+      params.push(JSON.stringify(facultyApproval));
+    }
+
+    if (!updates.length) {
+      conn.release();
+      return res.json(request);
+    }
+
+    updates.push('updated_at = CURRENT_TIMESTAMP');
+    const sql = `UPDATE requests SET ${updates.join(', ')} WHERE id = ?`;
+    params.push(id);
+
+    console.log('📝 Executing update SQL:', sql);
+    console.log('📝 With params:', params);
+    
+    await conn.query(sql, params);
+
+    // Get updated request
+    const [updatedRows] = await conn.query(
+      `SELECT r.*, d.name AS department_name, dd.label AS document_label,
+              u.course AS student_course, u.year_level AS student_year_level, u.email AS student_email
+       FROM requests r
+       LEFT JOIN departments d ON d.id = r.department_id
+       LEFT JOIN department_documents dd ON dd.value = r.document_value AND dd.department_id = r.department_id
+       LEFT JOIN users u ON u.id = r.student_id
+       WHERE r.id = ?`,
+      [id]
+    );
+
+    const updated = mapRequestRow(updatedRows[0]);
+
+    // Notification updates
+    if (status && status !== request.status) {
+      try {
+        await createNotification({
+          userId: request.studentId,
+          role: 'student',
+          type: 'status_update',
+          title: `Request ${status.replace('_', ' ')}`,
+          message: `Your request ${updated.requestCode || ''} status is now ${status}.`,
+          requestId: request.id,
+        });
+      } catch (notifError) {
+        console.warn('Failed to create notification:', notifError.message);
+      }
+    }
+
+    conn.release();
+    console.log('✅ Request updated successfully');
+    res.json(updated);
+  } catch (error) {
+    console.error('❌ Request PATCH error:', error);
+    res.status(500).json({ message: 'Failed to update request.' });
+  }
+});
+
+// UPDATE request (PUT - legacy)
 router.put('/:id', authMiddleware(), async (req, res) => {
   try {
     const { id } = req.params;

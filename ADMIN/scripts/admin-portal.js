@@ -7,77 +7,60 @@ document.addEventListener('DOMContentLoaded', async () => {
   const sidebarUserInfo = document.getElementById('sidebarUserInfo');
 
   if (userNameEl) userNameEl.textContent = user?.fullName || user?.name || 'Admin';
-  if (userInfoEl) userInfoEl.textContent = `${user?.role || ''}`;
+  const deptDisplay = user?.departmentName || user?.department || '';
+  if (userInfoEl) userInfoEl.textContent = deptDisplay ? `${deptDisplay} • Administrator` : 'Administrator';
   if (sidebarUserInfo) sidebarUserInfo.textContent = user?.fullName || '';
 
+  // Initialize notifications
+  let notificationsInstance = null;
   try {
-    await Notifications.init({
+    notificationsInstance = await Notifications.init({
       userId: user?.id,
       bellId: 'notificationBell',
       countId: 'notificationCount',
       dropdownId: 'notificationDropdown',
       listId: 'notificationList',
-      markAllBtnId: 'markAllRead'
+      markAllBtnId: 'markAllRead',
+      onNotificationClick: (requestId, notification) => {
+        console.log('🔔 Notification clicked, request ID:', requestId);
+        
+        // Switch to requests view
+        const links = document.querySelectorAll('.sidebar-link');
+        links.forEach(l => l.classList.remove('active'));
+        const requestsLink = document.querySelector('.sidebar-link[data-view="requests"]');
+        if (requestsLink) requestsLink.classList.add('active');
+        
+        // Hide all views, show requests view
+        document.getElementById('dashboardView').classList.add('hidden');
+        document.getElementById('requestsView').classList.remove('hidden');
+        document.getElementById('usersView').classList.add('hidden');
+        document.getElementById('notificationsView').classList.add('hidden');
+        document.getElementById('profileView').classList.add('hidden');
+        document.getElementById('settingsView').classList.add('hidden');
+        
+        // View the specific request after a short delay to ensure view is loaded
+        setTimeout(() => {
+          if (window.adminPortal && window.adminPortal.viewRequest) {
+            window.adminPortal.viewRequest(requestId);
+          }
+        }, 100);
+      }
     });
+    
+    // Set up polling for new notifications every 30 seconds
+    setInterval(async () => {
+      try {
+        if (notificationsInstance && notificationsInstance.refresh) {
+          await notificationsInstance.refresh();
+        }
+      } catch (err) {
+        // Silently fail - don't spam console
+      }
+    }, 30000);
+    
+    console.log('✅ Notifications initialized with polling');
   } catch (err) {
     console.warn('Notifications init failed', err.message || err);
-  }
-
-  // Profile dropdown (match student behavior)
-  const userPillElem = document.getElementById('userPill');
-  const profileMenu = document.getElementById('profileDropdownMenu');
-  const profileLink = document.getElementById('profileLink');
-  const notificationsLink = document.getElementById('notificationsLink');
-  const settingsLink = document.getElementById('settingsLink');
-  const logoutLink = document.getElementById('logoutLink');
-
-  if (userPillElem && profileMenu) {
-    userPillElem.addEventListener('click', (e) => {
-      e.stopPropagation();
-      profileMenu.classList.toggle('hidden');
-    });
-
-    // Close when clicking outside
-    document.addEventListener('click', (e) => {
-      if (!userPillElem.contains(e.target) && !profileMenu.contains(e.target)) {
-        profileMenu.classList.add('hidden');
-      }
-    });
-  }
-
-  if (profileLink) {
-    profileLink.addEventListener('click', (e) => {
-      e.preventDefault();
-      profileMenu.classList.add('hidden');
-      window.location.href = 'admin-profile.html';
-    });
-  }
-
-  if (notificationsLink) {
-    notificationsLink.addEventListener('click', (e) => {
-      e.preventDefault();
-      // open notifications dropdown and close profile menu
-      const notifDropdown = document.getElementById('notificationDropdown');
-      if (notifDropdown) {
-        profileMenu.classList.add('hidden');
-        notifDropdown.classList.toggle('hidden');
-      }
-    });
-  }
-
-  if (settingsLink) {
-    settingsLink.addEventListener('click', (e) => {
-      e.preventDefault();
-      profileMenu.classList.add('hidden');
-      Utils.showToast('Settings page not implemented', 'info');
-    });
-  }
-
-  if (logoutLink) {
-    logoutLink.addEventListener('click', (e) => {
-      e.preventDefault();
-      Utils.clearCurrentUser();
-    });
   }
 
   // Sidebar view switching
@@ -86,16 +69,389 @@ document.addEventListener('DOMContentLoaded', async () => {
     links.forEach(l => l.classList.remove('active'));
     btn.classList.add('active');
     const view = btn.dataset.view;
+    
+    // Hide all views
     document.getElementById('dashboardView').classList.toggle('hidden', view !== 'dashboard');
     document.getElementById('requestsView').classList.toggle('hidden', view !== 'requests');
     document.getElementById('usersView').classList.toggle('hidden', view !== 'users');
+    document.getElementById('notificationsView').classList.toggle('hidden', view !== 'notifications');
+    document.getElementById('profileView').classList.toggle('hidden', view !== 'profile');
+    document.getElementById('settingsView').classList.toggle('hidden', view !== 'settings');
+    
+    // Load content based on view
     if (view === 'users') {
       window.adminPortal?.loadUsers();
+    }
+    if (view === 'profile') {
+      renderAdminProfile();
+    }
+    if (view === 'settings') {
+      renderAdminSettings();
+    }
+    if (view === 'notifications') {
+      renderNotificationsView();
     }
   }));
 
   const logoutBtn = document.getElementById('logoutBtn');
   if (logoutBtn) logoutBtn.addEventListener('click', () => Utils.clearCurrentUser());
+  
+  // Mark all read button in notifications view
+  const markAllReadSecondary = document.getElementById('markAllReadSecondary');
+  if (markAllReadSecondary) {
+    markAllReadSecondary.addEventListener('click', async () => {
+      try {
+        await Utils.apiRequest('/notifications/mark-all-read', { method: 'POST' });
+        Utils.showToast('All notifications marked as read', 'success');
+        renderNotificationsView();
+      } catch (err) {
+        Utils.showToast('Failed to mark notifications as read', 'error');
+      }
+    });
+  }
+
+  // Profile rendering function
+  function renderAdminProfile(isEditMode = false) {
+    const container = document.getElementById('profileContent');
+    if (!container) return;
+    
+    const user = Utils.getCurrentUser();
+    
+    const formatValue = (value) => {
+      if (!value || value === '-' || (typeof value === 'string' && value.trim() === '')) {
+        return 'Not Provided';
+      }
+      return value;
+    };
+
+    const displayName = user?.fullName || user?.name || 'Administrator';
+    const deptName = user?.departmentName || user?.department || 'Not Assigned';
+    const roleName = user?.role ? user.role.charAt(0).toUpperCase() + user.role.slice(1) : 'Admin';
+
+    // Store edit mode state
+    window.adminProfileEditMode = isEditMode;
+
+    container.innerHTML = `
+      <div class="profile-view-content">
+        <div class="profile-header-card">
+          <div class="profile-photo-wrapper">
+            <div class="profile-photo" id="profilePhotoDisplay" style="${user?.profilePhoto ? `background-image: url('${user.profilePhoto}'); background-size: cover; background-position: center;` : ''}">
+              ${!user?.profilePhoto ? '<i class="fas fa-user"></i>' : ''}
+            </div>
+            <button class="profile-photo-edit" id="profilePhotoEditBtn" title="Upload Photo" onclick="document.getElementById('adminProfilePhotoInput').click()">
+              <i class="fas fa-camera"></i>
+            </button>
+            <input type="file" id="adminProfilePhotoInput" accept="image/*" style="display: none;" onchange="handleAdminPhotoUpload(event)" />
+          </div>
+          <div class="profile-header-info">
+            <h3>${displayName}</h3>
+            <p class="profile-student-number">${formatValue(user?.idNumber)}</p>
+            <p class="profile-course-year">${deptName} • ${roleName}</p>
+            <p class="profile-email">${formatValue(user?.email)}</p>
+          </div>
+          <div class="profile-header-actions">
+            ${isEditMode ? `
+              <button class="btn-save-profile" onclick="saveAdminProfile()">
+                <i class="fas fa-save"></i> Save Changes
+              </button>
+              <button class="btn-cancel-profile" onclick="renderAdminProfile(false)">
+                <i class="fas fa-times"></i> Cancel
+              </button>
+            ` : `
+              <button class="btn-edit-profile" onclick="renderAdminProfile(true)">
+                <i class="fas fa-edit"></i> Edit Profile
+              </button>
+              <button class="btn-settings-profile" onclick="switchToSettingsView()">
+                <i class="fas fa-cog"></i> Settings
+              </button>
+            `}
+          </div>
+        </div>
+
+        <div class="profile-section-card">
+          <h4 class="profile-section-title">
+            <i class="fas fa-id-card"></i> Personal Information
+          </h4>
+          <div class="profile-info-grid">
+            <div class="profile-info-column">
+              <div class="profile-info-item">
+                <span class="profile-info-label">Full Name</span>
+                ${isEditMode ? `
+                  <input type="text" id="editFullName" class="profile-edit-input" value="${user?.fullName || user?.name || ''}" />
+                ` : `
+                  <span class="profile-info-value">${formatValue(displayName)}</span>
+                `}
+              </div>
+              <div class="profile-info-item">
+                <span class="profile-info-label">ID Number</span>
+                <span class="profile-info-value">${formatValue(user?.idNumber)}</span>
+                <small style="color: #666; font-size: 0.85rem; display: block; margin-top: 0.25rem;">ID Number cannot be changed</small>
+              </div>
+              <div class="profile-info-item">
+                <span class="profile-info-label">Email</span>
+                ${isEditMode ? `
+                  <input type="email" id="editEmail" class="profile-edit-input" value="${user?.email || ''}" />
+                ` : `
+                  <span class="profile-info-value">${formatValue(user?.email)}</span>
+                `}
+              </div>
+              <div class="profile-info-item">
+                <span class="profile-info-label">Contact Number</span>
+                ${isEditMode ? `
+                  <input type="tel" id="editContactNumber" class="profile-edit-input" value="${user?.contactNumber || ''}" placeholder="Enter contact number" />
+                ` : `
+                  <span class="profile-info-value">${formatValue(user?.contactNumber)}</span>
+                `}
+              </div>
+            </div>
+            <div class="profile-info-column">
+              <div class="profile-info-item">
+                <span class="profile-info-label">Department</span>
+                <span class="profile-info-value">${formatValue(deptName)}</span>
+                <small style="color: #666; font-size: 0.85rem; display: block; margin-top: 0.25rem;">Cannot be changed</small>
+              </div>
+              <div class="profile-info-item">
+                <span class="profile-info-label">Role</span>
+                <span class="profile-info-value">${roleName}</span>
+                <small style="color: #666; font-size: 0.85rem; display: block; margin-top: 0.25rem;">Cannot be changed</small>
+              </div>
+              <div class="profile-info-item">
+                <span class="profile-info-label">Gender</span>
+                ${isEditMode ? `
+                  <select id="editGender" class="profile-edit-input">
+                    <option value="">Select Gender</option>
+                    <option value="Male" ${user?.gender === 'Male' ? 'selected' : ''}>Male</option>
+                    <option value="Female" ${user?.gender === 'Female' ? 'selected' : ''}>Female</option>
+                    <option value="Other" ${user?.gender === 'Other' ? 'selected' : ''}>Other</option>
+                    <option value="Prefer not to say" ${user?.gender === 'Prefer not to say' ? 'selected' : ''}>Prefer not to say</option>
+                  </select>
+                ` : `
+                  <span class="profile-info-value">${formatValue(user?.gender)}</span>
+                `}
+              </div>
+              <div class="profile-info-item">
+                <span class="profile-info-label">Address</span>
+                ${isEditMode ? `
+                  <textarea id="editAddress" class="profile-edit-textarea" placeholder="Enter address">${user?.address || ''}</textarea>
+                ` : `
+                  <span class="profile-info-value">${formatValue(user?.address)}</span>
+                `}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  // Make renderAdminProfile globally accessible
+  window.renderAdminProfile = renderAdminProfile;
+
+  // Switch to settings view
+  function switchToSettingsView() {
+    const links = document.querySelectorAll('.sidebar-link');
+    links.forEach(l => l.classList.remove('active'));
+    const settingsLink = document.querySelector('.sidebar-link[data-view="settings"]');
+    if (settingsLink) settingsLink.classList.add('active');
+    
+    document.getElementById('dashboardView').classList.add('hidden');
+    document.getElementById('requestsView').classList.add('hidden');
+    document.getElementById('usersView').classList.add('hidden');
+    document.getElementById('notificationsView').classList.add('hidden');
+    document.getElementById('profileView').classList.add('hidden');
+    document.getElementById('settingsView').classList.remove('hidden');
+    
+    renderAdminSettings();
+  }
+  window.switchToSettingsView = switchToSettingsView;
+
+  // Handle admin photo upload
+  async function handleAdminPhotoUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    // Check file size (max 2MB)
+    if (file.size > 2 * 1024 * 1024) {
+      Utils.showToast('Photo must be less than 2MB', 'error');
+      return;
+    }
+
+    // Check file type
+    if (!file.type.startsWith('image/')) {
+      Utils.showToast('Please upload an image file', 'error');
+      return;
+    }
+
+    // Convert to base64 and store in localStorage (simple approach)
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      const photoData = e.target.result;
+      const user = Utils.getCurrentUser();
+      user.profilePhoto = photoData;
+      localStorage.setItem('user', JSON.stringify(user));
+      
+      // Update display
+      const photoDisplay = document.getElementById('profilePhotoDisplay');
+      if (photoDisplay) {
+        photoDisplay.style.backgroundImage = `url('${photoData}')`;
+        photoDisplay.style.backgroundSize = 'cover';
+        photoDisplay.style.backgroundPosition = 'center';
+        photoDisplay.innerHTML = '';
+      }
+      
+      Utils.showToast('Profile photo updated!', 'success');
+    };
+    reader.readAsDataURL(file);
+  }
+  window.handleAdminPhotoUpload = handleAdminPhotoUpload;
+
+  // Save admin profile
+  async function saveAdminProfile() {
+    const user = Utils.getCurrentUser();
+    
+    const fullName = document.getElementById('editFullName')?.value;
+    const email = document.getElementById('editEmail')?.value;
+    const contactNumber = document.getElementById('editContactNumber')?.value;
+    const gender = document.getElementById('editGender')?.value;
+    const address = document.getElementById('editAddress')?.value;
+    
+    // Update user object
+    if (fullName) user.fullName = fullName;
+    if (email) user.email = email;
+    if (contactNumber) user.contactNumber = contactNumber;
+    if (gender) user.gender = gender;
+    if (address) user.address = address;
+    
+    // Save to localStorage
+    localStorage.setItem('user', JSON.stringify(user));
+    
+    // Update header
+    const userNameEl = document.getElementById('userName');
+    if (userNameEl) userNameEl.textContent = user.fullName || user.name || 'Admin';
+    
+    Utils.showToast('Profile updated successfully!', 'success');
+    renderAdminProfile(false);
+  }
+  window.saveAdminProfile = saveAdminProfile;
+
+  // Settings rendering function
+  function renderAdminSettings() {
+    const container = document.getElementById('settingsContent');
+    if (!container) return;
+    
+    container.innerHTML = `
+      <div class="settings-card">
+        <div class="settings-section-header">
+          <i class="fas fa-bell"></i>
+          <h3>Notification Preferences</h3>
+        </div>
+        <div class="settings-options">
+          <div class="settings-option">
+            <div class="settings-option-info">
+              <label>Email Notifications</label>
+              <small>Receive email updates for new requests</small>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="emailNotifications" checked>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          <div class="settings-option">
+            <div class="settings-option-info">
+              <label>Push Notifications</label>
+              <small>Receive browser push notifications</small>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="pushNotifications" checked>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+        </div>
+      </div>
+      
+      <div class="settings-card">
+        <div class="settings-section-header">
+          <i class="fas fa-lock"></i>
+          <h3>Security</h3>
+        </div>
+        <div class="settings-options">
+          <button class="btn-secondary" onclick="Utils.showToast('Password change not implemented', 'info')">
+            <i class="fas fa-key"></i> Change Password
+          </button>
+        </div>
+      </div>
+    `;
+  }
+
+  // Notifications view rendering
+  async function renderNotificationsView() {
+    const container = document.getElementById('notificationsFullList');
+    if (!container) return;
+
+    try {
+      const notifications = await Utils.apiRequest('/notifications');
+
+      if (!notifications || notifications.length === 0) {
+        container.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-state-icon">🔔</div>
+            <h3>No notifications yet</h3>
+            <p>You'll see notifications here when there are updates.</p>
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = notifications.map(notif => `
+        <div class="notification-item ${notif.is_read ? '' : 'unread'} ${notif.request_id ? 'clickable' : ''}" 
+             ${notif.request_id ? `data-request-id="${notif.request_id}" onclick="handleNotificationClick(${notif.request_id})"` : ''}>
+          <div class="notification-icon">
+            <i class="fas fa-bell"></i>
+          </div>
+          <div class="notification-content">
+            <div class="notification-title">${notif.title}</div>
+            <div class="notification-message">${notif.message}</div>
+            <div class="notification-time">${Utils.formatDate(notif.created_at)}</div>
+          </div>
+          ${notif.request_id ? '<div class="notification-arrow"><i class="fas fa-chevron-right"></i></div>' : ''}
+        </div>
+      `).join('');
+    } catch (err) {
+      container.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-state-icon">❌</div>
+          <h3>Failed to load notifications</h3>
+        </div>
+      `;
+    }
+  }
+
+  // Handle notification click from notifications view
+  function handleNotificationClick(requestId) {
+    console.log('🔔 Notification clicked from view, request ID:', requestId);
+    
+    // Switch to requests view
+    const links = document.querySelectorAll('.sidebar-link');
+    links.forEach(l => l.classList.remove('active'));
+    const requestsLink = document.querySelector('.sidebar-link[data-view="requests"]');
+    if (requestsLink) requestsLink.classList.add('active');
+    
+    // Hide all views, show requests view
+    document.getElementById('dashboardView').classList.add('hidden');
+    document.getElementById('requestsView').classList.remove('hidden');
+    document.getElementById('usersView').classList.add('hidden');
+    document.getElementById('notificationsView').classList.add('hidden');
+    document.getElementById('profileView').classList.add('hidden');
+    document.getElementById('settingsView').classList.add('hidden');
+    
+    // View the specific request after a short delay
+    setTimeout(() => {
+      if (window.adminPortal && window.adminPortal.viewRequest) {
+        window.adminPortal.viewRequest(requestId);
+      }
+    }, 100);
+  }
+  window.handleNotificationClick = handleNotificationClick;
 
   function getStatusIcon(status) {
     const icons = {
@@ -197,6 +553,7 @@ class AdminPortal {
     this.allUsers = [];
     this.filterStatus = 'all';
     this.filterType = 'all';
+    this.filterPriority = 'all';
     this.searchQuery = '';
     this.usersSearchQuery = '';
     this.usersRoleFilter = 'all';
@@ -263,13 +620,19 @@ class AdminPortal {
         return false;
       }
 
+      // Priority filter
+      if (this.filterPriority !== 'all' && request.priority !== this.filterPriority) {
+        return false;
+      }
+
       // Search query
       if (this.searchQuery) {
         const query = this.searchQuery.toLowerCase();
-        const matchesName = request.studentName.toLowerCase().includes(query);
-        const matchesId = request.studentIdNumber.toLowerCase().includes(query);
-        const matchesDoc = request.documentType.toLowerCase().includes(query);
-        if (!matchesName && !matchesId && !matchesDoc) {
+        const matchesName = (request.studentName || '').toLowerCase().includes(query);
+        const matchesId = (request.studentIdNumber || '').toLowerCase().includes(query);
+        const matchesDoc = (request.documentType || '').toLowerCase().includes(query);
+        const matchesCode = (request.requestCode || '').toLowerCase().includes(query);
+        if (!matchesName && !matchesId && !matchesDoc && !matchesCode) {
           return false;
         }
       }
@@ -447,6 +810,15 @@ class AdminPortal {
     if (typeFilter) {
       typeFilter.addEventListener('change', (e) => {
         this.filterType = e.target.value;
+        this.filterRequests();
+      });
+    }
+
+    // Priority filter
+    const priorityFilter = document.getElementById('filterPriority');
+    if (priorityFilter) {
+      priorityFilter.addEventListener('change', (e) => {
+        this.filterPriority = e.target.value;
         this.filterRequests();
       });
     }
@@ -677,10 +1049,22 @@ class AdminPortal {
               <strong>Submitted:</strong> ${Utils.formatDate(request.submittedAt || request.submitted_at)}<br>
               <strong>Last Updated:</strong> ${Utils.formatDate(request.updatedAt || request.updated_at)}<br>
               <strong>Quantity:</strong> ${request.quantity || 1}<br>
-              <strong>Purpose:</strong> ${request.purpose || 'N/A'}<br>
               <strong>Priority:</strong> <span class="priority-badge ${request.priority || 'normal'}">${(request.priority || 'normal').toUpperCase()}</span><br>
             ${assignedFaculty ? `<strong>Assigned Faculty:</strong> ${assignedFaculty.fullName || assignedFaculty.name}<br>` : ''}
               ${request.completedAt ? `<strong>Completed:</strong> ${Utils.formatDate(request.completedAt)}<br>` : ''}
+            </div>
+
+            <div style="margin-bottom: 1.5rem;">
+              <h4 style="color: var(--recoletos-green); margin-bottom: 0.5rem;">Student's Note</h4>
+              <div class="notes-list">
+                <div class="note-item" style="background: #FEF3C7; border-left: 3px solid #F59E0B;">
+                  <div class="note-header">
+                    <span class="note-author">${request.studentName || 'Student'}</span>
+                    <span class="note-time">${Utils.formatDate(request.submittedAt || request.submitted_at)}</span>
+                  </div>
+                  <div class="note-content">${request.purpose || 'No note provided'}</div>
+                </div>
+              </div>
             </div>
 
             <div style="margin-bottom: 1.5rem;">

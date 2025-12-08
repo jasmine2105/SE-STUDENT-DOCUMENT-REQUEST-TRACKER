@@ -11,6 +11,8 @@
     <link rel="stylesheet" href="../../shared/styles-home.css">
     <link rel="stylesheet" href="../../STUDENT/styles/student-portal.css">
     <link rel="stylesheet" href="../styles/admin-portal.css">
+    <link rel="stylesheet" href="../../shared/PROFILE/profile-modal.css">
+    <link rel="stylesheet" href="../../shared/SETTINGS/settings-modal.css">
 </head>
 
 
@@ -19,8 +21,8 @@
         <!-- Sidebar -->
         <aside class="portal-sidebar" id="portalSidebar">
             <div class="sidebar-header">
-                <div class="sidebar-logo">
-                    <i class="fas fa-shield-alt"></i>
+                <div class="sidebar-logo admin-logo">
+                    <i class="fas fa-user-shield"></i>
                 </div>
                 <div>
                     <p class="sidebar-title">Admin Portal</p>
@@ -28,12 +30,29 @@
                 </div>
             </div>
             <nav class="sidebar-nav">
-                <button class="sidebar-link active" data-view="dashboard">Dashboard</button>
-                <button class="sidebar-link" data-view="requests">Requests</button>
-                <button class="sidebar-link" data-view="users">Users</button>
+                <button class="sidebar-link active" data-view="dashboard">
+                    <i class="fas fa-home"></i> Dashboard
+                </button>
+                <button class="sidebar-link" data-view="requests">
+                    <i class="fas fa-file-alt"></i> Requests
+                </button>
+                <button class="sidebar-link" data-view="users">
+                    <i class="fas fa-users"></i> Users
+                </button>
+                <button class="sidebar-link" data-view="notifications">
+                    <i class="fas fa-bell"></i> Notifications
+                </button>
+                <button class="sidebar-link" data-view="profile">
+                    <i class="fas fa-user"></i> My Profile
+                </button>
+                <button class="sidebar-link" data-view="settings">
+                    <i class="fas fa-cog"></i> Settings
+                </button>
             </nav>
             <div class="sidebar-footer">
-                <button class="btn-logout" id="logoutBtn">Logout</button>
+                <button class="btn-logout" id="logoutBtn">
+                    <i class="fas fa-sign-out-alt"></i> Logout
+                </button>
             </div>
         </aside>
 
@@ -47,7 +66,7 @@
                 </div>
                 <div class="header-right">
                     <div class="notification-bell" id="notificationBell">
-                        <span class="bell-icon">🔔</span>
+                        <i class="fas fa-bell bell-icon"></i>
                         <span class="notification-count hidden" id="notificationCount">0</span>
                         <div class="notification-dropdown hidden" id="notificationDropdown">
                             <div class="notification-header">
@@ -57,26 +76,10 @@
                             <div class="notification-list" id="notificationList"></div>
                         </div>
                     </div>
-                    <div class="user-profile-dropdown" id="userProfileDropdown">
+                    <div class="user-profile-display" id="userProfileDisplay">
                         <div class="user-pill" id="userPill">
                             <i class="fas fa-user-circle"></i>
                             <span class="user-name" id="userName">Loading...</span>
-                            <i class="fas fa-chevron-down"></i>
-                        </div>
-                        <div class="profile-dropdown-menu hidden" id="profileDropdownMenu">
-                            <a href="#" class="dropdown-item" id="profileLink">
-                                <i class="fas fa-user"></i> My Profile
-                            </a>
-                            <a href="#" class="dropdown-item" id="notificationsLink">
-                                <i class="fas fa-bell"></i> Notifications
-                            </a>
-                            <a href="#" class="dropdown-item" id="settingsLink">
-                                <i class="fas fa-cog"></i> Settings
-                            </a>
-                            <div class="dropdown-divider"></div>
-                            <a href="#" class="dropdown-item" id="logoutLink">
-                                <i class="fas fa-sign-out-alt"></i> Logout
-                            </a>
                         </div>
                     </div>
                 </div>
@@ -124,6 +127,23 @@
                             <i class="fas fa-list-alt section-icon"></i>
                             <h2>All Requests</h2>
                         </div>
+                        <div class="section-controls" style="display: flex; gap: 1rem; align-items: center;">
+                            <input type="text" id="searchInput" class="search-input" placeholder="Search by name or ID..." style="min-width: 200px;">
+                            <select id="filterStatus" class="filter-select">
+                                <option value="all">All Status</option>
+                                <option value="pending">Pending</option>
+                                <option value="pending_faculty">Awaiting Faculty Approval</option>
+                                <option value="in_progress">In Progress</option>
+                                <option value="approved">Approved</option>
+                                <option value="completed">Completed</option>
+                                <option value="declined">Declined</option>
+                            </select>
+                            <select id="filterPriority" class="filter-select">
+                                <option value="all">All Priority</option>
+                                <option value="normal">Normal</option>
+                                <option value="urgent">Urgent</option>
+                            </select>
+                        </div>
                     </div>
                     <div id="requestsList">
                         <div class="empty-state">
@@ -156,6 +176,57 @@
                             <div class="empty-state-icon">👥</div>
                             <h3>Loading users...</h3>
                         </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Notifications View -->
+            <section class="main-container hidden" id="notificationsView">
+                <div class="content-section">
+                    <div class="section-header">
+                        <div class="section-title-wrapper">
+                            <i class="fas fa-bell section-icon"></i>
+                            <h2>Notifications</h2>
+                        </div>
+                        <button class="btn-secondary" id="markAllReadSecondary">
+                            <i class="fas fa-check-double"></i> Mark all as read
+                        </button>
+                    </div>
+                    <div id="notificationsFullList">
+                        <div class="empty-state">
+                            <div class="empty-state-icon">🔔</div>
+                            <h3>No notifications yet</h3>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Profile View -->
+            <section class="main-container hidden" id="profileView">
+                <div class="content-section">
+                    <div class="section-header">
+                        <div class="section-title-wrapper">
+                            <i class="fas fa-user section-icon"></i>
+                            <h2>My Profile</h2>
+                        </div>
+                    </div>
+                    <div id="profileContent">
+                        <!-- Profile content will be rendered here -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- Settings View -->
+            <section class="main-container hidden" id="settingsView">
+                <div class="content-section">
+                    <div class="section-header">
+                        <div class="section-title-wrapper">
+                            <i class="fas fa-cog section-icon"></i>
+                            <h2>Settings</h2>
+                        </div>
+                    </div>
+                    <div id="settingsContent">
+                        <!-- Settings content will be rendered here -->
                     </div>
                 </div>
             </section>

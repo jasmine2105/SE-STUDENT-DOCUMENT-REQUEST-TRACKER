@@ -12,9 +12,13 @@
       }
     },
 
-    renderNotificationItem(n) {
+    renderNotificationItem(n, onClick) {
       const div = document.createElement('div');
       div.className = 'notification-item';
+      if (n.request_id || n.requestId) {
+        div.style.cursor = 'pointer';
+        div.dataset.requestId = n.request_id || n.requestId;
+      }
       const title = document.createElement('div');
       title.className = 'notification-title';
       title.textContent = n.title || 'Notification';
@@ -28,6 +32,14 @@
       div.appendChild(msg);
       div.appendChild(time);
       div.dataset.notificationId = n.id;
+      
+      // Add click handler if provided and notification has a request_id
+      if (onClick && (n.request_id || n.requestId)) {
+        div.addEventListener('click', () => {
+          onClick(n.request_id || n.requestId, n);
+        });
+      }
+      
       return div;
     },
 
@@ -41,7 +53,7 @@
       }
     },
 
-    async init({ userId, bellId, countId, dropdownId, listId, markAllBtnId }) {
+    async init({ userId, bellId, countId, dropdownId, listId, markAllBtnId, onNotificationClick }) {
       const bell = document.getElementById(bellId);
       const countEl = document.getElementById(countId);
       const dropdown = document.getElementById(dropdownId);
@@ -63,7 +75,18 @@
           return;
         }
 
-        notifications.forEach(n => list.appendChild(Notifications.renderNotificationItem(n)));
+        notifications.forEach(n => {
+          const item = Notifications.renderNotificationItem(n, (requestId, notification) => {
+            // Close dropdown
+            dropdown.classList.add('hidden');
+            // Call the custom click handler if provided
+            if (onNotificationClick) {
+              onNotificationClick(requestId, notification);
+            }
+          });
+          list.appendChild(item);
+        });
+        
         const unreadCount = notifications.filter(n => !n.read_flag && !n.read).length || 0;
         if (unreadCount > 0) {
           countEl.classList.remove('hidden');

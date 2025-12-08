@@ -198,16 +198,23 @@ const Utils = {
 
       if (!response.ok) {
         // Only clear auth if it's actually an authentication error (401)
-        // BUT: Don't clear if we're on a portal page (student/faculty/admin) - 
-        // let the portal handle the redirect itself to avoid redirect loops
+        // BUT: Don't clear if:
+        // 1. We're on a portal page (student/faculty/admin) - let the portal handle redirect
+        // 2. This is a login/signup attempt - user isn't logged in yet, no need to clear
         if (response.status === 401) {
           const isPortalPage = window.location.pathname.includes('/STUDENT/') || 
                                window.location.pathname.includes('/FACULTY/') || 
-                               window.location.pathname.includes('/ADMIN/');
+                               window.location.pathname.includes('/ADMIN/') ||
+                               window.location.pathname.includes('/SUPER ADMIN/');
           
-          if (!isPortalPage) {
+          // Check if this is a login or signup attempt - don't clear/redirect for these
+          const isAuthAttempt = endpoint.includes('/auth/login') || endpoint.includes('/auth/signup');
+          
+          if (!isPortalPage && !isAuthAttempt) {
             console.warn('⚠️ Received 401 - authentication failed, clearing session');
             this.clearCurrentUser();
+          } else if (isAuthAttempt) {
+            console.warn('⚠️ Received 401 on login/signup - credentials invalid, NOT redirecting');
           } else {
             console.warn('⚠️ Received 401 on portal page - portal will handle redirect');
           }

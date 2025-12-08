@@ -56,13 +56,15 @@ router.get('/admins', authMiddleware(true), async (req, res) => {
 });
 
 // Get all students and faculty with full data
+// Admins only see users in their own department
 router.get('/all', authMiddleware(true), async (req, res) => {
   // Normalize role comparison (trim whitespace, lowercase)
   const userRole = String(req.user?.role || '').trim().toLowerCase();
   console.log('🔍 /api/users/all - User role check:', { 
     rawRole: req.user?.role, 
     normalizedRole: userRole, 
-    userId: req.user?.id 
+    userId: req.user?.id,
+    departmentId: req.user?.departmentId
   });
   
   if (userRole !== 'admin') {
@@ -73,7 +75,10 @@ router.get('/all', authMiddleware(true), async (req, res) => {
   try {
     const conn = await getConnection();
     try {
-      const [rows] = await conn.query(`
+      // Filter users by the admin's department
+      const adminDepartmentId = req.user.departmentId;
+      
+      let sql = `
         SELECT 
           id, 
           full_name AS fullName, 
@@ -86,8 +91,20 @@ router.get('/all', authMiddleware(true), async (req, res) => {
           created_at AS createdAt
         FROM users 
         WHERE role IN ('student', 'faculty')
-        ORDER BY role ASC, full_name ASC
-      `);
+      `;
+      
+      const params = [];
+      
+      // If admin has a department, filter users by that department
+      if (adminDepartmentId) {
+        sql += ' AND department_id = ?';
+        params.push(adminDepartmentId);
+      }
+      
+      sql += ' ORDER BY role ASC, full_name ASC';
+      
+      const [rows] = await conn.query(sql, params);
+      console.log(`📋 Returning ${rows.length} users for department ${adminDepartmentId}`);
       res.json(rows);
     } finally {
       conn.release();
