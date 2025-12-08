@@ -338,7 +338,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   function renderAdminSettings() {
     const container = document.getElementById('settingsContent');
     if (!container) return;
-    
+
     container.innerHTML = `
       <div class="settings-card">
         <div class="settings-section-header">
@@ -368,19 +368,254 @@ document.addEventListener('DOMContentLoaded', async () => {
           </div>
         </div>
       </div>
-      
+
       <div class="settings-card">
         <div class="settings-section-header">
           <i class="fas fa-lock"></i>
           <h3>Security</h3>
         </div>
         <div class="settings-options">
-          <button class="btn-secondary" onclick="Utils.showToast('Password change not implemented', 'info')">
+          <button class="btn-secondary" onclick="showChangePasswordModal()">
             <i class="fas fa-key"></i> Change Password
           </button>
         </div>
       </div>
     `;
+  }
+
+  // Show change password modal
+  function showChangePasswordModal() {
+    // Remove existing modal if any
+    const existingModal = document.getElementById('changePasswordModal');
+    if (existingModal) {
+      existingModal.remove();
+    }
+
+    const modalHTML = `
+      <div class="modal-overlay active" id="changePasswordModal">
+        <div class="modal-content change-password-modal">
+          <div class="modal-header">
+            <h2><i class="fas fa-key"></i> Change Password</h2>
+            <button class="modal-close" onclick="closeChangePasswordModal()">&times;</button>
+          </div>
+          <div class="modal-body">
+            <form id="changePasswordForm">
+              <div class="form-group">
+                <label for="currentPassword">Current Password</label>
+                <div class="password-input-wrapper">
+                  <input type="password" id="currentPassword" name="currentPassword" placeholder="Enter current password" required />
+                  <button type="button" class="password-toggle" onclick="togglePasswordVisibility('currentPassword', this)">
+                    <i class="fas fa-eye"></i>
+                  </button>
+                </div>
+                <div class="error-message" id="currentPasswordError"></div>
+              </div>
+
+              <div class="form-group">
+                <label for="newPassword">New Password</label>
+                <div class="password-input-wrapper">
+                  <input type="password" id="newPassword" name="newPassword" placeholder="Enter new password (min 3 characters)" required />
+                  <button type="button" class="password-toggle" onclick="togglePasswordVisibility('newPassword', this)">
+                    <i class="fas fa-eye"></i>
+                  </button>
+                </div>
+                <div class="error-message" id="newPasswordError"></div>
+              </div>
+
+              <div class="form-group">
+                <label for="confirmNewPassword">Confirm New Password</label>
+                <div class="password-input-wrapper">
+                  <input type="password" id="confirmNewPassword" name="confirmNewPassword" placeholder="Confirm new password" required />
+                  <button type="button" class="password-toggle" onclick="togglePasswordVisibility('confirmNewPassword', this)">
+                    <i class="fas fa-eye"></i>
+                  </button>
+                </div>
+                <div class="error-message" id="confirmNewPasswordError"></div>
+              </div>
+
+              <div class="error-message" id="changePasswordError"></div>
+
+              <div class="modal-actions">
+                <button type="button" class="btn-secondary" onclick="closeChangePasswordModal()">Cancel</button>
+                <button type="submit" class="btn-primary" id="changePasswordBtn">
+                  <i class="fas fa-save"></i> Change Password
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    `;
+
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+
+    // Attach form submit handler
+    const form = document.getElementById('changePasswordForm');
+    if (form) {
+      form.addEventListener('submit', handleChangePassword);
+    }
+
+    // Add real-time validation for confirm password
+    const newPasswordInput = document.getElementById('newPassword');
+    const confirmPasswordInput = document.getElementById('confirmNewPassword');
+    
+    if (newPasswordInput && confirmPasswordInput) {
+      confirmPasswordInput.addEventListener('input', validatePasswordMatch);
+      newPasswordInput.addEventListener('input', validatePasswordMatch);
+    }
+  }
+  window.showChangePasswordModal = showChangePasswordModal;
+
+  // Close change password modal
+  function closeChangePasswordModal() {
+    const modal = document.getElementById('changePasswordModal');
+    if (modal) {
+      modal.remove();
+    }
+  }
+  window.closeChangePasswordModal = closeChangePasswordModal;
+
+  // Toggle password visibility
+  function togglePasswordVisibility(inputId, btn) {
+    const input = document.getElementById(inputId);
+    if (!input) return;
+
+    const type = input.type === 'password' ? 'text' : 'password';
+    input.type = type;
+
+    const icon = btn.querySelector('i');
+    if (icon) {
+      icon.classList.toggle('fa-eye');
+      icon.classList.toggle('fa-eye-slash');
+    }
+  }
+  window.togglePasswordVisibility = togglePasswordVisibility;
+
+  // Validate password match
+  function validatePasswordMatch() {
+    const newPassword = document.getElementById('newPassword')?.value || '';
+    const confirmPassword = document.getElementById('confirmNewPassword')?.value || '';
+    const errorEl = document.getElementById('confirmNewPasswordError');
+
+    if (errorEl) {
+      if (confirmPassword && newPassword !== confirmPassword) {
+        errorEl.textContent = 'Passwords do not match';
+        errorEl.classList.add('show');
+      } else {
+        errorEl.textContent = '';
+        errorEl.classList.remove('show');
+      }
+    }
+  }
+
+  // Handle change password form submission
+  async function handleChangePassword(e) {
+    e.preventDefault();
+
+    const currentPassword = document.getElementById('currentPassword')?.value || '';
+    const newPassword = document.getElementById('newPassword')?.value || '';
+    const confirmPassword = document.getElementById('confirmNewPassword')?.value || '';
+    const btn = document.getElementById('changePasswordBtn');
+    const errorEl = document.getElementById('changePasswordError');
+    const currentPasswordError = document.getElementById('currentPasswordError');
+    const newPasswordError = document.getElementById('newPasswordError');
+    const confirmPasswordError = document.getElementById('confirmNewPasswordError');
+
+    // Clear all errors
+    [errorEl, currentPasswordError, newPasswordError, confirmPasswordError].forEach(el => {
+      if (el) {
+        el.textContent = '';
+        el.classList.remove('show');
+      }
+    });
+
+    // Client-side validation
+    if (!currentPassword) {
+      currentPasswordError.textContent = 'Current password is required';
+      currentPasswordError.classList.add('show');
+      return;
+    }
+
+    if (!newPassword) {
+      newPasswordError.textContent = 'New password is required';
+      newPasswordError.classList.add('show');
+      return;
+    }
+
+    if (newPassword.length < 3) {
+      newPasswordError.textContent = 'New password must be at least 3 characters';
+      newPasswordError.classList.add('show');
+      return;
+    }
+
+    if (!confirmPassword) {
+      confirmPasswordError.textContent = 'Please confirm your new password';
+      confirmPasswordError.classList.add('show');
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      confirmPasswordError.textContent = 'Passwords do not match';
+      confirmPasswordError.classList.add('show');
+      return;
+    }
+
+    if (currentPassword === newPassword) {
+      newPasswordError.textContent = 'New password must be different from current password';
+      newPasswordError.classList.add('show');
+      return;
+    }
+
+    // Disable button and show loading state
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Changing...';
+    }
+
+    try {
+      const response = await Utils.apiRequest('/auth/change-password', {
+        method: 'POST',
+        body: {
+          currentPassword,
+          newPassword,
+          confirmPassword
+        }
+      });
+
+      Utils.showToast('Password changed successfully!', 'success');
+      closeChangePasswordModal();
+
+    } catch (error) {
+      console.error('❌ Change password error:', error);
+
+      let errorMessage = 'Failed to change password. Please try again.';
+      try {
+        const parsed = JSON.parse(error.message);
+        if (parsed && parsed.message) {
+          errorMessage = parsed.message;
+        }
+      } catch (e) {
+        if (error.message) {
+          errorMessage = error.message;
+        }
+      }
+
+      // Show error in appropriate field
+      if (errorMessage.toLowerCase().includes('current password') || errorMessage.toLowerCase().includes('incorrect')) {
+        currentPasswordError.textContent = errorMessage;
+        currentPasswordError.classList.add('show');
+      } else {
+        errorEl.textContent = errorMessage;
+        errorEl.classList.add('show');
+      }
+
+      Utils.showToast(errorMessage, 'error');
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-save"></i> Change Password';
+      }
+    }
   }
 
   // Notifications view rendering
