@@ -55,14 +55,25 @@ router.get('/', async (req, res) => {
 
 // ✅ KEEPING YOUR EXISTING CODE - completely unchanged
 async function createNotification({ userId, role, type, title, message, requestId }) {
-  if (!userId) return;
+  if (!userId) {
+    console.warn('⚠️ createNotification called without userId');
+    return;
+  }
+  
+  console.log(`🔔 Creating notification: userId=${userId}, role=${role}, type=${type}, title="${title}", requestId=${requestId}`);
+  
   const conn = await getConnection();
   try {
-    await conn.query(
+    const [result] = await conn.query(
       `INSERT INTO notifications (user_id, role, type, title, message, request_id, read_flag)
        VALUES (?, ?, ?, ?, ?, ?, false)`,
       [userId, role || null, type || null, title || '', message || '', requestId || null]
     );
+    console.log(`✅ Notification created successfully with ID: ${result.insertId} for user ${userId}`);
+  } catch (error) {
+    console.error(`❌ Failed to create notification for user ${userId}:`, error.message);
+    console.error(`❌ Error stack:`, error.stack);
+    throw error;
   } finally {
     conn.release();
   }

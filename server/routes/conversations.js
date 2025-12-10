@@ -41,6 +41,10 @@ router.get('/:requestId', authMiddleware(true), async (req, res) => {
 
 // POST /:requestId - Post a message
 router.post('/:requestId', authMiddleware(true), async (req, res) => {
+    console.log(`\n🚀 ===== POST /conversations/${req.params.requestId} =====`);
+    console.log(`📨 Request body:`, JSON.stringify(req.body, null, 2));
+    console.log(`👤 Authenticated user:`, req.user ? { id: req.user.id, role: req.user.role, name: req.user.fullName } : 'NOT AUTHENTICATED');
+    
     let conn;
     try {
         conn = await getConnection();
@@ -51,46 +55,137 @@ router.post('/:requestId', authMiddleware(true), async (req, res) => {
         const userId = req.user.id;
         const userRole = req.user.role;
 
+        console.log(`📝 Processing message - Request ID: ${requestId}, User ID: ${userId}, Role: ${userRole}`);
+        console.log(`📝 Message: "${message}", isInternal: ${isInternal}`);
+
         if (!message) {
+            console.warn(`⚠️ Message is empty, returning 400`);
             if (conn) conn.release();
             return res.status(400).json({ message: 'Message is required' });
         }
 
         // Students cannot send internal messages
         const messageIsInternal = userRole === 'student' ? false : (isInternal || false);
+        
+        console.log(`💬 Posting message - Request ID: ${requestId}, User ID: ${userId}, Role: ${userRole}, isInternal: ${messageIsInternal}, isInternal param: ${isInternal}`);
 
         await conn.query(
             `INSERT INTO request_conversations (request_id, user_id, message, is_internal) 
        VALUES (?, ?, ?, ?)`,
             [requestId, userId, message, messageIsInternal]
         );
+        
+        console.log(`✅ Message saved successfully. is_internal = ${messageIsInternal}`);
 
-        // Create notification for student if message is from faculty/admin
-        if (userRole === 'faculty' || userRole === 'admin') {
+        // Handle notifications based on message type
+        if (messageIsInternal) {
+            console.log(`🔔 Processing internal message notifications for request ${requestId}...`);
+            // Internal messages (admin-faculty only) - notify the other party
             try {
-                // Get student ID from request
                 const [requestRows] = await conn.query(
-                    'SELECT student_id FROM requests WHERE id = ?',
+                    'SELECT student_id, faculty_id, department_id FROM requests WHERE id = ?',
                     [requestId]
                 );
                 
                 if (requestRows.length > 0) {
-                    const studentId = requestRows[0].student_id;
+                    const request = requestRows[0];
                     const senderName = req.user.fullName || req.user.name || (userRole === 'faculty' ? 'Faculty' : 'Admin');
                     
-                    await createNotification({
-                        userId: studentId,
-                        role: 'student', // Notification is FOR the student
-                        type: 'comment',
-                        title: 'New Comment on Your Request',
-                        message: `${senderName} sent a comment: ${message.substring(0, 100)}${message.length > 100 ? '...' : ''}`,
-                        requestId: requestId
-                    });
-                    console.log(`✅ Comment notification sent to student ID: ${studentId} for request ${requestId}`);
+                    if (userRole === 'admin') {
+                        // Admin sent internal message - notify all faculty in the department
+                        console.log(`👨‍💼 Admin (ID: ${userId}, Name: ${senderName}) sending internal message to faculty...`);
+                        try {
+                            // Get all faculty users in the department directly from users table
+                            const [facultyRows] = await conn.query(
+                                'SELECT id, full_name FROM users WHERE role = ? AND department_id = ?',
+                                ['faculty', request.department_id]
+                            );
+                            
+                            console.log(`📨 Found ${facultyRows.length} faculty member(s) to notify for admin message on request ${requestId} in department ${request.department_id}`);
+                            
+                            if (facultyRows.length === 0) {
+                                console.warn(`⚠️ No faculty found in department ${request.department_id} for request ${requestId}`);
+                            } else {
+                                console.log(`📋 Faculty to notify:`, facultyRows.map(f => `ID ${f.id} (${f.full_name})`).join(', '));
+                            }
+                            
+                            for (const faculty of facultyRows) {
+                                try {
+                                    const notificationData = {
+                                        userId: faculty.id,
+                                        role: 'faculty',
+                                        type: 'comment',
+                                        title: 'New Message from Admin',
+                                        message: `${senderName} sent a message: ${message.substring(0, 100)}${message.length > 100 ? '...' : ''}`,
+                                        requestId: requestId
+                                    };
+                                    console.log(`📤 Creating notification for faculty ID ${faculty.id}:`, notificationData);
+                                    await createNotification(notificationData);
+                                    console.log(`✅ Internal message notification sent to faculty ID: ${faculty.id} (${faculty.full_name}) for request ${requestId}`);
+                                } catch (facultyNotifError) {
+                                    console.error(`❌ Failed to notify faculty ID ${faculty.id}:`, facultyNotifError.message);
+                                    console.error(`❌ Error stack:`, facultyNotifError.stack);
+                                }
+                            }
+                        } catch (facultyNotifError) {
+                            console.error('❌ Failed to notify faculty of internal message:', facultyNotifError.message);
+                            console.error('❌ Error stack:', facultyNotifError.stack);
+                        }
+                    } else if (userRole === 'faculty') {
+                        // Faculty sent internal message - notify all admins in department
+                        const [admins] = await conn.query(
+                            'SELECT id FROM users WHERE role = ? AND department_id = ?',
+                            ['admin', request.department_id]
+                        );
+                        
+                        for (const admin of admins) {
+                            try {
+                                await createNotification({
+                                    userId: admin.id,
+                                    role: 'admin',
+                                    type: 'comment',
+                                    title: 'New Message from Faculty',
+                                    message: `${senderName} sent a message: ${message.substring(0, 100)}${message.length > 100 ? '...' : ''}`,
+                                    requestId: requestId
+                                });
+                                console.log(`✅ Internal message notification sent to admin ID: ${admin.id} for request ${requestId}`);
+                            } catch (adminNotifError) {
+                                console.error(`❌ Failed to notify admin ID ${admin.id}:`, adminNotifError.message);
+                            }
+                        }
+                    }
                 }
             } catch (notifError) {
-                console.error('❌ Failed to notify student of comment:', notifError.message);
-                // Don't fail the request if notification fails
+                console.error('❌ Failed to send internal message notifications:', notifError.message);
+            }
+        } else {
+            // Public messages - notify student if from faculty/admin
+            if (userRole === 'faculty' || userRole === 'admin') {
+                try {
+                    // Get student ID from request
+                    const [requestRows] = await conn.query(
+                        'SELECT student_id FROM requests WHERE id = ?',
+                        [requestId]
+                    );
+                    
+                    if (requestRows.length > 0) {
+                        const studentId = requestRows[0].student_id;
+                        const senderName = req.user.fullName || req.user.name || (userRole === 'faculty' ? 'Faculty' : 'Admin');
+                        
+                        await createNotification({
+                            userId: studentId,
+                            role: 'student', // Notification is FOR the student
+                            type: 'comment',
+                            title: 'New Comment on Your Request',
+                            message: `${senderName} sent a comment: ${message.substring(0, 100)}${message.length > 100 ? '...' : ''}`,
+                            requestId: requestId
+                        });
+                        console.log(`✅ Comment notification sent to student ID: ${studentId} for request ${requestId}`);
+                    }
+                } catch (notifError) {
+                    console.error('❌ Failed to notify student of comment:', notifError.message);
+                    // Don't fail the request if notification fails
+                }
             }
         }
 
@@ -140,12 +235,15 @@ router.post('/:requestId', authMiddleware(true), async (req, res) => {
             }
         }
 
+        console.log(`✅ Message posted successfully for request ${requestId}`);
         res.status(201).json({ message: 'Message sent successfully' });
     } catch (error) {
         console.error('❌ Error posting message:', error);
+        console.error('❌ Error stack:', error.stack);
         res.status(500).json({ message: 'Server error' });
     } finally {
         if (conn) conn.release();
+        console.log(`🏁 ===== END POST /conversations/${req.params.requestId} =====\n`);
     }
 });
 

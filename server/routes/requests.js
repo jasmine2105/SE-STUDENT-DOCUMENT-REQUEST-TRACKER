@@ -52,6 +52,7 @@ function mapRequestRow(row) {
     facultyId: row.faculty_id,
     facultyApproval: parseJsonField(row.faculty_approval, {}),
     adminNotes: parseJsonField(row.admin_notes, []),
+    attachments: parseJsonField(row.attachments, []),
     submittedAt: row.submitted_at,
     createdAt: row.submitted_at, // Keep for backward compatibility
     updatedAt: row.updated_at

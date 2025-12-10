@@ -1698,57 +1698,191 @@ class AdminPortal {
     }
   }
 
-  showUpdateModal(requestId) {
-    const request = this.requests.find(r => r.id === requestId);
-    if (!request) return;
+  async showUpdateModal(requestId) {
+    // Always fetch fresh request data to ensure attachments are included
+    let request;
+    try {
+      request = await Utils.apiRequest(`/requests/${requestId}`, { method: 'GET' });
+    } catch (error) {
+      console.error('Failed to load request:', error);
+      Utils.showToast('Failed to load request details', 'error');
+      return;
+    }
+    
+    if (!request) {
+      Utils.showToast('Request not found', 'error');
+      return;
+    }
+
+    // Load internal messages (admin-faculty only)
+    let internalMessages = [];
+    try {
+      const allMessages = await Utils.apiRequest(`/conversations/${requestId}`, {
+        timeout: 10000
+      });
+      // Filter to only show internal messages (admin-faculty communication)
+      internalMessages = allMessages.filter(msg => msg.is_internal === true || msg.is_internal === 1);
+    } catch (error) {
+      console.error('Failed to load internal messages:', error);
+    }
+
+    // Format messages for display
+    const messagesHTML = internalMessages.length > 0
+      ? internalMessages.map((msg) => {
+          const isAdmin = msg.role === 'admin';
+          const isFaculty = msg.role === 'faculty';
+          return `
+            <div style="display: flex; flex-direction: column; align-items: ${isAdmin ? 'flex-start' : 'flex-end'}; margin-bottom: 1rem;">
+              <div style="background: ${isAdmin ? 'var(--bg-cream)' : '#D1FAE5'}; border: 1px solid ${isAdmin ? 'var(--border-gray)' : '#10B981'}; border-radius: 8px; padding: 0.875rem 1rem; max-width: 85%; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+                ${isAdmin ? `
+                  <div style="font-weight: 600; margin-bottom: 0.5rem; color: var(--text-dark); font-size: 0.9rem;">${msg.full_name || 'Admin'}</div>
+                  <div style="font-size: 0.9rem; color: var(--text-dark); line-height: 1.5; margin-bottom: 0.5rem;">${msg.message}</div>
+                  <div style="font-size: 0.75rem; color: var(--text-dark); opacity: 0.6;">${Utils.formatDate(msg.created_at)}</div>
+                ` : `
+                  <div style="font-weight: 600; margin-bottom: 0.5rem; color: #065F46; font-size: 0.9rem;">${msg.full_name || 'Faculty'}</div>
+                  <div style="font-size: 0.9rem; color: #065F46; line-height: 1.5; margin-bottom: 0.5rem;">${msg.message}</div>
+                  <div style="font-size: 0.75rem; color: #065F46; opacity: 0.7;">${Utils.formatDate(msg.created_at)}</div>
+                `}
+              </div>
+            </div>
+          `;
+        }).join('')
+      : '<p style="opacity: 0.6; padding: 1rem; text-align: center; font-style: italic; background: var(--bg-cream); border-radius: 8px; border: 1px solid var(--border-gray);">No messages yet. Start the conversation with faculty!</p>';
 
     const facultyOptions = this.allFaculties.map(f => 
       `<option value="${f.id}" ${request.facultyId === f.id ? 'selected' : ''}>${f.fullName || f.name}</option>`
     ).join('');
 
+    // Supporting Documents HTML
+    const attachmentsHTML = request.attachments && request.attachments.length ? `
+      <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border-gray);">
+        <h4 style="color: var(--recoletos-green); margin-bottom: 0.75rem; font-size: 0.95rem; font-weight: 600;">
+          <i class="fas fa-paperclip"></i> Supporting Documents
+        </h4>
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 0.5rem;">
+          ${request.attachments.map((att) => {
+            const isPDF = att.url && (att.url.toLowerCase().endsWith('.pdf') || att.name && att.name.toLowerCase().endsWith('.pdf'));
+            const isImage = att.url && (att.url.toLowerCase().match(/\.(jpg|jpeg|png)$/i) || att.name && att.name.toLowerCase().match(/\.(jpg|jpeg|png)$/i));
+            
+            if (isPDF) {
+              return `
+                <div style="display: flex; flex-direction: column; align-items: center; padding: 0.5rem; background: var(--white); border: 1px solid var(--border-gray); border-radius: 6px;">
+                  <div style="width: 80px; height: 80px; display: flex; align-items: center; justify-content: center; background: #dc2626; border-radius: 6px; margin-bottom: 0.25rem;">
+                    <i class="fas fa-file-pdf" style="color: var(--white); font-size: 1.5rem;"></i>
+                  </div>
+                  <div style="font-size: 0.7rem; color: var(--text-dark); text-align: center; word-break: break-word; margin-bottom: 0.25rem; font-weight: 500;">
+                    ${(att.name || 'Document.pdf').substring(0, 15)}${(att.name || '').length > 15 ? '...' : ''}
+                  </div>
+                  <a 
+                    href="${att.url}" 
+                    target="_blank" 
+                    rel="noopener noreferrer" 
+                    style="padding: 0.25rem 0.5rem; background: var(--recoletos-green); color: var(--white); border-radius: 4px; text-decoration: none; font-size: 0.7rem; font-weight: 500;"
+                  >
+                    View
+                  </a>
+                </div>
+              `;
+            } else {
+              return `
+                <a href="${att.url}" target="_blank" rel="noopener noreferrer" style="display: block; text-decoration: none;">
+                  <div style="position: relative; width: 100px; height: 100px; border-radius: 6px; border: 1px solid var(--border-gray); overflow: hidden; background: var(--bg-cream);">
+                    <img 
+                      src="${att.url}" 
+                      alt="${att.name || 'Supporting Document'}" 
+                      style="width: 100%; height: 100%; object-fit: cover; display: block;"
+                      onerror="this.onerror=null; this.src='data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'100\' height=\'100\'%3E%3Crect fill=\'%23f3f4f6\' width=\'100\' height=\'100\'/%3E%3Ctext x=\'50%25\' y=\'50%25\' text-anchor=\'middle\' dy=\'.3em\' fill=\'%239ca3af\' font-family=\'Arial\' font-size=\'10\'%3EImage%3C/text%3E%3C/svg%3E';"
+                    />
+                  </div>
+                  <div style="font-size: 0.65rem; color: var(--text-dark); text-align: center; margin-top: 0.25rem; word-break: break-word; padding: 0 0.25rem;">
+                    ${(att.name || 'Image').substring(0, 12)}${(att.name || '').length > 12 ? '...' : ''}
+                  </div>
+                </a>
+              `;
+            }
+          }).join('')}
+        </div>
+      </div>
+    ` : '';
+
     const modalHTML = `
       <div class="modal-overlay active" id="updateModal">
-        <div class="action-modal">
+        <div class="action-modal" style="max-width: 1000px; max-height: 90vh; overflow-y: auto;">
           <div class="modal-header">
             <h2>Update Request Status</h2>
             <button class="close-modal" onclick="document.getElementById('updateModal').remove()">&times;</button>
           </div>
           <form id="updateForm">
-            <div class="form-group">
-              <label for="status">Status *</label>
-              <select id="status" name="status" required>
-                <option value="pending" ${request.status === 'pending' ? 'selected' : ''}>Pending</option>
-                <option value="pending_faculty" ${request.status === 'pending_faculty' ? 'selected' : ''}>Pending Faculty Approval</option>
-                <option value="in_progress" ${request.status === 'in_progress' ? 'selected' : ''}>In Progress</option>
-                <option value="approved" ${request.status === 'approved' ? 'selected' : ''}>Approved</option>
-                <option value="completed" ${request.status === 'completed' ? 'selected' : ''}>Completed</option>
-                <option value="declined" ${request.status === 'declined' ? 'selected' : ''}>Declined</option>
-              </select>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem;">
+              <div>
+                <div class="form-group">
+                  <label for="status">Status *</label>
+                  <select id="status" name="status" required>
+                    <option value="pending" ${request.status === 'pending' ? 'selected' : ''}>Pending</option>
+                    <option value="pending_faculty" ${request.status === 'pending_faculty' ? 'selected' : ''}>Pending Faculty Approval</option>
+                    <option value="in_progress" ${request.status === 'in_progress' ? 'selected' : ''}>In Progress</option>
+                    <option value="approved" ${request.status === 'approved' ? 'selected' : ''}>Approved</option>
+                    <option value="completed" ${request.status === 'completed' ? 'selected' : ''}>Completed</option>
+                    <option value="declined" ${request.status === 'declined' ? 'selected' : ''}>Declined</option>
+                  </select>
+                </div>
+
+                <div class="form-group">
+                  <label for="facultyId">Assign to Faculty</label>
+                  <select id="facultyId" name="facultyId">
+                    <option value="">None</option>
+                    ${facultyOptions}
+                  </select>
+                </div>
+
+                <div class="form-group">
+                  <label for="priority">Priority</label>
+                  <select id="priority" name="priority">
+                    <option value="normal" ${request.priority === 'normal' ? 'selected' : ''}>Normal</option>
+                    <option value="urgent" ${request.priority === 'urgent' ? 'selected' : ''}>Urgent</option>
+                  </select>
+                </div>
+
+                ${attachmentsHTML}
+              </div>
+
+              <div>
+                <div style="background: var(--bg-cream); padding: 1rem; border-radius: 8px; border: 1px solid var(--border-gray); display: flex; flex-direction: column; height: 100%;">
+                  <h3 style="color: var(--recoletos-green); margin-bottom: 0.75rem; font-size: 1rem; font-weight: 600;">
+                    <i class="fas fa-comments"></i> Notes & Communication (Faculty)
+                  </h3>
+                  
+                  <!-- Chat Messages Display -->
+                  <div style="margin-bottom: 1rem; max-height: 300px; overflow-y: auto; padding: 0.5rem; background: var(--white); border-radius: 8px; border: 1px solid var(--border-gray); flex: 1;">
+                    ${messagesHTML}
+                  </div>
+
+                  <!-- Admin Input Section for Faculty -->
+                  <div style="padding-top: 0.75rem; border-top: 1px solid var(--border-gray); margin-top: auto;">
+                    <textarea 
+                      id="facultyNoteInput" 
+                      placeholder="Send a message to faculty..."
+                      style="width: 100%; min-height: 80px; padding: 0.75rem; border: 1px solid var(--border-gray); border-radius: 8px; font-size: 0.9rem; font-family: inherit; resize: vertical; background: var(--white); margin-bottom: 0.75rem; box-sizing: border-box;"
+                    ></textarea>
+                    <div style="display: flex; justify-content: flex-end;">
+                      <button 
+                        type="button"
+                        id="sendFacultyNoteBtn" 
+                        onclick="window.adminPortal.sendFacultyNote(${requestId})"
+                        style="padding: 0.5rem 1rem; background: var(--recoletos-green); color: var(--white); border: none; border-radius: 6px; font-weight: 600; cursor: pointer; font-size: 0.85rem; transition: background 0.2s ease; display: flex; align-items: center; gap: 0.5rem;"
+                        onmouseover="this.style.background='#003318'"
+                        onmouseout="this.style.background='var(--recoletos-green)'"
+                      >
+                        <i class="fas fa-paper-plane" style="font-size: 0.75rem;"></i> Send to Faculty
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
 
-            <div class="form-group">
-              <label for="facultyId">Assign to Faculty</label>
-              <select id="facultyId" name="facultyId">
-                <option value="">None</option>
-                ${facultyOptions}
-              </select>
-            </div>
-
-            <div class="form-group">
-              <label for="priority">Priority</label>
-              <select id="priority" name="priority">
-                <option value="normal" ${request.priority === 'normal' ? 'selected' : ''}>Normal</option>
-                <option value="urgent" ${request.priority === 'urgent' ? 'selected' : ''}>Urgent</option>
-              </select>
-            </div>
-
-            <div class="form-group">
-              <label for="note">Add Note (Optional)</label>
-              <textarea id="note" name="note" placeholder="Add an internal note about this request..."></textarea>
-            </div>
-
-            <div class="modal-actions">
-              <button type="button" class="btn-secondary" onclick="document.getElementById('updateModal').remove()" style="flex: 0.5;">
+            <div class="modal-actions" style="display: flex; justify-content: flex-end; gap: 1rem; margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border-gray);">
+              <button type="button" class="btn-secondary" onclick="document.getElementById('updateModal').remove()">
                 Cancel
               </button>
               <button type="submit" class="btn-primary">
@@ -1775,6 +1909,12 @@ class AdminPortal {
       e.preventDefault();
       this.updateRequest(requestId);
     });
+
+    // Auto-scroll chat messages to bottom
+    const chatContainer = modal.querySelector('[style*="max-height: 250px"]');
+    if (chatContainer) {
+      chatContainer.scrollTop = chatContainer.scrollHeight;
+    }
   }
 
   async updateRequest(requestId) {
@@ -1784,7 +1924,6 @@ class AdminPortal {
     const status = formData.get('status');
     const facultyId = formData.get('facultyId');
     const priority = formData.get('priority');
-    const note = formData.get('note').trim();
 
     try {
       const payload = {
@@ -1794,10 +1933,6 @@ class AdminPortal {
 
       if (facultyId) {
         payload.facultyId = status === 'pending_faculty' ? parseInt(facultyId, 10) : null;
-      }
-
-      if (note) {
-        payload.adminNote = note;
       }
 
       await Utils.apiRequest(`/requests/${requestId}`, {
@@ -1814,19 +1949,69 @@ class AdminPortal {
     }
   }
 
-  async viewRequest(requestId) {
-    // Try to find request in loaded requests first
-    let request = this.requests?.find(r => r.id === requestId);
+  async sendFacultyNote(requestId) {
+    const noteInput = document.getElementById('facultyNoteInput');
+    const sendBtn = document.getElementById('sendFacultyNoteBtn');
     
-    // If not found, fetch it from the API
-    if (!request) {
-      try {
-        request = await Utils.apiRequest(`/requests/${requestId}`, { method: 'GET' });
-      } catch (error) {
-        console.error('Failed to load request:', error);
-        Utils.showToast('Failed to load request details', 'error');
-        return;
+    if (!noteInput || !sendBtn) return;
+
+    const message = noteInput.value.trim();
+    if (!message) {
+      Utils.showToast('Please enter a message', 'warning');
+      return;
+    }
+
+    // Disable button while sending
+    sendBtn.disabled = true;
+    sendBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
+
+    try {
+      // Send as internal message (is_internal = true) so only admin and faculty can see it
+      await Utils.apiRequest(`/conversations/${requestId}`, {
+        method: 'POST',
+        body: { 
+          message,
+          isInternal: true  // This makes it visible only to admin and faculty
+        },
+        timeout: 10000
+      });
+
+      Utils.showToast('Message sent to faculty!', 'success');
+      noteInput.value = '';
+
+      // Reload the modal to show the new message
+      const modal = document.getElementById('updateModal');
+      if (modal) {
+        const request = this.requests.find(r => r.id === requestId);
+        if (request) {
+          modal.remove();
+          await this.showUpdateModal(requestId);
+        }
       }
+    } catch (error) {
+      console.error('Failed to send message:', error);
+      Utils.showToast('Failed to send message', 'error');
+    } finally {
+      // Re-enable button
+      sendBtn.disabled = false;
+      sendBtn.innerHTML = '<i class="fas fa-paper-plane" style="font-size: 0.75rem;"></i> Send to Faculty';
+    }
+  }
+
+  async viewRequest(requestId) {
+    // Always fetch fresh data from API to ensure attachments are included
+    let request;
+    try {
+      request = await Utils.apiRequest(`/requests/${requestId}`, { method: 'GET' });
+      console.log('📎 Request loaded with attachments:', {
+        requestId,
+        attachmentsCount: request.attachments ? request.attachments.length : 0,
+        attachments: request.attachments
+      });
+    } catch (error) {
+      console.error('Failed to load request:', error);
+      Utils.showToast('Failed to load request details', 'error');
+      return;
     }
     
     if (!request) return;
@@ -1834,11 +2019,25 @@ class AdminPortal {
     const statusClass = Utils.getStatusBadgeClass(request.status);
     const statusText = Utils.getStatusText(request.status);
 
-    // Load conversation messages
+    // Load conversation messages - ONLY public messages (admin-student communication)
+    // Internal messages (admin-faculty) are NOT shown here - they're in the Update modal
     let conversationMessages = [];
     try {
-      conversationMessages = await Utils.apiRequest(`/conversations/${requestId}`, {
+      const allMessages = await Utils.apiRequest(`/conversations/${requestId}`, {
         timeout: 10000
+      });
+      // Filter to only show PUBLIC messages (is_internal = false, 0, null, or undefined)
+      // This is for admin-student communication
+      // Exclude messages where is_internal is true, 1, or "1"
+      conversationMessages = allMessages.filter(msg => {
+        const isInternal = msg.is_internal;
+        // Return true if message is NOT internal (public message)
+        return isInternal === false || 
+               isInternal === 0 || 
+               isInternal === '0' ||
+               isInternal === null || 
+               isInternal === undefined ||
+               isInternal === '';
       });
     } catch (error) {
       console.error('Failed to load conversation:', error);
@@ -1854,7 +2053,7 @@ class AdminPortal {
         }))
       : [];
     
-    // Get all conversation messages (admin and student)
+    // Get all conversation messages (admin and student) - only public ones
     const conversationMessagesFormatted = conversationMessages.map(msg => ({
       role: msg.role,
       name: msg.full_name || (msg.role === 'admin' ? 'Admin' : msg.role === 'student' ? request.studentName || 'Student' : 'User'),
@@ -1872,14 +2071,15 @@ class AdminPortal {
           const isStudent = msg.role === 'student';
           return `
             <div style="display: flex; flex-direction: column; align-items: ${isAdmin ? 'flex-start' : 'flex-end'}; margin-bottom: 1rem;">
-              <div style="background: ${isAdmin ? 'var(--bg-cream)' : 'var(--recoletos-green)'}; border: 1px solid ${isAdmin ? 'var(--border-gray)' : 'var(--recoletos-green)'}; border-radius: 8px; padding: 0.875rem 1rem; max-width: 85%; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+              <div style="background: ${isAdmin ? 'var(--bg-cream)' : '#D1FAE5'}; border: 1px solid ${isAdmin ? 'var(--border-gray)' : '#10B981'}; border-radius: 8px; padding: 0.875rem 1rem; max-width: 85%; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
                 ${isAdmin ? `
                   <div style="font-weight: 600; margin-bottom: 0.5rem; color: var(--text-dark); font-size: 0.9rem;">${msg.name}</div>
                   <div style="font-size: 0.9rem; color: var(--text-dark); line-height: 1.5; margin-bottom: 0.5rem;">${msg.message}</div>
                   <div style="font-size: 0.75rem; color: var(--text-dark); opacity: 0.6;">${Utils.formatDate(msg.timestamp || msg.created_at)}</div>
                 ` : `
-                  <div style="font-size: 0.9rem; color: var(--white); line-height: 1.5; margin-bottom: 0.5rem;">${msg.message}</div>
-                  <div style="font-size: 0.75rem; color: var(--white); opacity: 0.9; text-align: right;">${Utils.formatDate(msg.timestamp || msg.created_at)}</div>
+                  <div style="font-weight: 600; margin-bottom: 0.5rem; color: #065F46; font-size: 0.9rem;">${msg.name || request.studentName || 'Student'}</div>
+                  <div style="font-size: 0.9rem; color: #065F46; line-height: 1.5; margin-bottom: 0.5rem;">${msg.message}</div>
+                  <div style="font-size: 0.75rem; color: #065F46; opacity: 0.7;">${Utils.formatDate(msg.timestamp || msg.created_at)}</div>
                 `}
               </div>
             </div>
@@ -2043,14 +2243,54 @@ class AdminPortal {
               ${request.attachments && request.attachments.length ? `
               <div style="margin-top: 1.5rem;">
                 <h4 style="color: var(--recoletos-green); margin-bottom: 0.75rem; font-size: 1.1rem;">
-                  <i class="fas fa-paperclip"></i> Attachments
+                  <i class="fas fa-paperclip"></i> Supporting Documents
                 </h4>
-                <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(120px,1fr)); gap:0.75rem;">
-                  ${request.attachments.map((att) => `
-                    <a href="${att.url}" target="_blank" rel="noopener noreferrer" style="display:block;">
-                      <img src="${att.url}" alt="${att.name}" style="width:100%; height:110px; object-fit:cover; border-radius:8px; border:1px solid var(--border-gray);" />
-                    </a>
-                  `).join('')}
+                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 0.75rem;">
+                  ${request.attachments.map((att) => {
+                    const isPDF = att.url && (att.url.toLowerCase().endsWith('.pdf') || att.name && att.name.toLowerCase().endsWith('.pdf'));
+                    const isImage = att.url && (att.url.toLowerCase().match(/\.(jpg|jpeg|png)$/i) || att.name && att.name.toLowerCase().match(/\.(jpg|jpeg|png)$/i));
+                    
+                    if (isPDF) {
+                      // PDF files - show as file link
+                      return `
+                        <div style="display: flex; flex-direction: column; align-items: center; padding: 0.75rem; background: var(--bg-cream); border: 1px solid var(--border-gray); border-radius: 8px;">
+                          <div style="width: 120px; height: 120px; display: flex; align-items: center; justify-content: center; background: #dc2626; border-radius: 8px; margin-bottom: 0.5rem;">
+                            <i class="fas fa-file-pdf" style="color: var(--white); font-size: 2.5rem;"></i>
+                          </div>
+                          <div style="font-size: 0.85rem; color: var(--text-dark); text-align: center; word-break: break-word; margin-bottom: 0.5rem; font-weight: 500;">
+                            ${att.name || 'Document.pdf'}
+                          </div>
+                          <a 
+                            href="${att.url}" 
+                            target="_blank" 
+                            rel="noopener noreferrer" 
+                            style="padding: 0.4rem 0.75rem; background: var(--recoletos-green); color: var(--white); border-radius: 6px; text-decoration: none; font-size: 0.8rem; font-weight: 500; display: inline-flex; align-items: center; gap: 0.4rem; transition: background 0.2s;"
+                            onmouseover="this.style.background='#003318'"
+                            onmouseout="this.style.background='var(--recoletos-green)'"
+                          >
+                            <i class="fas fa-external-link-alt"></i> View
+                          </a>
+                        </div>
+                      `;
+                    } else {
+                      // Image files - show as 120x120 thumbnail
+                      return `
+                        <a href="${att.url}" target="_blank" rel="noopener noreferrer" style="display: block; text-decoration: none;">
+                          <div style="position: relative; width: 120px; height: 120px; border-radius: 8px; border: 1px solid var(--border-gray); overflow: hidden; background: var(--bg-cream); margin: 0 auto;">
+                            <img 
+                              src="${att.url}" 
+                              alt="${att.name || 'Supporting Document'}" 
+                              style="width: 100%; height: 100%; object-fit: cover; display: block;"
+                              onerror="this.onerror=null; this.src='data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'120\' height=\'120\'%3E%3Crect fill=\'%23f3f4f6\' width=\'120\' height=\'120\'/%3E%3Ctext x=\'50%25\' y=\'50%25\' text-anchor=\'middle\' dy=\'.3em\' fill=\'%239ca3af\' font-family=\'Arial\' font-size=\'12\'%3EImage%3C/text%3E%3C/svg%3E';"
+                            />
+                          </div>
+                          <div style="font-size: 0.75rem; color: var(--text-dark); text-align: center; margin-top: 0.5rem; word-break: break-word; padding: 0 0.25rem;">
+                            ${att.name || 'Image'}
+                          </div>
+                        </a>
+                      `;
+                    }
+                  }).join('')}
                 </div>
               </div>
               ` : ''}
@@ -2067,7 +2307,7 @@ class AdminPortal {
 
             <!-- Second Column: Notes & Communication -->
             <div class="request-modal-column">
-              <h3>Notes & Communication</h3>
+              <h3>Notes & Communication (Student)</h3>
               
               <div>
                 <!-- Chat Messages Display -->
@@ -2157,9 +2397,13 @@ class AdminPortal {
     sendBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
 
     try {
+      // Send as PUBLIC message (is_internal = false) for admin-student communication
       await Utils.apiRequest(`/conversations/${requestId}`, {
         method: 'POST',
-        body: { message },
+        body: { 
+          message,
+          isInternal: false  // Public message - visible to student
+        },
         timeout: 10000
       });
 

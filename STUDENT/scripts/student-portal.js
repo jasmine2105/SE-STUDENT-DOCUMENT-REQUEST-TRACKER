@@ -1665,7 +1665,30 @@ class StudentPortal {
   }
 
   async viewRequest(requestId) {
-    const request = this.requests.find((r) => r.id === requestId);
+    // Always fetch fresh data from API to ensure attachments are included
+    let request;
+    try {
+      request = await Utils.apiRequest(`/requests/${requestId}`, { method: 'GET' });
+      console.log('📎 Request loaded with attachments:', {
+        requestId,
+        attachmentsCount: request.attachments ? request.attachments.length : 0,
+        attachments: request.attachments,
+        hasAttachments: !!(request.attachments && request.attachments.length > 0)
+      });
+      
+      // Ensure attachments is an array
+      if (!request.attachments) {
+        request.attachments = [];
+      }
+      if (!Array.isArray(request.attachments)) {
+        request.attachments = [];
+      }
+    } catch (error) {
+      console.error('Failed to load request:', error);
+      Utils.showToast('Failed to load request details', 'error');
+      return;
+    }
+    
     if (!request) return;
 
     const statusClass = Utils.getStatusBadgeClass(request.status);
@@ -1706,16 +1729,18 @@ class StudentPortal {
     const notesHTML = allMessages.length > 0
       ? allMessages.map((msg) => {
           const isAdmin = msg.role === 'admin';
+          const isStudent = msg.role === 'student';
           return `
             <div style="display: flex; flex-direction: column; align-items: ${isAdmin ? 'flex-start' : 'flex-end'}; margin-bottom: 1rem;">
-              <div style="background: ${isAdmin ? 'var(--bg-cream)' : 'var(--recoletos-green)'}; border: 1px solid ${isAdmin ? 'var(--border-gray)' : 'var(--recoletos-green)'}; border-radius: 8px; padding: 0.875rem 1rem; max-width: 85%; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+              <div style="background: ${isAdmin ? 'var(--bg-cream)' : '#D1FAE5'}; border: 1px solid ${isAdmin ? 'var(--border-gray)' : '#10B981'}; border-radius: 8px; padding: 0.875rem 1rem; max-width: 85%; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
                 ${isAdmin ? `
                   <div style="font-weight: 600; margin-bottom: 0.5rem; color: var(--text-dark); font-size: 0.9rem;">${msg.name}</div>
                   <div style="font-size: 0.9rem; color: var(--text-dark); line-height: 1.5; margin-bottom: 0.5rem;">${msg.message}</div>
                   <div style="font-size: 0.75rem; color: var(--text-dark); opacity: 0.6;">${Utils.formatDate(msg.timestamp || msg.created_at)}</div>
                 ` : `
-                  <div style="font-size: 0.9rem; color: var(--white); line-height: 1.5; margin-bottom: 0.5rem;">${msg.message}</div>
-                  <div style="font-size: 0.75rem; color: var(--white); opacity: 0.9; text-align: right;">${Utils.formatDate(msg.timestamp || msg.created_at)}</div>
+                  <div style="font-weight: 600; margin-bottom: 0.5rem; color: #065F46; font-size: 0.9rem;">${msg.name || 'You'}</div>
+                  <div style="font-size: 0.9rem; color: #065F46; line-height: 1.5; margin-bottom: 0.5rem;">${msg.message}</div>
+                  <div style="font-size: 0.75rem; color: #065F46; opacity: 0.7;">${Utils.formatDate(msg.timestamp || msg.created_at)}</div>
                 `}
               </div>
             </div>
@@ -1848,16 +1873,56 @@ class StudentPortal {
               </div>
 
               ${request.attachments && request.attachments.length ? `
-              <div>
-                <h4 style="color: var(--recoletos-green); margin-bottom: 0.75rem; font-size: 1.1rem;">
-                  <i class="fas fa-paperclip"></i> Attachments
-                </h4>
-                <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(120px,1fr)); gap:0.75rem;">
-                  ${request.attachments.map((att) => `
-                    <a href="${att.url}" target="_blank" rel="noopener noreferrer" style="display:block;">
-                      <img src="${att.url}" alt="${att.name}" style="width:100%; height:110px; object-fit:cover; border-radius:8px; border:1px solid var(--border-gray);" />
-                    </a>
-                  `).join('')}
+              <div style="margin-top: 1.5rem;">
+                <h3 style="color: var(--recoletos-green); margin-bottom: 0.75rem; font-size: 1.1rem; font-weight: 600;">
+                  <i class="fas fa-paperclip"></i> Supporting Documents
+                </h3>
+                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 0.75rem;">
+                  ${request.attachments.map((att) => {
+                    const isPDF = att.url && (att.url.toLowerCase().endsWith('.pdf') || att.name && att.name.toLowerCase().endsWith('.pdf'));
+                    const isImage = att.url && (att.url.toLowerCase().match(/\.(jpg|jpeg|png)$/i) || att.name && att.name.toLowerCase().match(/\.(jpg|jpeg|png)$/i));
+                    
+                    if (isPDF) {
+                      // PDF files - show as file link
+                      return `
+                        <div style="display: flex; flex-direction: column; align-items: center; padding: 0.75rem; background: var(--bg-cream); border: 1px solid var(--border-gray); border-radius: 8px;">
+                          <div style="width: 120px; height: 120px; display: flex; align-items: center; justify-content: center; background: #dc2626; border-radius: 8px; margin-bottom: 0.5rem;">
+                            <i class="fas fa-file-pdf" style="color: var(--white); font-size: 2.5rem;"></i>
+                          </div>
+                          <div style="font-size: 0.85rem; color: var(--text-dark); text-align: center; word-break: break-word; margin-bottom: 0.5rem; font-weight: 500;">
+                            ${att.name || 'Document.pdf'}
+                          </div>
+                          <a 
+                            href="${att.url}" 
+                            target="_blank" 
+                            rel="noopener noreferrer" 
+                            style="padding: 0.4rem 0.75rem; background: var(--recoletos-green); color: var(--white); border-radius: 6px; text-decoration: none; font-size: 0.8rem; font-weight: 500; display: inline-flex; align-items: center; gap: 0.4rem; transition: background 0.2s;"
+                            onmouseover="this.style.background='#003318'"
+                            onmouseout="this.style.background='var(--recoletos-green)'"
+                          >
+                            <i class="fas fa-external-link-alt"></i> View
+                          </a>
+                        </div>
+                      `;
+                    } else {
+                      // Image files - show as 120x120 thumbnail
+                      return `
+                        <a href="${att.url}" target="_blank" rel="noopener noreferrer" style="display: block; text-decoration: none;">
+                          <div style="position: relative; width: 120px; height: 120px; border-radius: 8px; border: 1px solid var(--border-gray); overflow: hidden; background: var(--bg-cream); margin: 0 auto;">
+                            <img 
+                              src="${att.url}" 
+                              alt="${att.name || 'Supporting Document'}" 
+                              style="width: 100%; height: 100%; object-fit: cover; display: block;"
+                              onerror="this.onerror=null; this.src='data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'120\' height=\'120\'%3E%3Crect fill=\'%23f3f4f6\' width=\'120\' height=\'120\'/%3E%3Ctext x=\'50%25\' y=\'50%25\' text-anchor=\'middle\' dy=\'.3em\' fill=\'%239ca3af\' font-family=\'Arial\' font-size=\'12\'%3EImage%3C/text%3E%3C/svg%3E';"
+                            />
+                          </div>
+                          <div style="font-size: 0.75rem; color: var(--text-dark); text-align: center; margin-top: 0.5rem; word-break: break-word; padding: 0 0.25rem;">
+                            ${att.name || 'Image'}
+                          </div>
+                        </a>
+                      `;
+                    }
+                  }).join('')}
                 </div>
               </div>
               ` : ''}
